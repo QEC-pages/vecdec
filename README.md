@@ -6,16 +6,16 @@ An error model is a collection of rows, or independent `events`, each of which
 is characterized by a probability `p`, a list of affected syndrome bits, and a
 list of affected codewords.  Can be read from a file similar to the following
 example: 
-```
-# end-of line comment 
-# [rows `r` in the check matrix] [number of independent codewords, `m`]
-3 2
+```bash
+# end-of line comments can be used anywhere 
+# [rows `r` in the check matrix] [number of codewords, `k`] [number of entries `n`]
+3 2 4
 # each row is the probability followed by the list of syndrome bits, 
-# followed by the list of codewords.
-# use a semicolon to separate blocks of data.
+# followed by the list of affected codewords separated by a semicolon.
 0.001 0 1 ; 0
 0.01 1 2 ; 1
-0.005 0 1 2 ; 0 1 ; 0.0001 2 0; 1 
+0.005 0 1 2 ; 0 1 
+0.0001 2 0; 1 
 # second semicolon can be used to start new block of data if wanted 
 # use as many rows as necessary
 # rows with identical entries will be automatically combined
