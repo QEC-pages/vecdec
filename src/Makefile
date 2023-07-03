@@ -42,7 +42,8 @@ dox:
 	doxygen ../Doxyfile mainpage.h
 
 tags:
-	etags *.c *.h *.cpp
+	etags *.c *.h 
+
 
 veryclean: clean
 	rm -f vecdec vecdec.exe vecdec.zip 

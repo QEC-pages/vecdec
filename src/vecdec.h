@@ -21,6 +21,9 @@ extern "C"{
 #include <string.h>
 #include <math.h>
 
+/**< minimum probability for LLR calculations */
+#define MINPROB (1e-7)  
+
 /** @brief structure to read in one line of data */
 typedef struct ONE_PROB_T {
   double p; /**< probability */
@@ -38,9 +41,15 @@ typedef struct PARAMS_T {
   int colw;  /** max column weight (default: `10`, increase at the command line if needed) */ 
   int steps; /** how many random decoding steps, default: `1` */
   int nvec;  /** max number of syndromes to process in one bunch */
+  int mode;  /** mode information */
   int debug; /** `debug` information */ 
   char *fin; /**< `input file` name for error model */
   int seed;  /**< rng `seed`, set=0 for automatic */
+  double *vP; /**< probability vector (total of `n`) */
+  double *vLLR; /**< vector of LLRs */
+  int numH, numL; /**< count of non-zero entries in H and L */
+  csr_t *mH; /**< sparse version of H (by rows) */
+  csr_t *mLt; /**< sparse version of L (by columns) */
 } params_t;
 
 
@@ -63,10 +72,15 @@ typedef struct PARAMS_T {
   "\t steps=[integer]\t: how many random window decoding cycles (default: 1)\n" \
   "\t nvec =[integer]\t: suggested max vector size for decoding\n"      \
   "\t colw =[integer]\t: maximum column weight (default: 0)\n"          \
-  "\t seed=[integer]\t: RNG seed or use time(NULL) if 0 (default)\n"	\
+  "\t seed= [integer]\t: RNG seed or use time(NULL) if 0 (default)\n"	\
+  "\t mode= [integer]\t: bitmap for operation mode (default: 0)\n"      \
+  "\t\t*   0: clear the entire mode bitmap to 0.\n"                     \
+  "\t\t*   1: run as standalone program (no stdin)\n"                   \
+  "\t\t*   2: generate random errors and syndrome vectors to stdout\n"  \
   "\t debug=[integer]\t: bitmap for aux information to output\n"	\
   "\t\t*   0: clear the entire debug bitmap to 0.\n"                    \
   "\t\t*   1: output misc general info (on by default)\n"		\
+  "\t\t*   2: output matrices for verification\n"                       \
   "\t See program documentation for input file syntax.\n"               \
   "\t Multiple `debug` parameters are XOR combined except for 0.\n"	\
   "\t Use debug=0 as the 1st argument to suppress all debug messages.\n"
