@@ -10,6 +10,7 @@
 // #include <"copy_m4ri.h"
 #include "mmio.h"
 
+#include "utils.h"
 #include "util_m4ri.h"
 
 
@@ -267,12 +268,16 @@ size_t product_weight_csr_mzd(const csr_t *A, const mzd_t *B, int transpose){
  * return uniformly distributed random number in the range [0,...,max-1] 
  */
 int rand_uniform(const int max){
+#if 0  
   int divisor = RAND_MAX/(max);
   int retval;
   do  
     retval = rand() / divisor;
   while (retval >= max);
   return retval;
+#else
+  return (int) floor(max * tinymt64_generate_double(&tinymt));
+#endif /* 0 */
 }
 
 /**

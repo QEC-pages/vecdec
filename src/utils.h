@@ -21,6 +21,33 @@ extern "C"{
 #include <string.h>
 #include <math.h>
 
+#include "tinymt64.h"
+
+extern tinymt64_t tinymt;
+
+/** 
+ * @brief uniformly distributed pseudo random double `x`: `0 <= x < 1`.
+ * 
+ * Actually, just a call to `tinymt64_generate_double()`.
+ * @return a uniformly distributed pseudo random double in `[0,1)`.
+ */
+//double drandom(void);
+static inline double drandom(void){
+  return tinymt64_generate_double(&tinymt);
+};
+
+/**
+ * @brief generate an exponentially-distributed random number with average =1.
+ *
+ * Distribution probability density is exp(-x).  Used to get next time interval
+ * in a Poisson process.
+ */
+
+static inline double rnd_exponential(void){
+  return -log(tinymt64_generate_doubleOO(&tinymt));
+  /**< no need to check for zero or one values */
+};
+
 #ifndef linux 
 /**
  * @brief home-grown version of unix function with the same name.

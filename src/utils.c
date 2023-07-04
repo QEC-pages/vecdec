@@ -12,6 +12,7 @@
  */
 #include "utils.h"
 
+tinymt64_t tinymt;
 
 #ifndef linux
 int getline(char **line, size_t *n, FILE *fp){

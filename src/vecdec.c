@@ -17,13 +17,15 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <time.h>
+#include <unistd.h>
 #include <m4ri/m4ri.h>
 #include "utils.h"
 #include "util_m4ri.h"
 #include "vecdec.h"
 
-params_t prm={ .nrows=0, .n=0, .ncws=0, .steps=1, .debug=1, .fin=NULL, .seed=0, .colw=10, .mode=0,
-  .vP=NULL, .vLLR=NULL, .mH=NULL, .mLt=NULL};
+params_t prm={ .nrows=0, .n=0, .ncws=0, .steps=1, .debug=1, .fin=NULL,
+  .seed=0, .colw=10, .mode=0, .maxJ=20, .nvec=16, 
+  .vP=NULL, .vLLR=NULL, .mH=NULL, .mHt=NULL, .mLt=NULL};
 
 /** calculate the energy of the row `i` */
 double mzd_row_energ(double *coeff, const mzd_t *A, const int i){
@@ -70,20 +72,75 @@ static inline int twomat_gauss_one(mzd_t *M, mzd_t *S, const int idx, const int 
   return pivots; /** 0 or 1 only */
   // if one, need to update the current pivot list 
 }
+
+void do_errors(mzd_t *mHe, mzd_t *mLe,
+               const double vp[],
+               const params_t * const p){
+  int max = p->maxJ;  /** current size of `vec` */
+  int * vec = malloc(p->maxJ * sizeof(int));
+  //  for(int i=0; i < p->n; i++)
+  //    printf("vP[%d]=%g%s",i,vp[i],i+1==p->n? "\n":"\t");
+
+  /** for each error type (column of `mH` = row of `mHt`) */
+  for(int i=0; i < p->n; i++){
+    int ivec=0;
+    /** prepare the list of syndrome columns to flip */
+    double onebyL = -1.0/log(1.0-vp[i]);
+    int j =(int )floor(onebyL * rnd_exponential());
+    printf("p=%g onebyL=%g j=%d nvec=%d\n",vp[i],onebyL,j,p->nvec);
+    if(j < p->nvec){/** otherwise we are to skip this error altogether */
+      do{
+        if(ivec >= max){
+          max=2*max;
+          vec=realloc(vec,max);
+        }
+        vec[ivec++]=j;
+        j += (int )ceil(onebyL * rnd_exponential());         
+      }
+      while(j < p->nvec);
+      
+      for (j=0; j<ivec; j++)
+        printf("vec[%d]=%d%s",j,vec[j],j+1==ivec?" ###\n":" ");
+      
+      /** flip the bits in `mHe` row by row to speed it up */
+      for(int ir = p->mHt->p[i]; ir < p->mHt->p[i+1]; ir++){
+        int irow = p->mHt->i[ir];
+        for(j=0; j<ivec; j++)
+          mzd_flip_bit(mHe,irow,vec[j]);
+      }
+      printf("i=%d j=%d\n",i,j);
+      printf("matrix mHe:\n");  mzd_print(mHe);
+
+      
+      /** flip the bits in `mLe` row by row */
+      for(int ir = p->mLt->p[i]; ir < p->mLt->p[i+1]; ir++){
+        int irow = p->mLt->i[ir];
+        for(j=0; j<ivec; j++)
+          mzd_flip_bit(mLe,irow,vec[j]);
+      }
+    }
+  }
+}
+
 /** todo: reuse `mE` matrix */
 mzd_t *do_decode(mzd_t *mS, params_t const * const p){
   mzd_t * mH = mzd_from_csr(NULL, p->mH);
+  //  printf("here:\n"); mzd_print(mH);
+
   mzd_t * mE = mzd_init(mH->ncols,mS->ncols);
   mzd_t * mEt= mzd_init(mS->ncols,mH->ncols);
   mzd_t * mEt0=mzd_init(mS->ncols,mH->ncols); /** best errors to output */
   double *vE = calloc(mS->ncols,sizeof(double));
   if((!mE) || (!mEt) || (!mEt0) || (!vE))
     ERROR("memory allocation failed!\n");
+  //  printf("here:\n"); mzd_print(mH);
+
   mzp_t * perm=mzp_init(p->n); /** identity column permutation */
   mzp_t * pivs=mzp_init(p->n); /** list of pivot columns */
   if((!pivs) || (!perm))
     ERROR("memory allocation failed!\n");
 
+  
   /** first pass (todo: order by decreasing `p`) */
   int rank=0;
   for(int i=0; i< p->n; i++){
@@ -303,6 +360,8 @@ void mat_init(one_prob_t **in, params_t *p){
   };
   mH->nz  = p->numH;
   csr_compress(mH);
+
+  p->mHt = csr_transpose(p->mHt, mH);
   
   mLt->nz = p->numL;
   csr_compress(mLt);
@@ -375,15 +434,14 @@ int local_init(int argc, char **argv, params_t *p){
   }
   
   if (p->seed == 0){
+    p->seed=time(NULL)+1000000ul*getpid(); /* ensure a different seed */
     if(p->debug)
-      printf("# initializing rng from time(NULL)\n");
-    srand(time(NULL));
-  }
-  else {
-    srand(p->seed);
-    if(p->debug)
-      printf("# setting srand(%d)\n",p->seed);
-  }
+      printf("# initializing seed=%d from time(NULL)\n",p->seed);
+    /** use `tinymt64_generate_double(&pp.tinymt)` for double [0,1] */
+  }  
+  // srand(time(p->seed));
+  tinymt64_init(&tinymt,p->seed);
+  
   return 0;
 };
 
@@ -394,6 +452,7 @@ void local_kill(one_prob_t **copy, params_t *p){
   free(p->vP);
   free(p->vLLR);
   p->mH = csr_free(p->mH);
+  p->mHt = csr_free(p->mHt);
   p->mLt = csr_free(p->mLt);
   p->vP = p->vLLR = NULL;
 }
@@ -411,14 +470,22 @@ int main(int argc, char **argv){
 
   // copy entries to main matrix
   mzd_t * mH0=mzd_from_csr(NULL,p->mH);
-  mzd_t * mS0=NULL, *mE0=NULL; /** syndrome and error matrices */
-  mzd_print(mH0);
+  printf("matrix mH0:\n");  mzd_print(mH0);
+  printf("xxx %d %d \n",p->nrows, p->nvec);
 
-  // get the syndromes
+  // get or prepare the syndromes
+  mzd_t *mHe = mzd_init(p->nrows, p->nvec);
+  mzd_set_ui(mHe,0); /** zero matrix */
 
+  mzd_t *mLe = mzd_init(p->ncws,  p->nvec);
+  mzd_set_ui(mLe,0); /** zero matrix */
+  do_errors(mHe,mLe,p->vP,p);
+  printf("matrix mLe:\n");  mzd_print(mLe);
+  
   // actually decode and generate error vectors (sparse)
-  mE0=do_decode(mS0, p); 
-
+    mzd_t *mE0=NULL; 
+  mE0=do_decode(mHe, p); 
+  mzd_print(mE0);
 
   // give the answer `L*e` for each set of syndromes in turn
 

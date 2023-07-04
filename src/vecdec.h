@@ -1,9 +1,9 @@
 #ifndef VECDEC_H
 #define VECDEC_H
 /**
- * @file utils.h
+ * @file vecdec.h
  *
- * @brief Collection of utility functions
+ * @brief vecdec - a simple vectorized decoder
  *
  * @author Leonid Pryadko (University of California, Riverside)
  *
@@ -49,7 +49,9 @@ typedef struct PARAMS_T {
   double *vLLR; /**< vector of LLRs */
   int numH, numL; /**< count of non-zero entries in H and L */
   csr_t *mH; /**< sparse version of H (by rows) */
+  csr_t *mHt; /**< sparse version of H (by rows) */
   csr_t *mLt; /**< sparse version of L (by columns) */
+  int maxJ;  /** memory to initially allocate for local storage */
 } params_t;
 
 

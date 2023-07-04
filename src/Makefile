@@ -11,13 +11,13 @@ CC = gcc
 CFLAGS = ${OPT} ${WARN}
 CPP = g++
 
-src = vecdec.c utils_m4ri.c  utils.c ${VECDEC_HDRS}
+src = vecdec.c utils_m4ri.c  utils.c tinymt64.c ${VECDEC_HDRS}
 
 #-Wmissing-prototypes   -Wconversion -Wextra
 # -std=gnu11
-VECDEC_HDRS = vecdec.h util_m4ri.h utils.h mmio.h
-VECDEC_SECS = vecdec.c util_m4ri.c utils.c mmio.c
-VECDEC_OBJS = vecdec.o util_m4ri.o utils.o mmio.o
+VECDEC_HDRS = vecdec.h util_m4ri.h utils.h mmio.h tinymt64.h
+VECDEC_SECS = vecdec.c util_m4ri.c utils.c mmio.c tinymt64.c
+VECDEC_OBJS = vecdec.o util_m4ri.o utils.o mmio.o tinymt64.o
 ## unused (documentation only): mainpage.h
 
 src = Makefile ${VECDEC_HDRS} ${VECDEC_SRC} 
