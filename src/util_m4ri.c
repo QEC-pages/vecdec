@@ -416,6 +416,7 @@ void csr_compress(csr_t *mat){
   }
   mat->p[i]=j; /* final value */
   mat->nz=-1; /* indicate compressed form */
+  free(pairs);
 }
 
 /**

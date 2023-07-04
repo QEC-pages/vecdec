@@ -1,13 +1,14 @@
 # -*- shell-script -*-
 # end-of line comment 
 # [rows `r` in the check matrix] [number of independent codewords, `m`]
-3 2 4 
+3 2 5
 # each row is the probability followed by the list of syndrome bits, 
 # followed by the list of codewords.
 # use a semicolon or end-of-line to separate blocks of data.
 0.001 0 1 ; 0
 0.1 1 2 ;   1
 0.05 0 1 2 ; 0 1 # a comment is OK here
-0.01 2 0; 1 
+0.009 2 1 ; 0 # no non-zero entries in this column! 
+0.01 2 0; 1
 # use as many rows as necessary
 # rows with identical entries will be automatically combined (not in this version)

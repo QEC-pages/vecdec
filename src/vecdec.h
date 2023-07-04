@@ -32,7 +32,10 @@ typedef struct ONE_PROB_T {
   int idx[]; /**< flexible array to store `n1+n2` entries */
 } one_prob_t;
 
-/** global variables */
+/** @bried helper structure to sort by probabilities */
+typedef struct IPPAIR_T {int index; double prob; } ippair_t; 
+
+/** structure to hold global variables */
 
 typedef struct PARAMS_T {
   int nrows; /** rows in `H` or `r` (set in the input file) */
@@ -47,39 +50,36 @@ typedef struct PARAMS_T {
   int seed;  /**< rng `seed`, set=0 for automatic */
   double *vP; /**< probability vector (total of `n`) */
   double *vLLR; /**< vector of LLRs */
-  int numH, numL; /**< count of non-zero entries in H and L */
+  int nzH, nzL; /**< count of non-zero entries in `H` and `L` */
   csr_t *mH; /**< sparse version of H (by rows) */
   csr_t *mHt; /**< sparse version of H (by rows) */
   csr_t *mLt; /**< sparse version of L (by columns) */
   int maxJ;  /** memory to initially allocate for local storage */
 } params_t;
 
-
-
-
-// extern params_t prm;
-//params_t prm={1,3,1,NULL,NULL,0,0,0,0,0,0,0,0};
+extern params_t prm;
 
 /** 
  * @brief The help message. 
  * 
- * This has to be checked and updated, especially the `debug` options.
+ * @todo: This has to be checked and updated, especially the `debug` options.
  */
 #define USAGE                                                           \
   "%s: a simple vectorized random information set decoder.\n"           \
   "  usage: %s param=value [[param=value] ... ]\n"			\
   "\t Command line arguments are processed in the order given.\n"	\
   "\t Supported parameters:\n"						\
+  "\t --help\t: give this help (also '-h' or just 'help')\n"            \
   "\t f=[string]\t: name of the input file with the error model\n"      \
-  "\t steps=[integer]\t: how many random window decoding cycles (default: 1)\n" \
-  "\t nvec =[integer]\t: suggested max vector size for decoding\n"      \
-  "\t colw =[integer]\t: maximum column weight (default: 0)\n"          \
+  "\t steps=[integer]\t: how many random window decoding steps (default: 1)\n" \
+  "\t nvec =[integer]\t: max vector size for decoding (default: 16)\n"  \
+  "\t colw =[integer]\t: max column weight in stacked H+L (default: 10)\n" \
   "\t seed= [integer]\t: RNG seed or use time(NULL) if 0 (default)\n"	\
   "\t mode= [integer]\t: bitmap for operation mode (default: 0)\n"      \
   "\t\t*   0: clear the entire mode bitmap to 0.\n"                     \
   "\t\t*   1: run as standalone program (no stdin)\n"                   \
   "\t\t*   2: generate random errors and syndrome vectors to stdout\n"  \
-  "\t debug=[integer]\t: bitmap for aux information to output\n"	\
+  "\t debug=[integer]\t: bitmap for aux information to output (default: 1)\n" \
   "\t\t*   0: clear the entire debug bitmap to 0.\n"                    \
   "\t\t*   1: output misc general info (on by default)\n"		\
   "\t\t*   2: output matrices for verification\n"                       \

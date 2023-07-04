@@ -73,75 +73,141 @@ static inline int twomat_gauss_one(mzd_t *M, mzd_t *S, const int idx, const int 
   // if one, need to update the current pivot list 
 }
 
-void do_errors(mzd_t *mHe, mzd_t *mLe,
-               const double vp[],
+/** @brief create a sample of errors to play with.
+ *  @param mHe matrix with `maxJ` columns to return the syndrome `H*e`
+ *  @param mLe matrix with `maxJ` columns for logical error `L*e`
+ *  @param p params_t structure with error model information
+ * @return max number of generated errors of any one kind 
+ *  todo: perhaps allow for an independent error model (matrices `mHt`, `mLt` and vector `vP`) ? 
+ */
+int do_errors(mzd_t *mHe, mzd_t *mLe,
                const params_t * const p){
+  
+  assert((mHe!=NULL) && (mLe!=NULL)); /** sanity check */
+  
   int max = p->maxJ;  /** current size of `vec` */
   int * vec = malloc(p->maxJ * sizeof(int));
-  //  for(int i=0; i < p->n; i++)
-  //    printf("vP[%d]=%g%s",i,vp[i],i+1==p->n? "\n":"\t");
-
+  
+  mzd_set_ui(mHe,0); /** zero matrix */
+  mzd_set_ui(mLe,0); /** zero matrix */
+  int nvec = mHe->ncols; 
   /** for each error type (column of `mH` = row of `mHt`) */
-  for(int i=0; i < p->n; i++){
+  for(int i=0; i < p->mHt->rows; i++){
     int ivec=0;
-    /** prepare the list of syndrome columns to flip */
-    double onebyL = -1.0/log(1.0-vp[i]);
+    /** prepare the list of syndrome columns to deal with */
+    double onebyL = -1.0/log(1.0-p->vP[i]);
     int j =(int )floor(onebyL * rnd_exponential());
-    printf("p=%g onebyL=%g j=%d nvec=%d\n",vp[i],onebyL,j,p->nvec);
-    if(j < p->nvec){/** otherwise we are to skip this error altogether */
+#ifndef NDEBUG    
+    if(p->debug & 256) /** details of error setup */
+      printf("p[%d]=%g onebyL=%g j=%d nvec=%d\n",i,p->vP[i],onebyL,j,nvec);
+#endif /* NDEBUG */
+    if(j < nvec){/** otherwise we are to skip this error altogether */
       do{
         if(ivec >= max){
           max=2*max;
           vec=realloc(vec,max);
         }
         vec[ivec++]=j;
-        j += (int )ceil(onebyL * rnd_exponential());         
+        j += (int )ceil(onebyL * rnd_exponential());
+#ifndef NDEBUG            
+        if(p->debug & 256) /** details of error setup */
+          printf("p[%d]=%g onebyL=%g j=%d nvec=%d\n",i,p->vP[i],onebyL,j,nvec);
+#endif /* NDEBUG */        
       }
-      while(j < p->nvec);
+      while(j < nvec);
       
+#ifndef NDEBUG    
+    if(p->debug & 256) /** details of error setup */
       for (j=0; j<ivec; j++)
         printf("vec[%d]=%d%s",j,vec[j],j+1==ivec?" ###\n":" ");
-      
+#endif /* NDEBUG */
+    
       /** flip the bits in `mHe` row by row to speed it up */
       for(int ir = p->mHt->p[i]; ir < p->mHt->p[i+1]; ir++){
-        int irow = p->mHt->i[ir];
-        for(j=0; j<ivec; j++)
+        int irow = p->mHt->i[ir]; /** column index in `mH` = row in `mHt` */
+        for(j=0; j < ivec; j++)
           mzd_flip_bit(mHe,irow,vec[j]);
       }
-      printf("i=%d j=%d\n",i,j);
-      printf("matrix mHe:\n");  mzd_print(mHe);
-
+#ifndef NDEBUG      
+      if(p->debug & 256){ /** details of error setup */
+        printf("i=%d j=%d\n",i,j);
+        printf("matrix mHe:\n");  mzd_print(mHe);
+      }
+#endif /* NDEBUG */
       
       /** flip the bits in `mLe` row by row */
       for(int ir = p->mLt->p[i]; ir < p->mLt->p[i+1]; ir++){
-        int irow = p->mLt->i[ir];
+        int irow = p->mLt->i[ir]; /** column index in `mL` */
         for(j=0; j<ivec; j++)
           mzd_flip_bit(mLe,irow,vec[j]);
       }
     }
   }
+  //  p->maxJ = max; /** to reduce the number of `realloc`s next time */
+  free(vec);
+  return max;
 }
 
-/** todo: reuse `mE` matrix */
+/** @brief helper function to sort `ippair_t` 
+ *  use `qsort(array, len, sizeof(ippair_t), cmp_ippairs);`
+ */
+static inline int cmp_ippairs(const void *a, const void *b){
+  const double pa=((ippair_t *) a) -> prob;
+  const double pb=((ippair_t *) b) -> prob;
+  if (pa<pb)
+    return +1;
+  else if (pa>pb)
+    return -1;
+  return 0;
+}
+
+
+/** @brief return permutation = decreasing probabilities */
+mzp_t * sort_by_prob(mzp_t *perm, params_t const * const p){
+  /** prepare array of ippairs */
+  ippair_t * pairs = malloc(p->n * sizeof(ippair_t));
+  if (!pairs)
+    ERROR("memory allocation failed\n");
+  for(int i=0; i<p->n; i++){
+    pairs[i].index = i;
+    pairs[i].prob = p->vP[i];
+  }
+  qsort(pairs, p->n, sizeof(ippair_t), cmp_ippairs);
+  for(int i=0; i<p->n; i++)
+    perm->values[i] = pairs[i].index;
+
+  for(int i=0; i<p->n; i++)
+    printf("i=%d p[perm[i]]=%g\n",i,p->vP[perm->values[i]]);
+  free(pairs);
+  return perm;
+}
+
+/**
+ * @brief actual syndrome-based decoding routine
+ * @param mS the matrix with syndromes (each column)
+ * @param p structure with error model information
+ * @return binary matrix of min weight errors / each syndrome
+ ***************** todo: reuse some matrices? ***************/
 mzd_t *do_decode(mzd_t *mS, params_t const * const p){
   mzd_t * mH = mzd_from_csr(NULL, p->mH);
-  //  printf("here:\n"); mzd_print(mH);
 
-  mzd_t * mE = mzd_init(mH->ncols,mS->ncols);
-  mzd_t * mEt= mzd_init(mS->ncols,mH->ncols);
-  mzd_t * mEt0=mzd_init(mS->ncols,mH->ncols); /** best errors to output */
-  double *vE = calloc(mS->ncols,sizeof(double));
+  mzd_t * mE = mzd_init(mH->ncols,mS->ncols); /**< error vectors by col */
+  mzd_t * mEt= mzd_init(mS->ncols,mH->ncols); /**< error vectors by row */
+  mzd_t * mEt0=mzd_init(mS->ncols,mH->ncols); /**< best errors to output */
+  double *vE = calloc(mS->ncols,sizeof(double)); /**< best energies */
   if((!mE) || (!mEt) || (!mEt0) || (!vE))
     ERROR("memory allocation failed!\n");
-  //  printf("here:\n"); mzd_print(mH);
 
   mzp_t * perm=mzp_init(p->n); /** identity column permutation */
   mzp_t * pivs=mzp_init(p->n); /** list of pivot columns */
   if((!pivs) || (!perm))
     ERROR("memory allocation failed!\n");
-
   
-  /** first pass (todo: order by decreasing `p`) */
+  /** first pass ******************************************* */
+  perm = sort_by_prob(perm, p);   /** order of decreasing `p` */
+  /** full row echelon form (gauss elimination) using the order of `p`,
+   * on the block matrix `[H|S]` (in fact, two matrices).
+   */  
   int rank=0;
   for(int i=0; i< p->n; i++){
     int col=perm->values[i];
@@ -191,29 +257,46 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
       }
     }
   }
-  mzp_free(perm);
-  mzp_free(pivs);
+  /** clean-up */
   mzd_free(mH);
   mzd_free(mE);
   mzd_free(mEt);
   free(vE);
+  mzp_free(perm);
+  mzp_free(pivs);
   return mEt0;
 }
 
-one_prob_t ** read_file(char *fnam, params_t *p){
-  ssize_t linelen, col=0;
-  size_t lineno=0, bufsiz=0;
-  char *buf = NULL;
-  p->numH = p->numL = 0;
+/** @brief read the file with error model information.
 
-  if(p->debug&1)
-    printf("opening file %s\n",fnam);  
+```bash 
+    # end of-line comment
+    r k n # rows in `H`, rows in `L`, columns in `H` or `L``
+    # `n` rows with model information (one row per column of `H` or `L`):
+    # probability, non-zero rows in H ; non-zero rows in L.
+    # row indices starting with 0 separated by white space 
+    p [[row in H] ...] ; [[row in L] ...]
+    # separating semicolon is required even if `L` has all zero entries
+    # repeat for each row 
+```
+* @param fnam filename
+* @param p params_t structure
+* @return the structure with the raw error model, model params set in `p` 
+*/
+one_prob_t ** read_file(char *fnam, params_t * const p){
+  ssize_t linelen, col=0;
+  size_t lineno=0, bufsiz=0; /**< buffer size for `readline` */
+  char *buf = NULL;          /** actual buffer for `readline` */
+  p->nzH = p->nzL = 0;  /** count non-zero entries in `H` and `L` */
+
+  if(p->debug & 1)
+    printf("opening error-model file %s\n",fnam);  
   FILE *f = fopen(fnam, "r");
   if(f==NULL)
-    ERROR("can't open the file %s\n",fnam);
+    ERROR("can't open the file %s for reading\n",fnam);
 
   int cnt;
-  do{ /** read lines one-by-one until `r k d` are found ****************************/
+  do{ /** read lines one-by-one until a triple `r k n` is found *************/
     int num;
     lineno++; col=0; linelen = getline(&buf, &bufsiz, f);
     if(linelen<0)
@@ -227,36 +310,44 @@ one_prob_t ** read_file(char *fnam, params_t *p){
       num=0;
       cnt=sscanf(c," %d %d %d %n",&r,&k,&n,&num);      
       if(cnt!=3)
-        ERROR("expected three integers ' r k n ' in a row\n"
+        ERROR("expected three integers [ r k n ] in a row\n"
               "%s:%zu:%zu: '%s'\n", fnam,lineno,col+1,buf);
-      col+=num;
-      p->nrows=r;
-      p->ncws =k;
-      p->n =n;
+      col += num;
+      p->nrows = r;
+      p->ncws = k;
+      p->n = n;
       if(p->debug &1)
-        printf("# r=%d k=%d n=%d\n",r,k,n);
+        printf("# error model: r=%d k=%d n=%d\n",r,k,n);
     }
   }  
   while(cnt==0);
 
-  size_t max = (p->colw*sizeof(int)+ sizeof(  one_prob_t)); /** memory for a single error */
-  one_prob_t **s = calloc(p->n,max);
-  one_prob_t *pos = ( one_prob_t *) (s + p->n); /** leave space for row pointers */
+  /** prepare the structure for the error model *********************/
+  size_t max = (p->colw * sizeof(int)+ sizeof(one_prob_t)); /**< memory for one error */
+  one_prob_t **s = malloc(p->n*(max+sizeof(one_prob_t *))); /**< structure to hold raw error model */
+  char *tmp = ( char *) (s + p->n);
+  printf("xxx %ld max=%ld tot=%ld\n",tmp - (char *) s,max, p->n*(max+sizeof(one_prob_t *)));
+  one_prob_t *pos = ( one_prob_t *) (s + p->n); /**< space for row pointers */
   for(int i=0; i < p->n; i++){
     s[i] = pos;
-    pos = (one_prob_t *) (( char *) pos + max);  
+    char *tmp = ( char *) pos + max;
+    pos = (one_prob_t *) tmp;  
+    printf("xxx %ld max=%ld\n",tmp - (char *) s,max);
   }
-  
-  cnt = 0;
-  int nread=0;
+  printf ("%ld %ld XXXXXXXXx\n",pos - (  one_prob_t *) s, p->n * max);
+  /** read the rest of the error model file **********************/ 
+  int nread=0; /**< how many rows read */
   do{ /** read lines one-by-one until `n` rows are read */
     int cnt=0, num, val;
+    if(feof(f))
+      ERROR("unexpected end of file\n");
     lineno++; col=0; linelen = getline(&buf, &bufsiz, f);
     if(linelen<0)
       ERROR("error reading line %zu of file %s\n",lineno,fnam);
     char *c=buf;
     while(isspace(*c)){ c++; col++; }
-    if((*c == '\0')||(*c == '#')||(col >= linelen))
+    printf("lineno=%zu linelen=%ld col=%ld c=%s\n",lineno,linelen,col,c);        
+    if((*c == '\0')||(*c == '\n')||(*c == '#')||(col >= linelen))
       cnt=0; /**  try next line */
     else{/** this row `must` contain a valid entry! */
       num=0;
@@ -265,32 +356,42 @@ one_prob_t ** read_file(char *fnam, params_t *p){
         ERROR("expected a double followed by [[# ]...] ; [[# ]...], nread=%d\n"
               "%s:%zu:%zu: '%s'\n", nread,fnam,lineno,col+1,buf);
       if ((s[nread]->p <=0) || (s[nread]->p>=1))
-        ERROR("expect probability=%g in (0,1) range, nread=%d\n"
+        ERROR("expect probability=%g in (0,1) range exclusive, nread=%d\n"
               "%s:%zu:%zu: '%s'\n",s[nread]->p,nread,fnam,lineno,col+1,buf);
       c+=num; col+=num;
-      int i=0;
+    printf("lineno=%zu linelen=%ld col=%ld c=%s\n",lineno,linelen,col,c);        
+    //      printf("lineno=%zu col=%ld c=%s\n",lineno,col,c);        
+      int i=0; /** index of the current item */
       do{
         if(i >= p->colw)
-          ERROR("too many entries in a row, increase colw=%d on command line\n"
+          ERROR("too many entries in a row, increase colw=%d on the command line\n"
                 "%s:%zu:%zu: '%s'\n", p->colw,fnam,lineno,col+1,buf);
-        cnt = sscanf(c," %d %n",&val, &num);
+    printf("lineno=%zu linelen=%ld col=%ld c=%s\n",lineno,linelen,col,c);        
+    //        printf("lineno=%zu col=%ld c=%s\n",lineno,col,c);        
+        //        cnt = col< linelen ? sscanf(c," %d %n",&val, &num) : 0 ;
+        num=0;
+        cnt=sscanf(c," %d %n",&val, &num);
+        printf("cnt=%d num=%d\n",cnt,num);
         if(cnt==1){
-          //          printf("read %d num=%d\n",val,num);
           s[nread]->idx[i++] = val;
           if (s[nread]->n1)
-            p->numL ++;
+            p->nzL ++;
           else
-            p->numH ++; 
+            p->nzH ++; 
           col+=num; c+=num;
-          if(c[0]==';'){
-            //            printf("semicolon i=%d num=%d\n",i,num);
+          printf("lineno=%zu col=%ld c=%s\n",lineno,col,c);        
+          if(c[0]==';'){ /**< semicolon encountered, switch from `H` to `L` entries */
             if(s[nread]->n1)
               ERROR("only one ';' in a row expected, nread=%d i=%d\n"
                     "%s:%zu:%zu: '%s'\n", nread,i,fnam,lineno,col+1,buf);
             else{
-              s[nread]->n1=i;
+              s[nread]->n1 = i;
               col++;
               c++;
+              while(isspace(*c)){ c++; col++; }
+              printf("lineno=%zu col=%ld c=%s\n",lineno,col,c);        
+              
+              //              assert(col<=lineno);
             }
           }
         }
@@ -310,13 +411,15 @@ one_prob_t ** read_file(char *fnam, params_t *p){
       while(1);
     }    
   }
-  while (nread < p->n);
+  while ((nread < p->n) && (!feof(f)));
+  assert(nread == p->n);
+  printf("nread=%d n=%d\n",nread,p->n);
 
-  if(p->debug & 2){/** `print` out the entire error model ************************** */
+  if(p->debug & 2){/** `print` out the entire error model ******************** */
     printf("# error model read: r=%d k=%d n=%d\n",p->nrows, p->ncws, p->n);
     for( int i=0; i < p->n; i++){
       one_prob_t *row = s[i];
-      printf("# n1=%d n2=%d\n",row-> n1, row->n2);
+      printf("# i=%d n1=%d n2=%d\n",i, row-> n1, row->n2);
       printf("%g ",row-> p);
       int j=0;
       for(  ; j< row->n1; j++)
@@ -329,18 +432,27 @@ one_prob_t ** read_file(char *fnam, params_t *p){
   }
   
   if(p->debug&1)
-    printf("closing file %s\n",fnam);
+    printf("done reading, closing file %s\n",fnam);
+  printf("here one!!!\n"); fflush(stdout);
   fclose(f);
+  printf("here two !!!\n"); fflush(stdout);
   if (buf) 
     free(buf);
+  printf("here three!!!\n");
   return s;
 }
 
+/** @brief given the error model read, prepare for decoding
+    Create vectors `p->vP`, `p->LLR` and sparse matrices `p->mH` and `p->mL`
+    @param in the error model array in
+    @param p contains error model parameters and place to store vecs and matrices
+    @output nothing (modified `p`)
+*/
 void mat_init(one_prob_t **in, params_t *p){
   double *vP = p->vP = malloc(p->n * sizeof(double));
   double *vLLR = p->vLLR = malloc(p->n * sizeof(double));
-  csr_t *mH = p->mH   = csr_init(NULL, p->nrows, p->n,    p->numH);
-  csr_t *mLt = p->mLt = csr_init(NULL, p->n,     p->ncws, p->numL); /** transposed */
+  csr_t *mH = p->mH   = csr_init(NULL, p->nrows, p->n,    p->nzH);
+  csr_t *mLt = p->mLt = csr_init(NULL, p->n,     p->ncws, p->nzL); /** transposed */
   if((!vP) || (!vLLR) || (!mH) || (!mLt))
     ERROR("memory allocation failed!\n");
   int ipair1=0, ipair2=0;
@@ -358,12 +470,12 @@ void mat_init(one_prob_t **in, params_t *p){
       mLt->i[ipair2++]= row->idx[j]; /** row */
     }
   };
-  mH->nz  = p->numH;
+  mH->nz  = p->nzH;
   csr_compress(mH);
 
   p->mHt = csr_transpose(p->mHt, mH);
   
-  mLt->nz = p->numL;
+  mLt->nz = p->nzL;
   csr_compress(mLt);
   
   if(p->debug & 2){ /** print resulting vectors and matrices */    
@@ -385,7 +497,10 @@ int local_init(int argc, char **argv, params_t *p){
       if(dbg==0)
 	p->debug = 0;
       else{
-	p->debug ^= dbg;
+        if(i==1)
+          p->debug = dbg;
+        else
+          p->debug ^= dbg;
 	printf("# read %s, debug=%d octal=%o\n",argv[i],p->debug,p->debug);
       }
     }
@@ -418,17 +533,22 @@ int local_init(int argc, char **argv, params_t *p){
 	printf("# read %s, seed=%d\n",argv[i],p->seed);
     }
     else if (0==strncmp(argv[i],"f=",2)){
-      p->fin = argv[i]+2;
+      if(strlen(argv[i])>2)
+        p->fin = argv[i]+2;
+      else
+        p->fin = argv[++i]; /**< allow space before file name */
       if (p->debug)
-	printf("# read %s, finH=%s\n",argv[i],p->fin);
+	printf("# read %s, f=%s\n",argv[i],p->fin);
     }
-    else if((strcmp(argv[i],"--help")==0)||(strcmp(argv[i],"-h")==0)){
+    else if((strcmp(argv[i],"--help")==0)
+            ||(strcmp(argv[i],"-h")==0)
+            ||(strcmp(argv[i],"help")==0)){
       printf( USAGE , argv[0],argv[0]);
       exit (-1);
     }
     else{ /* unrecognized option */
       printf("# unrecognized parameter \"%s\" at position %d\n",argv[i],i);
-      ERROR("try \"%s -h\" for options",argv[0]);
+      ERROR("try \"%s -h\" for help",argv[0]);
     }
       
   }
@@ -460,9 +580,11 @@ void local_kill(one_prob_t **copy, params_t *p){
 int main(int argc, char **argv){
   params_t * const p=&prm;
   local_init(argc,argv, & prm); /* initialize variables */
-
   /** read in the model file, initialize sparse matrices */
+
   one_prob_t **copy = read_file(p->fin, p );  /** @todo: sort events and optimize decoder model */
+
+
   mat_init(copy, p);
   
   // decoder_init( & prm);
@@ -471,15 +593,12 @@ int main(int argc, char **argv){
   // copy entries to main matrix
   mzd_t * mH0=mzd_from_csr(NULL,p->mH);
   printf("matrix mH0:\n");  mzd_print(mH0);
-  printf("xxx %d %d \n",p->nrows, p->nvec);
+  printf("xxx %d nvec=%d \n",p->nrows, p->nvec);
 
   // get or prepare the syndromes
   mzd_t *mHe = mzd_init(p->nrows, p->nvec);
-  mzd_set_ui(mHe,0); /** zero matrix */
-
   mzd_t *mLe = mzd_init(p->ncws,  p->nvec);
-  mzd_set_ui(mLe,0); /** zero matrix */
-  do_errors(mHe,mLe,p->vP,p);
+  p->maxJ = do_errors(mHe,mLe,p);
   printf("matrix mLe:\n");  mzd_print(mLe);
   
   // actually decode and generate error vectors (sparse)
