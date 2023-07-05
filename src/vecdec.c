@@ -25,7 +25,7 @@
 
 params_t prm={ .nrows=0, .n=0, .ncws=0, .steps=1, .debug=1, .fin=NULL,
   .seed=0, .colw=10, .mode=0, .maxJ=20, .nvec=16, 
-  .vP=NULL, .vLLR=NULL, .mH=NULL, .mHt=NULL, .mLt=NULL};
+  .vP=NULL, .vLLR=NULL, .mH=NULL, .mHt=NULL, .mL=NULL, .mLt=NULL};
 
 /** calculate the energy of the row `i` */
 double mzd_row_energ(double *coeff, const mzd_t *A, const int i){
@@ -95,7 +95,7 @@ int do_errors(mzd_t *mHe, mzd_t *mLe,
   for(int i=0; i < p->mHt->rows; i++){
     int ivec=0;
     /** prepare the list of syndrome columns to deal with */
-    double onebyL = -1.0/log(1.0-p->vP[i]);
+    double onebyL = -1.0/log(1.0 - p->vP[i]);
     int j =(int )floor(onebyL * rnd_exponential());
 #ifndef NDEBUG    
     if(p->debug & 256) /** details of error setup */
@@ -105,7 +105,7 @@ int do_errors(mzd_t *mHe, mzd_t *mLe,
       do{
         if(ivec >= max){
           max=2*max;
-          vec=realloc(vec,max);
+          vec=realloc(vec,max * sizeof(int));
         }
         vec[ivec++]=j;
         j += (int )ceil(onebyL * rnd_exponential());
@@ -176,8 +176,7 @@ mzp_t * sort_by_prob(mzp_t *perm, params_t const * const p){
   for(int i=0; i<p->n; i++)
     perm->values[i] = pairs[i].index;
 
-  for(int i=0; i<p->n; i++)
-    printf("i=%d p[perm[i]]=%g\n",i,p->vP[perm->values[i]]);
+  //  for(int i=0; i<p->n; i++) printf("i=%d p[perm[i]]=%g\n",i,p->vP[perm->values[i]]);
   free(pairs);
   return perm;
 }
@@ -219,7 +218,9 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
     printf("rank=%d\n",rank);
     printf("perm: "); mzp_out(perm);
     printf("pivs: "); mzp_out(pivs);
+    printf("mH:\n");
     mzd_print(mH);
+    printf("mS:\n");
     mzd_print(mS);
   }
   // for each syndrome, calculate error vector and energy
@@ -234,9 +235,7 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
   for (int ii=1; ii< p->steps; ii++){
     pivs=mzp_rand(pivs); /** random pivots LAPAC-style */
     mzp_set_ui(perm,1); perm=perm_p_trans(perm,pivs,0); /**< corresponding permutation */
-
-    //    printf("permutation: "); mzp_out(perm);
-    // gauss, record pivots
+    /** todo: make it probability-dependent */
     rank=0;
     for(int i=0; i< p->n; i++){
       int col=perm->values[i];
@@ -250,7 +249,7 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
       mzd_copy_row(mE,pivs->values[i],mS,i);
     mEt = mzd_transpose(mEt, mE);
     for(int i=0; i< p->n; i++){
-      double energ=mzd_row_energ(p->vLLR,mEt0,i);
+      double energ=mzd_row_energ(p->vLLR,mEt,i);
       if(energ< vE[i]){
         vE[i]=energ;
         mzd_copy_row(mEt0,i,mEt,i);
@@ -281,9 +280,10 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
 ```
 * @param fnam filename
 * @param p params_t structure
-* @return the structure with the raw error model, model params set in `p` 
+* @return the structure with the raw error model, model params set in `p`
+* @todo: sort events and optimize decoder model 
 */
-one_prob_t ** read_file(char *fnam, params_t * const p){
+one_prob_t ** read_error_model(char *fnam, params_t * const p){
   ssize_t linelen, col=0;
   size_t lineno=0, bufsiz=0; /**< buffer size for `readline` */
   char *buf = NULL;          /** actual buffer for `readline` */
@@ -325,16 +325,16 @@ one_prob_t ** read_file(char *fnam, params_t * const p){
   /** prepare the structure for the error model *********************/
   size_t max = (p->colw * sizeof(int)+ sizeof(one_prob_t)); /**< memory for one error */
   one_prob_t **s = malloc(p->n*(max+sizeof(one_prob_t *))); /**< structure to hold raw error model */
-  char *tmp = ( char *) (s + p->n);
-  printf("xxx %ld max=%ld tot=%ld\n",tmp - (char *) s,max, p->n*(max+sizeof(one_prob_t *)));
+  //  char *tmp = ( char *) (s + p->n);
+  //  printf("xxx %ld max=%ld tot=%ld\n",tmp - (char *) s,max, p->n*(max+sizeof(one_prob_t *)));
   one_prob_t *pos = ( one_prob_t *) (s + p->n); /**< space for row pointers */
   for(int i=0; i < p->n; i++){
     s[i] = pos;
     char *tmp = ( char *) pos + max;
     pos = (one_prob_t *) tmp;  
-    printf("xxx %ld max=%ld\n",tmp - (char *) s,max);
+    //    printf("xxx %ld max=%ld\n",tmp - (char *) s,max);
   }
-  printf ("%ld %ld XXXXXXXXx\n",pos - (  one_prob_t *) s, p->n * max);
+  //  printf ("%ld %ld XXXXXXXXx\n",pos - (  one_prob_t *) s, p->n * max);
   /** read the rest of the error model file **********************/ 
   int nread=0; /**< how many rows read */
   do{ /** read lines one-by-one until `n` rows are read */
@@ -346,7 +346,7 @@ one_prob_t ** read_file(char *fnam, params_t * const p){
       ERROR("error reading line %zu of file %s\n",lineno,fnam);
     char *c=buf;
     while(isspace(*c)){ c++; col++; }
-    printf("lineno=%zu linelen=%ld col=%ld c=%s\n",lineno,linelen,col,c);        
+    //    printf("lineno=%zu linelen=%ld col=%ld c=%s\n",lineno,linelen,col,c);        
     if((*c == '\0')||(*c == '\n')||(*c == '#')||(col >= linelen))
       cnt=0; /**  try next line */
     else{/** this row `must` contain a valid entry! */
@@ -359,19 +359,15 @@ one_prob_t ** read_file(char *fnam, params_t * const p){
         ERROR("expect probability=%g in (0,1) range exclusive, nread=%d\n"
               "%s:%zu:%zu: '%s'\n",s[nread]->p,nread,fnam,lineno,col+1,buf);
       c+=num; col+=num;
-    printf("lineno=%zu linelen=%ld col=%ld c=%s\n",lineno,linelen,col,c);        
-    //      printf("lineno=%zu col=%ld c=%s\n",lineno,col,c);        
+      //    printf("lineno=%zu linelen=%ld col=%ld c=%s\n",lineno,linelen,col,c);        
       int i=0; /** index of the current item */
       do{
         if(i >= p->colw)
           ERROR("too many entries in a row, increase colw=%d on the command line\n"
                 "%s:%zu:%zu: '%s'\n", p->colw,fnam,lineno,col+1,buf);
-    printf("lineno=%zu linelen=%ld col=%ld c=%s\n",lineno,linelen,col,c);        
-    //        printf("lineno=%zu col=%ld c=%s\n",lineno,col,c);        
-        //        cnt = col< linelen ? sscanf(c," %d %n",&val, &num) : 0 ;
+        // printf("lineno=%zu linelen=%ld col=%ld c=%s\n",lineno,linelen,col,c);
         num=0;
         cnt=sscanf(c," %d %n",&val, &num);
-        printf("cnt=%d num=%d\n",cnt,num);
         if(cnt==1){
           s[nread]->idx[i++] = val;
           if (s[nread]->n1)
@@ -379,7 +375,6 @@ one_prob_t ** read_file(char *fnam, params_t * const p){
           else
             p->nzH ++; 
           col+=num; c+=num;
-          printf("lineno=%zu col=%ld c=%s\n",lineno,col,c);        
           if(c[0]==';'){ /**< semicolon encountered, switch from `H` to `L` entries */
             if(s[nread]->n1)
               ERROR("only one ';' in a row expected, nread=%d i=%d\n"
@@ -389,9 +384,6 @@ one_prob_t ** read_file(char *fnam, params_t * const p){
               col++;
               c++;
               while(isspace(*c)){ c++; col++; }
-              printf("lineno=%zu col=%ld c=%s\n",lineno,col,c);        
-              
-              //              assert(col<=lineno);
             }
           }
         }
@@ -413,7 +405,6 @@ one_prob_t ** read_file(char *fnam, params_t * const p){
   }
   while ((nread < p->n) && (!feof(f)));
   assert(nread == p->n);
-  printf("nread=%d n=%d\n",nread,p->n);
 
   if(p->debug & 2){/** `print` out the entire error model ******************** */
     printf("# error model read: r=%d k=%d n=%d\n",p->nrows, p->ncws, p->n);
@@ -433,12 +424,10 @@ one_prob_t ** read_file(char *fnam, params_t * const p){
   
   if(p->debug&1)
     printf("done reading, closing file %s\n",fnam);
-  printf("here one!!!\n"); fflush(stdout);
   fclose(f);
-  printf("here two !!!\n"); fflush(stdout);
   if (buf) 
     free(buf);
-  printf("here three!!!\n");
+
   return s;
 }
 
@@ -446,46 +435,79 @@ one_prob_t ** read_file(char *fnam, params_t * const p){
     Create vectors `p->vP`, `p->LLR` and sparse matrices `p->mH` and `p->mL`
     @param in the error model array in
     @param p contains error model parameters and place to store vecs and matrices
-    @output nothing (modified `p`)
+    @param prob if positive, alternative global probability to use 
+    @output nothing (modified data in `p`)
 */
-void mat_init(one_prob_t **in, params_t *p){
-  double *vP = p->vP = malloc(p->n * sizeof(double));
-  double *vLLR = p->vLLR = malloc(p->n * sizeof(double));
-  csr_t *mH = p->mH   = csr_init(NULL, p->nrows, p->n,    p->nzH);
-  csr_t *mLt = p->mLt = csr_init(NULL, p->n,     p->ncws, p->nzL); /** transposed */
-  if((!vP) || (!vLLR) || (!mH) || (!mLt))
-    ERROR("memory allocation failed!\n");
-  int ipair1=0, ipair2=0;
-  for (int i=0; i< p->n; i++){
-    one_prob_t *row = in[i];
-    vP[i] = row->p;
-    vLLR[i] = row->p > MINPROB ? log((1.0/ row->p -1)) : log(1/MINPROB - 1);
-    int j=0;
-    for( ; j< row->n1; j++){
-      mH->i[ipair1]  = i;    /** column */
-      mH->p[ipair1++]= row->idx[j]; /** row */
-    }
-    for( ; j< row->n2; j++){
-      mLt->p[ipair2]  = i;    /** column */
-      mLt->i[ipair2++]= row->idx[j]; /** row */
-    }
-  };
-  mH->nz  = p->nzH;
-  csr_compress(mH);
+void mat_init(one_prob_t **in, params_t *p, double prob){
+  int init_mat = (p->vP == NULL ? 1 : 0 );  
+  if(init_mat){
+    p->vP = malloc(p->n * sizeof(double));
+    p->vLLR = malloc(p->n * sizeof(double));
+    p->mH = csr_init(NULL, p->nrows, p->n, p->nzH);
+    p->mL = csr_init(NULL, p->ncws,  p->n, p->nzL); /** transposed */
+    if((!p->vP) || (!p->vLLR) || (!p->mH) || (!p->mL))
+      ERROR("memory allocation failed!\n");  
+    int ipair1=0, ipair2=0;
+    for (int i=0; i< p->n; i++){
+      one_prob_t *row = in[i];
+      int j=0;
+      for( ; j< row->n1; j++){
+        p->mH->i[ipair1]   = i;           /** column */
+        p->mH->p[ipair1++] = row->idx[j]; /** row */
+      }
+      for( ; j< row->n2; j++){
+        p->mL->i[ipair2]   = i;            /** column */
+        p->mL->p[ipair2++] = row->idx[j]; /** row */
+      }
+    };
+    p->mH->nz  = p->nzH;
+    csr_compress(p->mH);
 
-  p->mHt = csr_transpose(p->mHt, mH);
+    p->mHt = csr_transpose(p->mHt, p->mH);
+    
+    p->mL->nz = p->nzL;
+    csr_compress(p->mL);
+
+    p->mLt = csr_transpose(p->mLt,p->mL);
+  }
+  if(prob > 0){
+    double pp = prob;
+    double LLR = pp > MINPROB ? log((1.0/pp -1.0)) : log(1/MINPROB - 1);
+    for(int i=0; i< p->n; i++){
+      p->vP[i] = pp;
+      p->vLLR[i] = LLR;
+    }
+  }
+  else{
+    for(int i=0; i< p->n; i++){
+      one_prob_t *row = in[i];
+      double pp = row->p;
+      p->vP[i] = pp;
+      p->vLLR[i] = pp > MINPROB ? log((1.0/pp -1.0)) : log(1/MINPROB - 1);
+    }
+  }
   
-  mLt->nz = p->nzL;
-  csr_compress(mLt);
-  
+#ifndef NDEBUG  
   if(p->debug & 2){ /** print resulting vectors and matrices */    
     for(int i=0; i< p->n; i++)
-      printf("%g%s",vP[i],i+1<p->n?" ":"\n");
+      printf("%g%s",p->vP[i],i+1<p->n?" ":"\n");
     for(int i=0; i< p->n; i++)
-      printf("%g%s",vLLR[i],i+1<p->n?" ":"\n");
-    csr_out(mH);
-    csr_out(mLt);
+      printf("%g%s",p->vLLR[i],i+1<p->n?" ":"\n");
+    if(init_mat){
+      mzd_t *mdH = mzd_from_csr(NULL,p->mH);
+      printf("mH:\n");
+      //    csr_out(mH);
+      mzd_print(mdH);
+      mzd_free(mdH);
+
+      printf("mL:\n");
+    //    csr_out(mL);
+      mzd_t *mdL = mzd_from_csr(NULL,p->mL);
+      mzd_print(mdL);
+      mzd_free(mdL);
+    }
   }
+#endif 
 }
 
 int local_init(int argc, char **argv, params_t *p){
@@ -512,15 +534,10 @@ int local_init(int argc, char **argv, params_t *p){
 	printf("# read %s, mode=%d octal=%o\n",argv[i],p->mode,p->mode);
       }
     }
-    else if (sscanf(argv[i],"nrows=%d",&dbg)==1){ /** `nrows` */
-      p -> nrows = dbg;
+    else if (sscanf(argv[i],"nvec=%d",&dbg)==1){ /** `nvec` */
+      p -> nvec = dbg;
       if (p->debug)
-	printf("# read %s, nrows=%d\n",argv[i], p-> nrows);
-    }
-    else if (sscanf(argv[i],"ncws=%d",&dbg)==1){ /** `ncws` */
-      p -> ncws = dbg;
-      if (p->debug)
-	printf("# read %s, ncws=%d\n",argv[i],p-> ncws);
+	printf("# read %s, nvec=%d\n",argv[i],p-> nvec);
     }
     else if (sscanf(argv[i],"steps=%d",&dbg)==1){ /** `steps` */
       p -> steps = dbg;
@@ -565,52 +582,114 @@ int local_init(int argc, char **argv, params_t *p){
   return 0;
 };
 
-void local_kill(one_prob_t **copy, params_t *p){
-  if(copy)
-    free(copy);
-
+void local_kill(params_t *p){
   free(p->vP);
   free(p->vLLR);
-  p->mH = csr_free(p->mH);
-  p->mHt = csr_free(p->mHt);
-  p->mLt = csr_free(p->mLt);
   p->vP = p->vLLR = NULL;
+  p->mH =  csr_free(p->mH);
+  p->mHt = csr_free(p->mHt);
+  p->mL =  csr_free(p->mL);
+  p->mLt = csr_free(p->mLt);
 }
 
 int main(int argc, char **argv){
   params_t * const p=&prm;
   local_init(argc,argv, & prm); /* initialize variables */
-  /** read in the model file, initialize sparse matrices */
+  /** read in the error model file, initialize sparse matrices */
+  one_prob_t **err_mod = read_error_model(p->fin, p );
 
-  one_prob_t **copy = read_file(p->fin, p );  /** @todo: sort events and optimize decoder model */
+  double pmin=-1.0001, pmax=-0.9999;
+  if(p->mode==2){
+    pmin=1e-2; pmax=20.1e-2;
+  }
+  for(double prob = pmin; prob < pmax; prob += 1e-2){    
+    mat_init(err_mod, p, prob);
 
 
-  mat_init(copy, p);
-  
   // decoder_init( & prm);
   /** choose how many syndromes to use (depending on columns in `H`) */
 
-  // copy entries to main matrix
-  mzd_t * mH0=mzd_from_csr(NULL,p->mH);
-  printf("matrix mH0:\n");  mzd_print(mH0);
-  printf("xxx %d nvec=%d \n",p->nrows, p->nvec);
-
-  // get or prepare the syndromes
-  mzd_t *mHe = mzd_init(p->nrows, p->nvec);
-  mzd_t *mLe = mzd_init(p->ncws,  p->nvec);
-  p->maxJ = do_errors(mHe,mLe,p);
-  printf("matrix mLe:\n");  mzd_print(mLe);
+  // copy entries to main check matrix
+#ifndef NDEBUG  
+    if(p->debug & 64){ /** print matrices */
+      mzd_t *mH0 = mzd_from_csr(NULL,p->mH);
+      printf("matrix mH0:\n");  mzd_print(mH0);
+      mzd_free(mH0); 
+    }
   
-  // actually decode and generate error vectors (sparse)
-    mzd_t *mE0=NULL; 
-  mE0=do_decode(mHe, p); 
-  mzd_print(mE0);
+#endif 
 
-  // give the answer `L*e` for each set of syndromes in turn
+    // prepare the syndrome vectors
+    /** todo: add code for reading syndrome information from file */
+    mzd_t *mHe = mzd_init(p->nrows, p->nvec); /** each column a syndrome vector `H*e` */
+    mzd_t *mLe = mzd_init(p->ncws,  p->nvec); /** each column `L*e` vector */
+    p->maxJ = do_errors(mHe,mLe,p);
 
+    if(p->debug & 128){ /** print matrices */
+      printf("matrix mLe:\n");  mzd_print(mLe);
+      printf("matrix mHe:\n");  mzd_print(mHe);
+    }
+    
+    // actually decode and generate error vectors 
+    mzd_t *mE0=NULL;
+#ifndef NDEBUG  /** need `mHe` later */
+    mzd_t *mS=mzd_copy(NULL,mHe);
+    mE0=do_decode(mS, p); /** each row a decoded error vector */
+    mzd_free(mS); mS=NULL;
+#else
+    mE0=do_decode(mHe, p); /** each row a decoded error vector */
+#endif /* NDEBUG */
+    mzd_t *mE0t = mzd_transpose(NULL, mE0);
+    mzd_free(mE0); mE0=NULL;
+    
+    if(p->debug & 128){ /** print matrices */
+      printf("mE0t:\n");
+      mzd_print(mE0t); printf("\n");
+    }
+#ifndef NDEBUG 
+    mzd_t *prodHe = csr_mzd_mul(NULL,p->mH,mE0t,1);
+    mzd_add(prodHe, prodHe, mHe);
+    if(!mzd_is_zero(prodHe)){
+      printf("syndromes difference:\n");
+      mzd_print(prodHe);
+      ERROR("some syndromes are not matched!\n");
+    }
+    mzd_free(prodHe); prodHe = NULL;
+    mzd_free(mHe);    mHe    = NULL;
+#endif
+
+    mzd_t *prodLe = csr_mzd_mul(NULL,p->mL,mE0t,1);
+
+    if(p->debug & 128){ /** print matrices */
+      printf("prodLe:\n");
+      mzd_print(prodLe); 
+      printf("mLe:\n");
+      mzd_print(mLe); 
+    }
+  
+    mzd_add(prodLe, prodLe, mLe);
+    mzd_free(mLe); mLe=NULL;
+    
+    int fails=0;
+    for(rci_t ic=0; ic< prodLe->ncols; ic++){
+      rci_t ir=0;
+      if(mzd_find_pivot(prodLe, ir, ic, &ir, &ic)){
+        fails++;
+        //      printf("ir=%d ic=%d fails=%d\n",ir,ic,fails);
+      }
+      else
+        break;          
+    }
+    if(p->mode == 2)
+      //  printf("# %g failed=%d out of %d\n",fails, prodLe->ncols);  
+      printf(" %g %d %d # %s\n",prob, fails, prodLe->ncols, p->fin);
+    else 
+      printf(" %d %d # %s\n",fails, prodLe->ncols, p->fin);
+    mzd_free(prodLe);
+  }
   // clean up
-  mzd_free(mH0);
-  local_kill(copy, p);
+  free(err_mod); err_mod=NULL;
+  local_kill(p);
   return 0;
 }
 

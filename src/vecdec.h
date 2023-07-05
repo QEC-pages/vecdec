@@ -52,7 +52,8 @@ typedef struct PARAMS_T {
   double *vLLR; /**< vector of LLRs */
   int nzH, nzL; /**< count of non-zero entries in `H` and `L` */
   csr_t *mH; /**< sparse version of H (by rows) */
-  csr_t *mHt; /**< sparse version of H (by rows) */
+  csr_t *mHt; /**< sparse version of H (by columns) */
+  csr_t *mL; /**< sparse version of L (by rows) */
   csr_t *mLt; /**< sparse version of L (by columns) */
   int maxJ;  /** memory to initially allocate for local storage */
 } params_t;

@@ -8,7 +8,7 @@
 0.001 0 1 ; 0
 0.1 1 2 ;   1
 0.05 0 1 2 ; 0 1 # a comment is OK here
-0.009 2 1 ; 0 # no non-zero entries in this column! 
-0.01 2 0; 1
+0.009 2 1 ;  # no non-zero entries in this column! 
+0.01 2 ; 
 # use as many rows as necessary
 # rows with identical entries will be automatically combined (not in this version)
