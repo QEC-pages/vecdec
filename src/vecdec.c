@@ -248,9 +248,9 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
     for(int i=0;i< rank; i++)     
       mzd_copy_row(mE,pivs->values[i],mS,i);
     mEt = mzd_transpose(mEt, mE);
-    for(int i=0; i< p->n; i++){
+    for(int i=0; i< mEt->nrows; i++){
       double energ=mzd_row_energ(p->vLLR,mEt,i);
-      if(energ< vE[i]){
+      if(energ < vE[i]){
         vE[i]=energ;
         mzd_copy_row(mEt0,i,mEt,i);
       }
@@ -600,9 +600,9 @@ int main(int argc, char **argv){
 
   double pmin=-1.0001, pmax=-0.9999;
   if(p->mode==2){
-    pmin=1e-2; pmax=20.1e-2;
+    pmin=1e-3; pmax=20.1e-3;
   }
-  for(double prob = pmin; prob < pmax; prob += 1e-2){    
+  for(double prob = pmin; prob < pmax; prob += 1e-3){    
     mat_init(err_mod, p, prob);
 
 
