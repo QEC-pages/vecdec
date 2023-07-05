@@ -367,30 +367,52 @@ csr_t *csr_free(csr_t *p){
  * check existing size and (re)allocate if  needded 
  */
 csr_t *csr_init(csr_t *mat, int rows, int cols, int nzmax){
-  if ((mat!=NULL)&&((mat->nzmax<nzmax)||(mat->nzmax<rows+1)))
+  if ((mat!=NULL)&&((mat->nzmax < nzmax)||(mat->nzmax < rows+1)))
     mat=csr_free(mat);  /* allocated size was too small */  
-  if(mat==NULL)
+  if(mat==NULL){
     mat=malloc(sizeof(csr_t));  
-  mat->p=calloc(MAX(nzmax,(rows+1)),sizeof(int));
-  mat->i=calloc(nzmax,sizeof(int)); 
-  if ((mat->p==NULL) || (mat->i==NULL))
-    ERROR("csr_init: failed to allocate CSR rows=%d cols=%d nzmax=%d",
-	  rows,cols,nzmax);
+    mat->p=calloc(MAX(nzmax,(rows+1)),sizeof(int));
+    mat->i=calloc(nzmax,sizeof(int)); 
+    if ((mat == NULL) || (mat->p==NULL) || (mat->i==NULL))
+      ERROR("csr_init: failed to allocate CSR rows=%d cols=%d nzmax=%d",
+            rows,cols,nzmax);
+    mat->nzmax=nzmax;
+  }
   mat->rows=rows;
   mat->cols=cols;
   mat->nz=0; /* empty */
-  mat->nzmax=nzmax; 
   return mat;
 }
-
-
-typedef struct { int a; int b; } int_pair;
 
 /* helper function */
 static int cmp_int_pairs(const void *p1, const void *p2){
   if ((((int_pair *) p1)->a)!=(((int_pair *) p2)->a))
     return  ((((int_pair *) p1)->a)-(((int_pair *) p2)->a));    
   return ((((int_pair *) p1)->b)-(((int_pair *) p2)->b));
+}
+
+/**
+ * @brief initialize a CSR matrix from list of pairs (row,col)
+ * @param mat use existing handle if sufficient size (allocate if NULL)
+ * @param nz number of non-zero pairs in the list 
+ * @param prs array of pairs (will be sorted)
+ * @param nrows matrix dimension
+ * @param ncols matrix dimension
+ */
+csr_t * csr_from_pairs(csr_t *mat, int nz, int_pair *prs, int nrows, int ncols){
+  mat = csr_init(mat, nrows, ncols, nz);
+  qsort(prs, nz, sizeof(int_pair), cmp_int_pairs);
+  int i, j=0;
+  for(i=0;i < mat->rows; i++){
+    mat->p[i]=j;
+    while ((prs[j].a == i) && (j<nz)){
+      mat->i[j]=prs[j].b;
+      j++;
+    }
+  }
+  mat->p[i]=j; /* final value */
+  mat->nz=-1; /* indicate compressed form */
+  return mat;
 }
 
 /**

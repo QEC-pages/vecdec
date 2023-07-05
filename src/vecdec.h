@@ -56,6 +56,9 @@ typedef struct PARAMS_T {
   csr_t *mL; /**< sparse version of L (by rows) */
   csr_t *mLt; /**< sparse version of L (by columns) */
   int maxJ;  /** memory to initially allocate for local storage */
+  double pmin; /** parameters for `mode&2 !=0` (scan probabilities) */
+  double pmax;
+  double pstep;
 } params_t;
 
 extern params_t prm;
@@ -78,8 +81,11 @@ extern params_t prm;
   "\t seed= [integer]\t: RNG seed or use time(NULL) if 0 (default)\n"	\
   "\t mode= [integer]\t: bitmap for operation mode (default: 0)\n"      \
   "\t\t*   0: clear the entire mode bitmap to 0.\n"                     \
-  "\t\t*   1: run as standalone program (no stdin)\n"                   \
-  "\t\t*   2: generate random errors and syndrome vectors to stdout\n"  \
+  "\t\t*   1: use old error model file format\n"                        \
+  "\t\t*   2: cycle global probabilities in error model from `pmin` to `pmax`\n" \
+  "\t pmin = [double]\t: min global probability with `mode&2`\n"        \
+  "\t pmax = [double]\t: max global probability with `mode&2`\n"        \
+  "\t pstep =[double]\t: step of global probability with `mode&2`\n"    \
   "\t debug=[integer]\t: bitmap for aux information to output (default: 1)\n" \
   "\t\t*   0: clear the entire debug bitmap to 0.\n"                    \
   "\t\t*   1: output misc general info (on by default)\n"		\

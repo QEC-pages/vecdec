@@ -98,6 +98,19 @@ typedef struct{    /*  */
 } csr_t ;
 
 
+typedef struct { int a; int b; } int_pair;
+
+/**
+ * @brief initialize a CSR matrix from list of pairs (row,col)
+ * @param mat use existing handle if sufficient size (allocate if NULL)
+ * @param nz number of non-zero pairs in the list 
+ * @param prs array of pairs (will be sorted)
+ * @param nrows matrix dimension
+ * @param ncols matrix dimension
+ * @return the created matrix 
+ */
+csr_t * csr_from_pairs(csr_t *mat, int nz, int_pair * const prs, int nrows, int ncols);
+
 #if defined(__cplusplus) && !defined (_MSC_VER)
 extern "C" {
 #endif
