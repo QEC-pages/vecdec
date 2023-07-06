@@ -45,6 +45,7 @@ typedef struct PARAMS_T {
   int steps; /** number of random window decoding steps, default: `1` */
   int nvec;  /** max number of syndromes to process in one bunch (default: `16`) */
   int ntot;  /** total number of syndromes to process (default: `1`) */
+  int nfail; /** when non-zero, num of fails to terminate the run (default: `0`) */
   int swait; /** gauss decoding steps with no vectors changed to stop (default: `0` - do not stop) */
   int lerr;  /** local search after gauss up to this weight (default: `0`) */
   int mode;  /** mode information bitmap */
@@ -83,6 +84,7 @@ extern params_t prm;
   "\t swait=[integer]\t: steps w/o new errors to stop (0, do not stop)\n" \
   "\t nvec =[integer]\t: max vector size for decoding (default: 16)\n"  \
   "\t ntot =[integer]\t: total syndromes to process (default: 1)\n"     \
+  "\t nfail=[integer]\t: total fails to terminate (0, do not terminate)\n" \
   "\t seed= [integer]\t: RNG seed or use time(NULL) if 0 (default)\n"	\
   "\t mode= [integer]\t: bitmap for operation mode (default: 0)\n"      \
   "\t\t*   0: clear the entire mode bitmap to 0.\n"                     \

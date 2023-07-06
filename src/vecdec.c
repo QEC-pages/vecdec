@@ -24,7 +24,7 @@
 #include "vecdec.h"
 
 params_t prm={ .nrows=0, .n=0, .ncws=0, .steps=1, .lerr=0, .swait=0,
-  .nvec=16, .ntot=1, .seed=0, 
+  .nvec=16, .ntot=1, .nfail=0, .seed=0, 
   .debug=1, .fin=NULL,
   .colw=10, .mode=0, .maxJ=20, 
   .pmin=-1, .pmax=-1, .pstep=1e-3,
@@ -694,6 +694,11 @@ int local_init(int argc, char **argv, params_t *p){
       if (p->debug)
 	printf("# read %s, ntot=%d\n",argv[i],p-> ntot);
     }    
+    else if (sscanf(argv[i],"nfail=%d",&dbg)==1){ /** `nfail` */
+      p -> nfail = dbg;
+      if (p->debug)
+	printf("# read %s, nfail=%d\n",argv[i],p-> nfail);
+    }    
     else if (sscanf(argv[i],"seed=%d",&dbg)==1){ /** `seed` */
       p->seed=dbg;
       if (p->debug)
@@ -850,13 +855,15 @@ int main(int argc, char **argv){
           fails++;
           //      printf("ir=%d ic=%d fails=%d\n",ir,ic,fails);
         }
-        else
+        else /** no more pivots */
           break;          
       }
       /** update the global counts */
       synd_tot  += prodLe->ncols;
       synd_fail += fails;
       mzd_free(prodLe); prodLe=NULL;
+      if((p->nfail>0) && (synd_fail >= p->nfail))
+        break;
     }
     
     if(p->mode&2)
