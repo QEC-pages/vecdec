@@ -1,0 +1,16 @@
+# bs code d=2, separate X and Z measurements 
+# layout: 
+# 0  1  
+# 2  3
+4 3 4 # n, number of repetitions, maximum operations on one ancilla qubit 
+# separate X and Z measurements 
+X0 X1 _  _ # g1 	 
+X2 X3 _  _ # g2	
+_ _ Z0 Z2  # g3     
+_ _ Z1 Z3  # g4
+
+# stabilizer generators from gauge generators
+! 1 2 # g1g2  XXXX 
+! 3 4 # g3g4: ZZZZ
+
+: Z0 Z1 # logical operator 

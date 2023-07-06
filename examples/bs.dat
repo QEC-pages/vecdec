@@ -1,0 +1,16 @@
+# running bs.sh
+# error probability p1
+# columns: d p1 Nfails Ntotal
+2 0.032 1080 4096 # tmp.dem
+# columns: d p1 Nfails Ntotal
+2 0.016 605 4096 # tmp.dem
+# columns: d p1 Nfails Ntotal
+2 0.008 354 4096 # tmp.dem
+# columns: d p1 Nfails Ntotal
+2 0.004 177 4096 # tmp.dem
+# columns: d p1 Nfails Ntotal
+2 0.002 104 4096 # tmp.dem
+# columns: d p1 Nfails Ntotal
+2 0.001 40 4096 # tmp.dem
+# columns: d p1 Nfails Ntotal
+2 0.0005 15 4096 # tmp.dem
