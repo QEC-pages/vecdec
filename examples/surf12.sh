@@ -16,7 +16,7 @@ dmax=7 # maximum code distance
 p0=0.032 # error probability for j=0 
 jmin=0 # range for calculating p1 and p2 (using p0/2**j )
 jmax=6
-Ntotal=$((1024*4)) # total number of steps to use
+Ntotal=$((1024*100)) # total number of steps to use
 
 echo "# running surf12.sh" > $outfile
 echo "# depolarizing probability p1, measurement error p2" >> $outfile
@@ -46,7 +46,7 @@ for (( d0=$dmin; d0<=$dmax; d0+=2 )) do # distance loop
         # analyze errors 
         $stim analyze_errors --in $fnam.stim > $fnam.dem
         
-        $vecdec debug=0 steps=$((d0*d0*d0)) nvec=$Ntotal f=$fnam.dem > $fnam.out
+        $vecdec debug=0 steps=$((d0*d0*d0*10)) swait=5 ntot=$Ntotal nvec=4096 f=$fnam.dem > $fnam.out
         echo $d0 $p1 $p2 `cat $fnam.out` # show the output
         echo $d0 $p1 $p2 `cat $fnam.out` >> $outfile # save to big file        
       done # loop over p2

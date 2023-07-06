@@ -48,6 +48,7 @@ vecdec
 *.su
 *.idb
 *.pdb
+*.log
 # Long input files
 
 # emacs backup files 

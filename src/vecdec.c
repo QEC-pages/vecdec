@@ -23,8 +23,10 @@
 #include "util_m4ri.h"
 #include "vecdec.h"
 
-params_t prm={ .nrows=0, .n=0, .ncws=0, .steps=1, .debug=1, .fin=NULL,
-  .seed=0, .colw=10, .mode=0, .maxJ=20, .nvec=16,
+params_t prm={ .nrows=0, .n=0, .ncws=0, .steps=1, .lerr=0, .swait=0,
+  .nvec=16, .ntot=1, .seed=0, 
+  .debug=1, .fin=NULL,
+  .colw=10, .mode=0, .maxJ=20, 
   .pmin=-1, .pmax=-1, .pstep=1e-3,
   .vP=NULL, .vLLR=NULL, .mH=NULL, .mHt=NULL, .mL=NULL, .mLt=NULL};
 
@@ -192,10 +194,8 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
   mzd_t * mH = mzd_from_csr(NULL, p->mH);
 
   mzd_t * mE = mzd_init(mH->ncols,mS->ncols); /**< error vectors by col */
-  mzd_t * mEt= mzd_init(mS->ncols,mH->ncols); /**< error vectors by row */
-  mzd_t * mEt0=mzd_init(mS->ncols,mH->ncols); /**< best errors to output */
   double *vE = calloc(mS->ncols,sizeof(double)); /**< best energies */
-  if((!mE) || (!mEt) || (!mEt0) || (!vE))
+  if((!mE) || (!vE))
     ERROR("memory allocation failed!\n");
 
   mzp_t * perm=mzp_init(p->n); /** identity column permutation */
@@ -228,10 +228,10 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
   mzd_set_ui(mE,0); /** zero matrix */
   for(int i=0;i< rank; i++)     
     mzd_copy_row(mE,pivs->values[i],mS,i);
-  mEt0 = mzd_transpose(mEt0,mE);
+  mzd_t *mEt0 = mzd_transpose(NULL,mE);
   for(int i=0; i< mS->ncols; i++)
     vE[i]=mzd_row_energ(p->vLLR,mEt0,i);
-
+  int iwait=0, ichanged=0;
   /** main loop over permutations * ****************** */
   for (int ii=1; ii< p->steps; ii++){
     pivs=mzp_rand(pivs); /** random pivots LAPAC-style */
@@ -248,19 +248,26 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
     mzd_set_ui(mE,0); /** zero matrix */
     for(int i=0;i< rank; i++)     
       mzd_copy_row(mE,pivs->values[i],mS,i);
-    mEt = mzd_transpose(mEt, mE);
+    ichanged=0;
+    mzd_t * mEt = mzd_transpose(NULL, mE);
     for(int i=0; i< mEt->nrows; i++){
       double energ=mzd_row_energ(p->vLLR,mEt,i);
       if(energ < vE[i]){
         vE[i]=energ;
         mzd_copy_row(mEt0,i,mEt,i);
+        ichanged++;
       }
     }
+    mzd_free(mEt);
+    iwait = ichanged > 0 ? 0 : iwait+1 ;
+    if(p->debug&8) /** convergence information */
+      printf(" ii=%d of %d changed=%d\n",ii,p->steps,ichanged);
+    if((p->swait > 0)&&(iwait > p->swait))
+      break;   
   }
   /** clean-up */
   mzd_free(mH);
   mzd_free(mE);
-  mzd_free(mEt);
   free(vE);
   mzp_free(perm);
   mzp_free(pivs);
@@ -285,7 +292,7 @@ void read_dem_file(char *fnam, params_t * const p){
     ERROR("memory allocation failed\n");
 
   if(p->debug & 1)
-    printf("opening DEM file %s\n",fnam);  
+    printf("# opening DEM file %s\n",fnam);  
   FILE *f = fopen(fnam, "r");
   if(f==NULL)
     ERROR("can't open the file %s for reading\n",fnam);
@@ -419,7 +426,7 @@ one_prob_t ** read_error_model(char *fnam, params_t * const p){
   p->nzH = p->nzL = 0;  /** count non-zero entries in `H` and `L` */
 
   if(p->debug & 1)
-    printf("opening error-model file %s\n",fnam);  
+    printf("# opening error-model file %s\n",fnam);  
   FILE *f = fopen(fnam, "r");
   if(f==NULL)
     ERROR("can't open the file %s for reading\n",fnam);
@@ -672,6 +679,21 @@ int local_init(int argc, char **argv, params_t *p){
       if (p->debug)
 	printf("# read %s, steps=%d\n",argv[i],p-> steps);
     }
+    else if (sscanf(argv[i],"swait=%d",&dbg)==1){ /** `swait` */
+      p -> swait = dbg;
+      if (p->debug)
+	printf("# read %s, swait=%d\n",argv[i],p-> swait);
+    }
+    else if (sscanf(argv[i],"lerr=%d",&dbg)==1){ /** `lerr` */
+      p -> lerr = dbg;
+      if (p->debug)
+	printf("# read %s, lerr=%d\n",argv[i],p-> lerr);
+    }
+    else if (sscanf(argv[i],"ntot=%d",&dbg)==1){ /** `ntot` */
+      p -> ntot = dbg;
+      if (p->debug)
+	printf("# read %s, ntot=%d\n",argv[i],p-> ntot);
+    }    
     else if (sscanf(argv[i],"seed=%d",&dbg)==1){ /** `seed` */
       p->seed=dbg;
       if (p->debug)
@@ -747,100 +769,100 @@ int main(int argc, char **argv){
   else
     read_dem_file(p->fin,p); /** creates all matrices */
   
-  //  double pmin=-1.0001, pmax=-0.999999, pstep=1e-3;
-  //  if(p->mode&2){
-  //    pmin=1e-3; pmax=20e-3; pstep=1e-3;
-  //  }
+#ifndef NDEBUG  
+  if(p->debug & 64){ /** print matrices */
+    mzd_t *mH0 = mzd_from_csr(NULL,p->mH);
+    printf("matrix mH0:\n");  mzd_print(mH0);
+    mzd_free(mH0); 
+    
+    mzd_t *mL0 = mzd_from_csr(NULL,p->mL);
+    printf("matrix mL0:\n");  mzd_print(mL0);
+    mzd_free(mL0); 
+    
+  }
+  
+#endif 
+    
   double pmax=p->pmax +0.5*p->pstep;
   for(double prob = p->pmin; prob < pmax; prob += p->pstep){    
     if(p->mode&2)
       prob_init(p, prob);
+    /** at least one round always */
+    int rounds=(int )ceil((double) p->ntot / (double) p->nvec); 
+    long int synd_tot=0, synd_fail=0;
+    for(int iround=0; iround < rounds; iround++){
+      if(p->debug &1)
+        printf("# starting round %d of %d\n", iround, rounds);
+      /** todo: add code for reading syndrome information from file */
+      
+      // decoder_init( & prm);
+      mzd_t *mHe = mzd_init(p->nrows, p->nvec); /** each column a syndrome vector `H*e` */
+      mzd_t *mLe = mzd_init(p->ncws,  p->nvec); /** each column `L*e` vector */
+      p->maxJ = do_errors(mHe,mLe,p);
 
-  // decoder_init( & prm);
-  /** choose how many syndromes to use (depending on columns in `H`) */
-
-  // copy entries to main check matrix
-#ifndef NDEBUG  
-    if(p->debug & 64){ /** print matrices */
-      mzd_t *mH0 = mzd_from_csr(NULL,p->mH);
-      printf("matrix mH0:\n");  mzd_print(mH0);
-      mzd_free(mH0); 
-
-      mzd_t *mL0 = mzd_from_csr(NULL,p->mL);
-      printf("matrix mL0:\n");  mzd_print(mL0);
-      mzd_free(mL0); 
-
-    }
-  
-#endif 
-
-    // prepare the syndrome vectors
-    /** todo: add code for reading syndrome information from file */
-    mzd_t *mHe = mzd_init(p->nrows, p->nvec); /** each column a syndrome vector `H*e` */
-    mzd_t *mLe = mzd_init(p->ncws,  p->nvec); /** each column `L*e` vector */
-    p->maxJ = do_errors(mHe,mLe,p);
-
-    if(p->debug & 128){ /** print matrices */
-      printf("matrix mLe:\n");  mzd_print(mLe);
-      printf("matrix mHe:\n");  mzd_print(mHe);
-    }
+      if(p->debug & 128){ /** print matrices */
+        printf("matrix mLe:\n");  mzd_print(mLe);
+        printf("matrix mHe:\n");  mzd_print(mHe);
+      }
     
-    // actually decode and generate error vectors 
-    mzd_t *mE0=NULL;
+      // actually decode and generate error vectors 
+      mzd_t *mE0=NULL;
 #ifndef NDEBUG  /** need `mHe` later */
-    mzd_t *mS=mzd_copy(NULL,mHe);
-    mE0=do_decode(mS, p); /** each row a decoded error vector */
-    mzd_free(mS); mS=NULL;
+      mzd_t *mS=mzd_copy(NULL,mHe);
+      mE0=do_decode(mS, p); /** each row a decoded error vector */
+      mzd_free(mS); mS=NULL;
 #else
-    mE0=do_decode(mHe, p); /** each row a decoded error vector */
+      mE0=do_decode(mHe, p); /** each row a decoded error vector */
 #endif /* NDEBUG */
-    mzd_t *mE0t = mzd_transpose(NULL, mE0);
-    mzd_free(mE0); mE0=NULL;
+      mzd_t *mE0t = mzd_transpose(NULL, mE0);
+      mzd_free(mE0); mE0=NULL;
     
-    if(p->debug & 128){ /** print matrices */
-      printf("mE0t:\n");
-      mzd_print(mE0t); printf("\n");
-    }
 #ifndef NDEBUG 
-    mzd_t *prodHe = csr_mzd_mul(NULL,p->mH,mE0t,1);
-    mzd_add(prodHe, prodHe, mHe);
-    if(!mzd_is_zero(prodHe)){
-      printf("syndromes difference:\n");
-      mzd_print(prodHe);
-      ERROR("some syndromes are not matched!\n");
-    }
-    mzd_free(prodHe); prodHe = NULL;
-    mzd_free(mHe);    mHe    = NULL;
+      mzd_t *prodHe = csr_mzd_mul(NULL,p->mH,mE0t,1);
+      mzd_add(prodHe, prodHe, mHe);
+      if(!mzd_is_zero(prodHe)){
+        if((p->debug&512)||(p->nvec <=64)){
+          printf("syndromes difference:\n");
+          mzd_print(prodHe);
+        }
+        ERROR("some syndromes are not matched!\n");
+      }
+      mzd_free(prodHe); prodHe = NULL;
+      mzd_free(mHe);    mHe    = NULL;
 #endif
 
-    mzd_t *prodLe = csr_mzd_mul(NULL,p->mL,mE0t,1);
+      mzd_t *prodLe = csr_mzd_mul(NULL,p->mL,mE0t,1);
 
-    if(p->debug & 128){ /** print matrices */
-      printf("prodLe:\n");
-      mzd_print(prodLe); 
-      printf("mLe:\n");
-      mzd_print(mLe); 
-    }
-  
-    mzd_add(prodLe, prodLe, mLe);
-    mzd_free(mLe); mLe=NULL;
-    
-    int fails=0;
-    for(rci_t ic=0; ic< prodLe->ncols; ic++){
-      rci_t ir=0;
-      if(mzd_find_pivot(prodLe, ir, ic, &ir, &ic)){
-        fails++;
-        //      printf("ir=%d ic=%d fails=%d\n",ir,ic,fails);
+      if(p->debug & 128){ /** print matrices */
+        printf("prodLe:\n");
+        mzd_print(prodLe); 
+        printf("mLe:\n");
+        mzd_print(mLe); 
       }
-      else
-        break;          
+  
+      mzd_add(prodLe, prodLe, mLe);
+      mzd_free(mLe); mLe=NULL;
+    
+      int fails=0;
+      for(rci_t ic=0; ic< prodLe->ncols; ic++){
+        rci_t ir=0;
+        if(mzd_find_pivot(prodLe, ir, ic, &ir, &ic)){
+          fails++;
+          //      printf("ir=%d ic=%d fails=%d\n",ir,ic,fails);
+        }
+        else
+          break;          
+      }
+      /** update the global counts */
+      synd_tot  += prodLe->ncols;
+      synd_fail += fails;
+      mzd_free(prodLe); prodLe=NULL;
     }
+    
     if(p->mode&2)
-      //  printf("# %g failed=%d out of %d\n",fails, prodLe->ncols);  
-      printf(" %g %d %d # %s\n",prob, fails, prodLe->ncols, p->fin);
+      printf(" %g %ld %ld # %s\n",prob, synd_fail, synd_tot, p->fin);
     else 
-      printf(" %d %d # %s\n",fails, prodLe->ncols, p->fin);
-    mzd_free(prodLe);
+      printf(" %ld %ld # %s\n",synd_fail, synd_tot, p->fin);
   }
   // clean up
   free(err_mod); err_mod=NULL;
