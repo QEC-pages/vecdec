@@ -46,7 +46,7 @@ for (( d0=$dmin; d0<=$dmax; d0+=2 )) do # distance loop
         # analyze errors 
         $stim analyze_errors --in $fnam.stim > $fnam.dem
         
-        $vecdec debug=0 steps=$((d0*d0*d0*10)) swait=5 ntot=$Ntotal nvec=8192 nfail=1000 f=$fnam.dem > $fnam.out
+        $vecdec debug=0 steps=$((d0*d0*d0*10)) swait=$((d0*d0*d0)) ntot=$Ntotal nvec=8192 nfail=1000 f=$fnam.dem > $fnam.out
         echo $d0 $p1 $p2 `cat $fnam.out` # show the output
         echo $d0 $p1 $p2 `cat $fnam.out` >> $outfile # save to big file        
       done # loop over p2
