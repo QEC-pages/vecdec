@@ -1,51 +1,119 @@
 # vecdec - a simple vectorized decoder
 
+## Installation 
+
+The program uses `m4ri` library for binary linear algebra.
+To install this library on a Ubuntu system, run
+    `sudo apt-get install libm4ri-dev`
+    
+For compilation *help*, change to the (vecdec/src/) directory and just run w/o
+arguments  
+    `make`
+Since the program  is experimental, I recommend compiling with  
+    `make vecdec EXTRA=""`
+This will enable additional integrity checks.
+
 ## Error model
 
-An error model is a collection of rows, or independent `events`, each of which
-is characterized by a probability `p`, a list of affected syndrome bits, and a
-list of affected codewords.  Can be read from a file similar to the following
-example: 
+A detector error model (DEM) is a collection of independent `events`, each of
+which is characterized by a probability `p`, a list of affected syndrome bits,
+and a list of affected codewords.  Can be created by `stim`, see shell scripts
+in the (vecdec/examples/) directory.  Notice that `stim` cycles are not
+supported in the DEM file.  Only the lines starting with `error` are used; the
+`detector` and `shift_detectors` are silently ignored, as well as any comments.
+Any other entry will trigger an error.
+
 ```bash
-# end-of line comments can be used anywhere 
-# [rows `r` in the check matrix] [number of codewords, `k`] [number of entries `n`]
-3 2 4
-# each row is the probability followed by the list of syndrome bits, 
-# followed by the list of affected codewords separated by a semicolon.
-0.001 0 1 ; 0
-0.01 1 2 ; 1
-0.005 0 1 2 ; 0 1 
-0.0001 2 0; 1 
-# second semicolon can be used to start new block of data if wanted 
-# use as many rows as necessary
-# rows with identical entries will be automatically combined
+# An example DEM file created by `stim`
+error(0.125) D0
+error(0.125) D0 D1
+error(0.125) D0 D2
+error(0.125) D1 D3
+error(0.125) D1 L0
+error(0.125) D2 D4
+error(0.125) D3 D5
+error(0.125) D4 D6
+error(0.125) D5 D7
+detector(1, 0) D0
+detector(3, 0) D1
+shift_detectors(0, 1) 0
+detector(1, 0) D2
+detector(3, 0) D3
+shift_detectors(0, 1) 0
+detector(1, 0) D4
+detector(3, 0) D5
+detector(1, 1) D6
+detector(3, 1) D7
 ```
 
+Older format can also be read from a file similar to the following example
+(requires `mode=1` command-line switch; the support for such a format will soon
+be dropped):
+
+```bash
+# handwritten error model for 
+# distance-3 surface code (perfect measurements)
+# 0   1   2
+# X0    X1
+# 3   4   5 
+#  X2      X3
+# 6   7   8  
+# logical X = 0 1 2
+# logical Z = 0 3 6 
+4 1 9
+0.005 0 ; 0 # Z error at qubit 0
+0.005 1 ; 0 # 1 
+0.005 1 ; 0 # 2 
+0.005 0 2 ; # 3
+0.005 1 2 ; # 4
+0.005 1 3 ; # 5
+0.005 2 ; # 6
+0.005 2 ; # 7
+0.005 3 ; # 8
+#
+```
+
+## How it works 
+
 Given a syndrome vector `s`, the goal is to construct the most likely binary
-vector `e` such that `H*e=s`.  For each input row, the program outputs a binary
-vector `L*e` with the found `e`. Most common operation as a filter: syndrome
-vectors on `stdin`, output vectors on `stdout`.
+vector `e` such that `H*e=s`.  The decoding is verified by computing the vector
+`L*e` and comparing it with the result computed from the actual error.
 
-## Syndrome vectors
+Right now, the only option is to generate a bunch of random errors (for a given
+error model) and associated syndrome vectors, to be processed in one big step.
 
-Each syndrome vector is a row of of exactly `r` zerows and ones.  Rows starting
-with `#` are considered comments and ignored. An empty input row produces an
-empty row on output.
+The program processes up to `nvec` syndrome vectors at a time.  The syndrome
+columns are written as columns of a binary matrix `S`.  The original check
+matrix `H` (extracted from the error model) is combined with `S`, to form
+block-matrix `[H,S]`.  At each step, a column ordering `P` is randomly generated
+(using values of event probabilities to help), the Gauss elimination is
+performed on the rows of the combined matrix, creating the list of pivot columns
+`[i0, i1, ...]`, with one entry per row.  Given the transformed syndrome column
+`[s0, s1, ...]`, the output vector has values given by the list of pairs
+[(i0,s0), (i1,s1), ...].  The energy is calculated as the sum of LLRs for
+non-zero bits in `e` and recorded, along with the sparse form of `e` if the
+energy is small enough.
 
-## How it works
+The program stops after a sufficient number of attempts is made, and compares
+the values `L*e` for each found error `e` with the similar ones generated from
+the original errors; any mismatch is a logical error.
 
-The program processes a up to `n` syndrome vectors at a time.  The syndrome
-columns are written after all columns of the original check matrix `H`.  At each
-step, a column ordering `P` is randomly generated (using values of event
-probabilities to help), the Gauss elimination is performed on the rows of the
-combined matrix, creating the list of pivot columns `[i0, i1, ...]`, with one
-entry per row.  Given the transformed syndrome column `[s0, s1, ...]`, the
-output vector has values given by the list of pairs [(i0,s0), (i1,s1), ...].
-The energy is calculated as the sum of LLRs for non-zero bits in `e` and
-recorded, along with the sparse form of `e` if the energy is small enough.
+## How to run it
 
-The program stops after a sufficient number of attempts is made, and outputs the
-values `L*e`, one per syndrome row, in this order.
+The number of syndrome vectors to generate and process is given by `nvec`
+(command-line parameter, by default `nvec=16`.)  I have only tried values of
+`nvec` up to around $10^4$.
+
+Another important command-line parameter is `steps`.  It should be set to a
+large number (experiment!) for decoding to be accurate, especially close to the
+threshold.
+
+Use `debug=0` to suppress any output except for simulation results.  Use
+`debug=1023` to output all possible debugging information (not all bits are used
+at this time).
+
+Use `f="filename"` (with or without quotes) to specify the input file with the error model.
+Eventually, the program will be able to process externally generated syndrome data.
 
 ## Libraries 
 
