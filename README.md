@@ -104,6 +104,11 @@ The `suggested` number of syndrome vectors to generate and process is given by
 `ntot`.  In reality, the number of rounds is calculated as $\lceil$ `ntot/nvec`
 $\rceil$, where `nvec` is another command line argument (default `nvec=16`).  In
 each round, `nvec` different syndrome vectors will be generated and processed.
+Ideally, `nvec` should be a factor `64`, since 64-bit integers are used to store
+binary vectors internally.
+
+The parameter `nfail`, when non-zero, will cause execution to stop after
+accumulating a given number of logical errors.
 
 The parameter `lerr` (currently `unsupported`), when non-zero, specifies the
 maximum number of non-zero error bits outside of the index set to try before
@@ -137,6 +142,7 @@ src/vecdec: a simple vectorized random information set decoder.
 	 swait=[integer]	: steps w/o new errors to stop (0, do not stop)
 	 nvec =[integer]	: max vector size for decoding (default: 16)
 	 ntot =[integer]	: total syndromes to process (default: 1)
+	 nfail=[integer]	: total fails to terminate (0, do not terminate)
 	 seed= [integer]	: RNG seed or use time(NULL) if 0 (default)
 	 mode= [integer]	: bitmap for operation mode (default: 0)
 		*   0: clear the entire mode bitmap to 0.
