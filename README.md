@@ -100,23 +100,71 @@ the original errors; any mismatch is a logical error.
 
 ## How to run it
 
-The number of syndrome vectors to generate and process is given by `nvec`
-(command-line parameter, by default `nvec=16`.)  I have only tried values of
-`nvec` up to around $10^4$.
+The `suggested` number of syndrome vectors to generate and process is given by
+`ntot`.  In reality, the number of rounds is calculated as $\lceil$ `ntot/nvec`
+$\rceil$, where `nvec` is another command line argument (default `nvec=16`).  In
+each round, `nvec` different syndrome vectors will be generated and processed.
+Ideally, `nvec` should be a factor `64`, since 64-bit integers are used to store
+binary vectors internally.
+
+The parameter `nfail`, when non-zero, will cause execution to stop after
+accumulating a given number of logical errors.
+
+The parameter `lerr` (currently `unsupported`), when non-zero, specifies the
+maximum number of non-zero error bits outside of the index set to try before
+generating a new permutation.  This is similar to OSD level.
 
 Another important command-line parameter is `steps`.  It should be set to a
 large number (experiment!) for decoding to be accurate, especially close to the
-threshold.
+threshold.  The related parameter `swait` (if non-zero) specifies the number of
+steps w/o any updates to any error vector to wait before terminating the cycle.
 
 Use `debug=0` to suppress any output except for simulation results.  Use
 `debug=1023` to output all possible debugging information (not all bits are used
 at this time).
 
-Use `f="filename"` (with or without quotes) to specify the input file with the error model.
-Eventually, the program will be able to process externally generated syndrome data.
+Use `f="filename"` (with or without quotes) or `f= "filename"` (with a space) to
+specify the input file with the detector error model.
+
+## All command-line arguments 
+
+You can obtain these by running `vecdec --help`
+
+```bash
+src/vecdec: a simple vectorized random information set decoder.
+  usage: src/vecdec param=value [[param=value] ... ]
+	 Command line arguments are processed in the order given.
+	 Supported parameters:
+	 --help	: give this help (also '-h' or just 'help')
+	 f=[string]	: name of the input file with the error model
+	 steps=[integer]	: how many random window decoding steps (default: 1)
+	 lerr =[integer]	: local search level after gauss (0, no search)
+	 swait=[integer]	: steps w/o new errors to stop (0, do not stop)
+	 nvec =[integer]	: max vector size for decoding (default: 16)
+	 ntot =[integer]	: total syndromes to process (default: 1)
+	 nfail=[integer]	: total fails to terminate (0, do not terminate)
+	 seed= [integer]	: RNG seed or use time(NULL) if 0 (default)
+	 mode= [integer]	: bitmap for operation mode (default: 0)
+		*   0: clear the entire mode bitmap to 0.
+		*   1: use old error model file format (deprecated)
+		*   2: cycle global probabilities in error model from `pmin` to `pmax`
+	 pmin = [double]	: min global probability with `mode&2` (-1)
+	 pmax = [double]	: max global probability with `mode&2` (-1)
+	 pstep =[double]	: step of probability with `mode&2` (1e-3)
+	 debug=[integer]	: bitmap for aux information to output (default: 1)
+		*   0: clear the entire debug bitmap to 0.
+		*   1: output misc general info (on by default)
+		*   2: output matrices for verification
+	 See program documentation for input file syntax.
+	 Multiple `debug` parameters are XOR combined except for 0.
+	 Use debug=0 as the 1st argument to suppress all debug messages.
+```
 
 ## Libraries 
 
 The program uses `m4ri` library for binary linear algebra.
 
+## Future
 
+Eventually, the program will be able to process externally generated syndrome
+data, or use other more efficient decoders, e.g., belief propagation.
