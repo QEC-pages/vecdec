@@ -164,6 +164,23 @@ static inline int cmp_ippairs(const void *a, const void *b){
   return 0;
 }
 
+/** @brief helper function to sort `int` 
+ *  use `qsort(array, len, sizeof(ippair_t), cmp_int);`
+ */
+static inline int cmp_rci_t(const void *a, const void *b){
+  const rci_t va= *((rci_t *) a);
+  const rci_t vb= *((rci_t *) b);
+  return vb-va;
+#if 0  
+  if (va<vb)
+    return +1;
+  else if (va>vb)
+    return -1;
+  return 0;
+#endif
+}
+
+
 
 /** @brief return permutation = decreasing probabilities */
 mzp_t * sort_by_prob(mzp_t *perm, params_t const * const p){
@@ -182,6 +199,85 @@ mzp_t * sort_by_prob(mzp_t *perm, params_t const * const p){
   //  for(int i=0; i<p->n; i++) printf("i=%d p[perm[i]]=%g\n",i,p->vP[perm->values[i]]);
   free(pairs);
   return perm;
+}
+
+/** @brief prepare an ordered pivot-skip list */
+mzp_t * skip_pivs(const size_t rank, const mzp_t * const pivs){
+  const rci_t n=pivs->length;
+  rci_t j1=rank; /** position to insert the next result */
+  mzp_t * ans = mzp_copy(NULL,pivs);
+  qsort(ans->values, rank, sizeof(pivs->values[0]), cmp_rci_t);
+  for(rci_t j=0; j<n; j++){
+    if(!bsearch(&j, ans->values, rank, sizeof(ans->values[0]), cmp_rci_t)){
+      ans->values[j1++]=j;
+    }
+  }
+  assert(j1==n);
+  for(rci_t i=0, j=rank; j<n; j++)
+    ans->values[i] = ans->values[j];
+  ans->length = n-rank;
+  return ans;
+}
+
+/**
+ * @brief do local search up to `p->lerr` inclusive recursively 
+ * @param vE0 best energy values for each `e` a row in `mE0`
+ * @param mE0 best error vectors so far for each syndrome (rows)
+ * @param jstart start local search from this column in `mH`
+ * @param lev recusion level, must not exceed `p->lerr`
+ * @param mE input error vectors (rows)
+ * @param mH check matrix in row echelon form (pivots in `pivs`)
+ * @param skip_pivs `sorted` list of `n-rank` non-pivot positions in `mH`
+ * @param pivs list of `rank` pivots returned by gauss 
+ * @param p pointer to the remaining program parameters
+ *
+ * @todo: see if binary ops + transposition is faster 
+ */
+void do_local_search(double *vE0, mzd_t * mE0, const rci_t jstart, const int lev,
+                     const mzd_t * const mE, const mzd_t * const mH,
+                     const mzp_t * const skip_pivs, const mzp_t * const pivs,
+                     const params_t * const p){
+  assert(lev<=p->lerr);
+  rci_t knum = skip_pivs->length; /** number of non-pivot cols in `mH` to go over */
+  rci_t rank = pivs->length; /** number of pivot cols */
+  rci_t rnum; /** number of non-zero entries in rlis (for each `j`) */
+  int * rlis = malloc(rank * sizeof(int)); 
+  if(!rlis) ERROR("memory allocation failed!");
+  mzd_t *mE1 = mzd_copy(NULL,mE); /** error vectors to update */
+  
+  for(rci_t j=jstart; j<knum; j++){ /** `j`th `non-pivot` entry */
+    rci_t jj=skip_pivs->values[j]; /** actual `non-pivot` column we are looking at */
+    rnum=0; /** prepare list of positions to update for `jj`th col of `mH` */
+    for(rci_t ir=0; ir<rank; ir++)
+      if(mzd_read_bit(mH,ir,jj)) /** non-zero bit */
+        rlis[rnum++] = pivs->values[ir]; /** column of `mH` to update */
+    
+    for(rci_t is=0; is < mE->nrows; is++){ /** syndrome rows */        
+      assert(!mzd_read_bit(mE,is,jj)); /** sanity check */
+      double energ=vE0[is];
+      if(vE0[is]>1e-15){ /** substitute for zero syndrome check */
+        mzd_flip_bit(mE1,is,jj);
+        energ += p->vLLR[jj];
+        for(rci_t ir = 0 ;  ir < rnum; ++ir){
+          const int ii = rlis[ir]; /** position to update */
+          if(mzd_read_bit(mE1,is,ii))
+            energ -= p->vLLR[ii]; /** `1->0` flip */
+          else
+            energ += p->vLLR[ii]; /** `0->1` flip */
+          mzd_flip_bit(mE1,is,ii);
+        }        
+        if(energ < vE0[is]){
+          vE0[is]=energ;
+          mzd_copy_row(mE0,is, mE1,is);
+        }
+      }
+    }
+    
+    if(lev<p->lerr) /** go up one recursion level */
+      do_local_search(vE0,mE0,jstart+1,lev+1,mE1, mH, skip_pivs, pivs,p);        
+  }
+  free(rlis);
+  mzd_free(mE1);
 }
 
 /**
@@ -224,15 +320,16 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
     printf("mS:\n");
     mzd_print(mS);
   }
+  
   // for each syndrome, calculate error vector and energy
-  mzd_set_ui(mE,0); /** zero matrix */
+  mzd_set_ui(mE,0); /** zero matrix to store `errors by column` */
   for(int i=0;i< rank; i++)     
     mzd_copy_row(mE,pivs->values[i],mS,i);
   mzd_t *mEt0 = mzd_transpose(NULL,mE);
   for(int i=0; i< mS->ncols; i++)
     vE[i]=mzd_row_energ(p->vLLR,mEt0,i);
   int iwait=0, ichanged=0;
-  /** main loop over permutations * ****************** */
+  /** main loop over permutations * `***************************` */
   for (int ii=1; ii< p->steps; ii++){
     pivs=mzp_rand(pivs); /** random pivots LAPAC-style */
     mzp_set_ui(perm,1); perm=perm_p_trans(perm,pivs,0); /**< corresponding permutation */
@@ -244,7 +341,7 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
       if(ret)       
         pivs->values[rank++]=col;      
     }
-    // for each syndrome, calculate errow vector and energy; update minima
+    // for each syndrome, calculate error vector and energy; update minima
     mzd_set_ui(mE,0); /** zero matrix */
     for(int i=0;i< rank; i++)     
       mzd_copy_row(mE,pivs->values[i],mS,i);

@@ -168,3 +168,14 @@ The program uses `m4ri` library for binary linear algebra.
 
 Eventually, the program will be able to process externally generated syndrome
 data, or use other more efficient decoders, e.g., belief propagation.
+
+## To do list 
+- [ ] Finish local recursive search implementation 
+- [ ] Test performance (statistics of updates): `A`: random window initial
+      (sorted by `p`), `B`: random window secondary (unbiased permutations),
+      `Aj`: local `j` after `A`, `Bj`: local `j` after `B`.
+- [ ] Remove non-DEM error model
+- [ ] Add hashing table for triplets (s,e,energy) and implement ML (`mode=1`).
+- [ ] Reserve `mode=4` for BP+OSD.  Since we are doing OSD, `mode=1` can also be
+      used here
+- [ ] Other minimum energey solvers? 
