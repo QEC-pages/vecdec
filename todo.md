@@ -71,14 +71,32 @@ purpose, which is essentially an RW decoder using the list of *aposteriori*
 probabilities returned by BP.
 
 ## Actual to-do list 
-- [ ] Implement recursive enumeration of vectors from the information set.
+- [x] Implement recursive enumeration of vectors from the information set.
+- [ ] Implement reading of externally generated simulation data (e.g., from
+      Stim) using separate files with detection events and the corresponding
+      observables.  Here is a sample command-line to produce binary vectors in
+      `01` format: 
+
+```bash
+stim sample_dem \
+  --shots 5 \
+  --in example.dem \
+  --out dets.01 \
+  --out_format 01 \
+  --obs_out obs_flips.01 \
+  --obs_out_format 01
+```
+- [ ] Implement a mode for finding the list of most likely zero-syndrome error
+      vectors.
 - [ ] Implement hashing storage for small-weight errors (say, up to weight 2)
-      and the corresponding syndromes for fast lookup decoding.
-- [ ] Implement hashing storage for errors corresponding to different syndrome
-      vectors.  Perhaps use `vecdec` in *scalar* mode for this, working with
-      just one (or a few) syndrome vectors at a time, and keeping the
-      corresponding hashing storage separate, so that only the error vectors
-      (in sparse form?) and the corresponding probabilities need to be stored.
+      and the corresponding syndromes for fast lookup decoding.  Subsequently,
+      use decoding results to add most likely vectors to this list.
+- [ ] Implement hashing storage for near-ML decoding using lists of small-weight
+      errors.  Perhaps use `vecdec` in *scalar* mode for this, working with just
+      one (or a few) syndrome vectors at a time, and keeping the corresponding
+      hashing storage separate, so that only the error vectors (in sparse form?)
+      and the corresponding probabilities need to be store.  E.g., try using the
+      [`uthash` library](https://github.com/troydhanson/uthash).
 - [ ] Implement BP decoding with OSD
 - [ ] Come up with alternative simulation mechanisms, e.g., in the regime of
       small error probabilities $p$.
