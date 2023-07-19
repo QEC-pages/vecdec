@@ -44,13 +44,15 @@ typedef struct PARAMS_T {
   int colw;  /** max column weight (default: 10, `deprecated`) */ 
   int steps; /** number of random window decoding steps, default: `1` */
   int nvec;  /** max number of syndromes to process in one bunch (default: `16`) */
-  int ntot;  /** total number of syndromes to process (default: `1`) */
-  int nfail; /** when non-zero, num of fails to terminate the run (default: `0`) */
-  int swait; /** gauss decoding steps with no vectors changed to stop (default: `0` - do not stop) */
+  int ntot;  /** total number of syndromes to generate (default: `1`) */
+  int nfail; /** when non-zero, num of fails to terminate the run (default: `0`, do not terminate) */
+  int swait; /** gauss decoding steps with no vectors changed to stop (default: `0`, do not stop) */
   int lerr;  /** local search after gauss up to this weight (default: `0`) */
   int mode;  /** mode information bitmap */
   int debug; /** `debug` information */ 
-  char *fin; /** `input file` name for error model */
+  char *fin; /** `input file` name for detector error model */
+  char *fdet; /** `input file` name for detector events */
+  char *fobs; /** `input file` name for observables */
   int seed;  /** rng `seed`, set=0 for automatic */
   double *vP; /** probability vector (total of `n`) */
   double *vLLR; /** vector of LLRs (total of `n`) */
@@ -78,17 +80,19 @@ extern params_t prm;
   "\t Command line arguments are processed in the order given.\n"	\
   "\t Supported parameters:\n"						\
   "\t --help\t: give this help (also '-h' or just 'help')\n"            \
-  "\t f=[string]\t: name of the input file with the error model\n"      \
-  "\t steps=[integer]\t: how many random window decoding steps (default: 1)\n" \
+  "\t fdem=[string]\t: name of the input file with detector error model\n" \
+  "\t fdet=[string]\t: input file with detector events (01 format)\n"   \
+  "\t fobs=[string]\t: file with observables (01 matching lines in fdet)\n" \
+  "\t steps=[integer]\t: num of random window decoding steps (default: 1)\n" \
   "\t lerr =[integer]\t: local search level after gauss (0, no search)\n" \
   "\t swait=[integer]\t: steps w/o new errors to stop (0, do not stop)\n" \
   "\t nvec =[integer]\t: max vector size for decoding (default: 16)\n"  \
-  "\t ntot =[integer]\t: total syndromes to process (default: 1)\n"     \
+  "\t ntot =[integer]\t: total syndromes to generate (default: 1)\n"     \
   "\t nfail=[integer]\t: total fails to terminate (0, do not terminate)\n" \
   "\t seed= [integer]\t: RNG seed or use time(NULL) if 0 (default)\n"	\
   "\t mode= [integer]\t: bitmap for operation mode (default: 0)\n"      \
   "\t\t*   0: clear the entire mode bitmap to 0.\n"                     \
-  "\t\t*   1: use old error model file format (deprecated)\n"           \
+  "\t\t*   1: (reserved)\n"                                             \
   "\t\t*   2: cycle global probabilities in error model from `pmin` to `pmax`\n" \
   "\t pmin = [double]\t: min global probability with `mode&2` (-1)\n"   \
   "\t pmax = [double]\t: max global probability with `mode&2` (-1)\n"   \
