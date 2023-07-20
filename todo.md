@@ -2,7 +2,10 @@
 title: Notes on `vecdec` 
 author: Leonid P. Pryadko
 date: 2023/07/11
+bibliography: refs.bib
 ---
+
+# Conventional decoding algorithms 
 
 ## ML list decoding 
 
@@ -64,15 +67,73 @@ the error model.
 
 Belief propagation (BP) is notoriously difficult for highly-degenerate quantum
 codes, as it gets stuck often at degenerate configurations.  On the other hand,
-it tends to clear small-weight error efficiently, after ${\cal O}(1)$ steps with
+it tends to clear small-weight errors efficiently, after ${\cal O}(1)$ steps with
 overall complexity linear, so that the remaining errors can be cleaned up with a
 secondary decoder.  Ordered-statistics decoder (OSD) has been suggested for this
 purpose, which is essentially an RW decoder using the list of *aposteriori*
 probabilities returned by BP.
 
+# Logical fail rate predictors 
+
+## Asymptotic minimum-weight fail rate 
+
+With a given detector error model (specified by detector-fault incidence matrix
+$J$, observable-fault incidence matrix $L$, and a set of independent
+probabilities $p_i$ for each column of $J$), we would like to know the logical
+fail rate of the minimum-weight decoder in the regime of small probabilities.
+For simplicity, let us first assume all error probabilities be the same and
+equal to $p$.  Then, according to Fowler [@Fowler-2013], the asymptotic logical
+error rate at small $p$ has the form $P_L=Bp^{\lceil d/2\rceil}$, where the
+prefactor $B$ can be calculated by enumerating the fault paths ("codewords") of
+weight $d$.  Moreover, while different fault paths are not uncorrelated, in the
+case of a surface code, ignoring the correlations gives $B$ with around 12%
+accuracy.  With $p_i$ different, the weight of a single codeword $c$ can be
+approximated as $1/2\prod_{i:c_i\neq 0}2[p_i(1-p_i)]^{1/2}$.
+
+## Weighted Hashimoto matrix approach 
+
+In the case of graph errors, summation over paths can be done approximately with
+the help of weighted Hashimoto matrix, defined in terms of directed edges
+(arcs), $$ M_{a=i\to j,b=i'\to j'}= W_a \delta_{j,i'}(1-\delta_{i,j'}),\quad
+W_a\equiv 2[p_a(1-p_a)]^{1/2}, $$ where $W_a$ is the weight of a single edge.
+Namely, to enumerate the sum of all non-backtracking paths of length $m$
+starting at arc $a$ and ending at arc $b$, we just write $[M^m]_{a,b}W_b$ (no
+summation).  Notice that at sufficiently small error probabilities $p_a$, the
+logical fail probability is going to be dominated by the leading-order terms with $m=d$.
+
+In practice, when $H$ corresponds to a graph (e.g., in the case of a surface
+code), we just have to construct a vector $x$ of in-arcs and a vector $y$ of
+weighted out-arcs, and calculate $P_L=\alpha x M^d y$, where the prefactor
+coefficient $\alpha$ can be used to estimate the corrections, e.g., due to the
+distribution of error probabilities $p_a$.
+
+## Estimate the correction due to overlaps
+
+The issue with the expansion over fault-lines (codewords) is non-locality.
+Indeed, $p_0=(1-p)^n\le e^{-np}$ can be small unless $pn\to0$, and $q_{t+1}$ is
+also strongly suppressed by similar factors, to the point of not being useful.
+To construct a more useful expansion, consider a local notion of failure.
+Namely, given an index set $J$ and a given error vector $e$, consider the
+probability $P_J(e)$ of a minimum-energy fault strictly on $J$.  That is, we
+assume that there exists a codeword $c$ (irreducible or not) supported on $J$
+such that $P(e+c)>P(e)$, while for every irreducible codeword $c'$ not entirely
+supported on $J$, $p(e+c')\le p(e)$.
+
+The function $P_A(e)$ has nice properties: 
+- It is increasing, meaning that if $A\subset B$, $P_A(e)\le P_B(e)$
+- When sets $A$ and $B$ have partial overlaps, $A\neq A\cap B\neq\emptyset$ and
+  $B\neq A \cap B$, as long as $P_{A\cap B}(e)=0$, $P_{A\cup
+  B}(e)=P_{A}(e)+P_{B}(e)$ **(???)**
+
+Furthermore, consider a set of non-trivial irreducible binary codewords $c$ such
+that $Hc=0$ and $Lc\neq0$; necessarily, $\mathop{\rm wgt} c\ge d$.  Irreducible
+means that $c$ cannot be separated into a pair of non-zero binary vectors with
+disjoint supports and zero syndromes.  In the case of a surface code,
+irreducible $c$ is a homologically non-trivial chain without self-intersections.
+
 ## Actual to-do list 
 - [x] Implement recursive enumeration of vectors from the information set.
-- [ ] Implement reading of externally generated simulation data (e.g., from
+- [x] Implement reading of externally generated simulation data (e.g., from
       Stim) using separate files with detection events and the corresponding
       observables.  Here is a sample command-line to produce binary vectors in
       `01` format: 
@@ -100,3 +161,11 @@ stim sample_dem \
 - [ ] Implement BP decoding with OSD
 - [ ] Come up with alternative simulation mechanisms, e.g., in the regime of
       small error probabilities $p$.
+- [ ] Hashimoto matrix implementation steps
+  - [ ] Given a DEM in a *graph form,* construct the sparse weighted Hashimoto
+        matrix (of size $2n\times 2n$).
+  - [ ] Construct an in-vector $x$ and a weighted out-vector $y$
+  - [ ] Calculate the corresponding logical fault-rates
+  - [ ] Estimate the fudge-factor $\alpha$, given the statistics of error probabilities
+  - [ ] Estimate the effect of correlations between the trajectories.
+

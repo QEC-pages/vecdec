@@ -6,6 +6,9 @@ The program uses `m4ri` library for binary linear algebra.
 To install this library on a Ubuntu system, run
     `sudo apt-get install libm4ri-dev`
     
+To use the example scripts, you will also need a command-line version of
+[Stim](https://github.com/quantumlib/Stim)
+    
 For compilation *help*, change to the (vecdec/src/) directory and just run w/o
 arguments  
     `make`
@@ -46,41 +49,16 @@ detector(1, 1) D6
 detector(3, 1) D7
 ```
 
-Older format can also be read from a file similar to the following example
-(requires `mode=1` command-line switch; the support for such a format will soon
-be dropped):
-
-```bash
-# handwritten error model for 
-# distance-3 surface code (perfect measurements)
-# 0   1   2
-# X0    X1
-# 3   4   5 
-#  X2      X3
-# 6   7   8  
-# logical X = 0 1 2
-# logical Z = 0 3 6 
-4 1 9
-0.005 0 ; 0 # Z error at qubit 0
-0.005 1 ; 0 # 1 
-0.005 1 ; 0 # 2 
-0.005 0 2 ; # 3
-0.005 1 2 ; # 4
-0.005 1 3 ; # 5
-0.005 2 ; # 6
-0.005 2 ; # 7
-0.005 3 ; # 8
-#
-```
-
 ## How it works 
 
-Given a syndrome vector `s`, the goal is to construct the most likely binary
-vector `e` such that `H*e=s`.  The decoding is verified by computing the vector
-`L*e` and comparing it with the result computed from the actual error.
+Given a binary vector `s` with detector events, the goal is to construct the
+most likely binary vector `e` such that `H*e=s`.  The decoding is verified by
+computing the vector of observable bits `L*e` and comparing it with the
+corresponding result computed from the actual error.
 
-Right now, the only option is to generate a bunch of random errors (for a given
-error model) and associated syndrome vectors, to be processed in one big step.
+The random errors and the corresponding detector/observable vectors can be
+generated on the fly (for a given error model), or read from files in 01
+format.
 
 The program processes up to `nvec` syndrome vectors at a time.  The syndrome
 columns are written as columns of a binary matrix `S`.  The original check
@@ -110,9 +88,9 @@ binary vectors internally.
 The parameter `nfail`, when non-zero, will cause execution to stop after
 accumulating a given number of logical errors.
 
-The parameter `lerr` (currently `unsupported`), when non-zero, specifies the
-maximum number of non-zero error bits outside of the index set to try before
-generating a new permutation.  This is similar to OSD level.
+The parameter `lerr`, when non-zero, specifies the maximum number of non-zero
+error bits outside of the index set to try before generating a new permutation.
+This is similar to OSD level.
 
 Another important command-line parameter is `steps`.  It should be set to a
 large number (experiment!) for decoding to be accurate, especially close to the
@@ -123,8 +101,12 @@ Use `debug=0` to suppress any output except for simulation results.  Use
 `debug=1023` to output all possible debugging information (not all bits are used
 at this time).
 
-Use `f="filename"` (with or without quotes) or `f= "filename"` (with a space) to
-specify the input file with the detector error model.
+Use `fdem="filename"` (with or without quotes) or `fdem= "filename"` (with a
+space) to specify the input file with the detector error model.  
+
+With `mode=1` switch, you need to set the names of the input files, e.g., 
+using the command-line arguments  
+    `fdet=dets.01 fobs=obs_flips.01`
 
 ## All command-line arguments 
 
@@ -136,17 +118,19 @@ src/vecdec: a simple vectorized random information set decoder.
 	 Command line arguments are processed in the order given.
 	 Supported parameters:
 	 --help	: give this help (also '-h' or just 'help')
-	 f=[string]	: name of the input file with the error model
-	 steps=[integer]	: how many random window decoding steps (default: 1)
-	 lerr =[integer]	: local search level after gauss (0, no search)
+	 fdem=[string]	: name of the input file with detector error model
+	 fdet=[string]	: input file with detector events (01 format)
+	 fobs=[string]	: input file with observable flips (01 format)
+	 steps=[integer]	: num of random window decoding steps (default: 1)
+	 lerr=[integer]		: local search level after gauss (0, no search)
 	 swait=[integer]	: steps w/o new errors to stop (0, do not stop)
-	 nvec =[integer]	: max vector size for decoding (default: 16)
-	 ntot =[integer]	: total syndromes to process (default: 1)
+	 nvec=[integer]		: max vector size for decoding (default: 16)
+	 ntot=[integer]		: total syndromes to generate (default: 1)
 	 nfail=[integer]	: total fails to terminate (0, do not terminate)
-	 seed= [integer]	: RNG seed or use time(NULL) if 0 (default)
-	 mode= [integer]	: bitmap for operation mode (default: 0)
+	 seed=[integer]		: RNG seed or use time(NULL) if 0 (default)
+	 mode=[integer]		: bitmap for operation mode (default: 0)
 		*   0: clear the entire mode bitmap to 0.
-		*   1: use old error model file format (deprecated)
+		*   1: read detector events/observables from 01 files 
 		*   2: cycle global probabilities in error model from `pmin` to `pmax`
 	 pmin = [double]	: min global probability with `mode&2` (-1)
 	 pmax = [double]	: max global probability with `mode&2` (-1)
@@ -176,7 +160,7 @@ data, or use other more efficient decoders, e.g., belief propagation.
 - [ ] Test performance (statistics of updates): `A`: random window initial
       (sorted by `p`), `B`: random window secondary (unbiased permutations),
       `Aj`: local `j` after `A`, `Bj`: local `j` after `B`.
-- [ ] Remove non-DEM error model
+- [x] Remove non-DEM error model
 - [ ] Add hashing table for triplets (s,e,energy) and implement ML (`mode=1`).
 - [ ] Reserve `mode=4` for BP+OSD.  Since we are doing OSD which generates a
       local list, `mode=1` can also be used here
