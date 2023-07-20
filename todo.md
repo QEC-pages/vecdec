@@ -133,7 +133,7 @@ irreducible $c$ is a homologically non-trivial chain without self-intersections.
 
 ## Actual to-do list 
 - [x] Implement recursive enumeration of vectors from the information set.
-- [ ] Implement reading of externally generated simulation data (e.g., from
+- [x] Implement reading of externally generated simulation data (e.g., from
       Stim) using separate files with detection events and the corresponding
       observables.  Here is a sample command-line to produce binary vectors in
       `01` format: 

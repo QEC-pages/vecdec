@@ -30,7 +30,7 @@ params_t prm={ .nrows=0, .n=0, .ncws=0, .steps=1, .lerr=0, .swait=0,
   .pmin=-1, .pmax=-1, .pstep=1e-3,
   .vP=NULL, .vLLR=NULL, .mH=NULL, .mHt=NULL, .mL=NULL, .mLt=NULL};
 
-/** calculate the energy of the row `i` */
+/** @brief calculate the energy of the row `i` in `A` */
 double mzd_row_energ(double *coeff, const mzd_t *A, const int i){
   double ans=0;
   for(rci_t j = 0; j < A->ncols; ++j)
@@ -149,6 +149,73 @@ int do_errors(mzd_t *mHe, mzd_t *mLe,
   //  p->maxJ = max; /** to reduce the number of `realloc`s next time */
   free(vec);
   return max;
+}
+
+/** @brief read up to `lmax` lines from a file in `01` format
+
+ * read up to `lmax` binary vectors of length `m` from a `01` file `fin` open
+ * for reading.  Place the vectors as columns of matrix `M` of size `m` rows by
+ * `lmax` colums.  Lines starting with `#` are silently ignored; a non-`01`
+ * line, or a `01` line of an incorrect length will give an error.
+ *
+ * @param M initialized output matrix with `lmax` rows and `m` columns
+ * @param fin file with 01 data open for reading 
+ * @param[input,output] lineno current line number in the file.
+ * @param fnam file name (for debugging purposes)
+ * @param p Other parameters (only `p->debug` is used).
+ * @return the number of rows actually read.
+ * 
+ */
+rci_t read_01(mzd_t *M, FILE *fin, rci_t *lineno, const char* fnam, 
+                const params_t * const p){
+  rci_t m   =M->nrows;
+  rci_t lmax=M->ncols, il=0;  
+  if(!M)
+    ERROR("expected initialized matrix 'M'!\n");
+  else
+    mzd_set_ui(M,0);
+  if(!fin)
+    ERROR("file 'fin' named '%s' must be open for reading\n",fnam);
+  if(p->debug&8) /** file io */
+    printf("# about to read 01 data from line %d in file '%s'\n",
+           *lineno,fnam);
+
+  char *buf=NULL;
+  size_t bufsiz=0;
+
+  ssize_t linelen;
+  while((il<lmax) && (!feof(fin)) &&
+        ((linelen = getline(&buf, &bufsiz, fin))>=0)){
+    (*lineno)++;
+    switch(buf[0]){
+      case '0': case '1':
+        if(linelen<=m)
+          ERROR("line is too short, expected %d 01 characters\n"
+                "%s:%d:1: '%s'\n", m,fnam,*lineno,buf);
+        else{
+          for(int i=0; i<m; i++){
+            if (buf[i]=='1')
+              mzd_write_bit(M,i,il,1); /** row `i`, col `il` */
+            else if (buf[i]!='0')
+              ERROR("invalid 01 line\n"
+                    "%s:%d:%d: '%s'\n", fnam,*lineno,i+1,buf);
+          }
+          (il)++; /** success */
+          }
+          break;
+        case '#': /** do nothing - skip this line */
+          break;
+        default:
+          ERROR("invalid 01 line\n"
+                "%s:%d:1: '%s'\n", fnam,*lineno,buf);
+      }
+  }
+  if(p->debug&8) /** file io */
+    printf("# read %d 01 rows from file '%s'\n",il,fnam);
+  if(buf)
+    free(buf); 
+  buf=NULL;
+  return il;  
 }
 
 /** @brief helper function to sort `ippair_t` 
@@ -585,6 +652,18 @@ void read_dem_file(char *fnam, params_t * const p){
     free(buf);
   free(inH);
   free(inL);
+
+#ifndef NDEBUG  
+  if(p->debug & 64){ /** print matrices */
+    mzd_t *mH0 = mzd_from_csr(NULL,p->mH);
+    printf("matrix mH0:\n");  mzd_print(mH0);
+    mzd_free(mH0); 
+    
+    mzd_t *mL0 = mzd_from_csr(NULL,p->mL);
+    printf("matrix mL0:\n");  mzd_print(mL0);
+    mzd_free(mL0);    
+  }  
+#endif 
 }
 
 /** @brief given the error model read, prepare for decoding
@@ -800,6 +879,14 @@ int var_init(int argc, char **argv, params_t *p){
       p->pmin=1e-2;
       p->pmax=0.101;
       p->pstep=1e-2;
+      if(p->mode &1)
+        ERROR("mode=1 and mode=2 are incompatible, exiting!\n");
+  }
+  if(p->mode &1){
+    if(p->fdet==NULL)
+      ERROR("mode=1, use 'fdet=filename' to set input file with detection events\n");
+    if(p->fobs==NULL)
+      ERROR("mode=1, use 'fobs=filename' to set input file with observables\n");          
   }
   
   return 0;
@@ -822,20 +909,17 @@ int main(int argc, char **argv){
   //  one_prob_t **err_mod = NULL;
   read_dem_file(p->fin,p); /** creates all matrices */
   
-#ifndef NDEBUG  
-  if(p->debug & 64){ /** print matrices */
-    mzd_t *mH0 = mzd_from_csr(NULL,p->mH);
-    printf("matrix mH0:\n");  mzd_print(mH0);
-    mzd_free(mH0); 
-    
-    mzd_t *mL0 = mzd_from_csr(NULL,p->mL);
-    printf("matrix mL0:\n");  mzd_print(mL0);
-    mzd_free(mL0); 
-    
+  FILE *fdet=NULL, *fobs=NULL;
+  rci_t linedet=0, lineobs=0;
+  if(p->mode&1){
+    fdet=fopen(p->fdet, "r");
+    if(fdet==NULL)
+      ERROR("can't open the file %s for reading\n",p->fdet);
+    fobs=fopen(p->fobs, "r");
+    if(fobs==NULL)
+      ERROR("can't open the file %s for reading\n",p->fobs);
   }
   
-#endif 
-    
   double pmax=p->pmax +0.005*p->pstep;
   for(double prob = p->pmin; prob < pmax; prob += p->pstep){    
     if(p->mode&2)
@@ -846,12 +930,22 @@ int main(int argc, char **argv){
     for(int iround=0; iround < rounds; iround++){
       if(p->debug &1)
         printf("# starting round %d of %d\n", iround, rounds);
-      /** todo: add code for reading syndrome information from file */
       
       // decoder_init( & prm);
       mzd_t *mHe = mzd_init(p->nrows, p->nvec); /** each column a syndrome vector `H*e` */
       mzd_t *mLe = mzd_init(p->ncws,  p->nvec); /** each column `L*e` vector */
-      p->maxJ = do_errors(mHe,mLe,p);
+     
+      if (p->mode&1){
+        rci_t il1=read_01(mHe,fdet,&linedet, p->fdet, p);
+        rci_t il2=read_01(mLe,fobs,&lineobs, p->fobs, p);
+        if(il1!=il2)
+          ERROR("mismatched DET %s (line %d) and OBS %s (line %d) files!",
+                p->fdet,linedet,p->fobs,lineobs);
+        if(il1==0)
+          break; /** no more rounds */
+      }
+      else 
+        p->maxJ = do_errors(mHe,mLe,p);
 
       if((p->debug & 512)&&(p->debug &4)){ /** print matrices */
         printf("matrix mLe:\n");  mzd_print(mLe);
@@ -907,7 +1001,7 @@ int main(int argc, char **argv){
           break;          
       }
       /** update the global counts */
-      synd_tot  += prodLe->ncols;
+      synd_tot  += prodLe->ncols;/** todo: fix this */
       synd_fail += fails;
       mzd_free(prodLe); prodLe=NULL;
       if((p->nfail>0) && (synd_fail >= p->nfail))
@@ -919,11 +1013,17 @@ int main(int argc, char **argv){
     else 
       printf(" %ld %ld # %s\n",synd_fail, synd_tot, p->fin);
   }
+
   // clean up
-  //  free(err_mod); err_mod=NULL;
-  var_kill(p);
-  if(p->mode&2)
+  if (p->mode&1){
+    if(fdet)
+    fclose(fdet);
+    if(fobs)
+      fclose(fobs);
+  }
+  else if(p->mode&2)
     printf("\n\n");
+  var_kill(p);
   return 0;
 }
 
