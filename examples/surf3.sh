@@ -4,8 +4,9 @@
 # use 01 simulation data from Stim 
 #
 # program variables to use 
-vecdec=./vecdec
+vecdec=../src/vecdec
 stim=../../Stim/out/stim
+pymatching=../../PyMatching/pymatching
 
 # place to put the data in
 outfile=surf_new.dat
@@ -17,14 +18,14 @@ dmin=3 # minimum code distance
 dmax=3 # maximum code distance
 p0=0.004 # error probability for j=0 
 jmin=0 # range for calculating p1 and p2 (using p0/2**j )
-jmax=0
-Ntotal=$((16)) # total number of steps to use
-
-echo "# running surf3.sh" > $outfile
-echo "# same depolarizing probability and measurement error p1" >> $outfile
-echo "# columns: d p1 Nfails Ntotal"
-echo "# columns: d p1 Nfails Ntotal" >> $outfile
-index=0 # block index to use in gnuplot
+jmax=4
+Ntotal=$((128*1024)) # total number of steps to use
+nvec=1024
+#echo "# running surf3.sh" > $outfile
+#echo "# same depolarizing probability and measurement error p1" >> $outfile
+#echo "# columns: d p1 Nfails Ntotal"
+#echo "# columns: d p1 Nfails Ntotal" >> $outfile
+#index=0 # block index to use in gnuplot
 
 for (( d0=$dmin; d0<=$dmax; d0+=2 )) do # distance loop
     fnam=surf_d$d0 # filename to use
@@ -47,10 +48,17 @@ for (( d0=$dmin; d0<=$dmax; d0+=2 )) do # distance loop
         --out $detf --out_format 01 \
         --obs_out $obsf --obs_out_format 01
       
-      $vecdec debug=0 mode=1 fdet=$detf fobs=$obsf steps=$((d0*d0*d0)) lerr=1 swait=$((d0*d0)) \
-        ntot=$Ntotal nvec=$((Ntotal)) nfail=5000 f=$fnam.dem > $fnam.out
-      echo $d0 $p1 `cat $fnam.out` # show the output
-      echo $d0 $p1 `cat $fnam.out` >> $outfile # save to big file
+      $pymatching predict --dem $fnam.dem --in $detf --out p$obsf --in_format 01 --out_format 01
+      pyOK=`paste -d " " p$obsf $obsf | grep "1 1\|0 0" | wc -l`
+      pyF=`paste -d " " p$obsf $obsf | grep "0 1\|1 0" | wc -l`
+      echo "# pymatching :" $pyOK fail $pyF
+
+      $vecdec debug=0 mode=1 fdet=$detf fobs=$obsf steps=1000 lerr=1 swait=100 \
+        ntot=$Ntotal nvec=$((nvec)) nfail=5000 f=$fnam.dem > $fnam.out
+      echo $d0 $p1 `awk '{print $1/$2 " " $2 " " $1}' < $fnam.out` \
+        `awk "BEGIN { print  $pyF \" \" $pyF/$Ntotal \" \" $pyOK }"`
+      #      echo $d0 $p1 `cat $fnam.out` >> $outfile # save to big file
+
       
     done # loop over p1
     if (( 0 )) ; then

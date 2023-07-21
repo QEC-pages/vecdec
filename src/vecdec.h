@@ -48,9 +48,9 @@ typedef struct PARAMS_T {
   int nfail; /** when non-zero, num of fails to terminate the run (default: `0`, do not terminate) */
   int swait; /** gauss decoding steps with no vectors changed to stop (default: `0`, do not stop) */
   int lerr;  /** local search after gauss up to this weight (default: `0`) */
-  int mode;  /** mode information bitmap */
+  int mode;  /** operation mode, see help */
   int debug; /** `debug` information */ 
-  char *fin; /** `input file` name for detector error model */
+  char *fdem; /** `input file` name for detector error model (`DEM`) */
   char *fdet; /** `input file` name for detector events */
   char *fobs; /** `input file` name for observables */
   int seed;  /** rng `seed`, set=0 for automatic */
@@ -62,9 +62,8 @@ typedef struct PARAMS_T {
   csr_t *mL; /** sparse version of L (by rows) */
   csr_t *mLt; /** sparse version of L (by columns) */
   int maxJ;  /** memory to initially allocate for local storage */
-  double pmin; /** parameters for `mode&2 !=0` (scan probabilities) `deprecated` */
-  double pmax;
-  double pstep;
+  double LLRmin;
+  double LLRmax;
 } params_t;
 
 extern params_t prm;
@@ -83,20 +82,19 @@ extern params_t prm;
   "\t fdem=[string]\t: name of the input file with detector error model\n" \
   "\t fdet=[string]\t: input file with detector events (01 format)\n"   \
   "\t fobs=[string]\t: file with observables (01 matching lines in fdet)\n" \
+  "\t\t\t (space is OK in front of file name to enable shell completion)\n" \
   "\t steps=[integer]\t: num of random window decoding steps (default: 1)\n" \
   "\t lerr =[integer]\t: local search level after gauss (0, no search)\n" \
   "\t swait=[integer]\t: steps w/o new errors to stop (0, do not stop)\n" \
   "\t nvec =[integer]\t: max vector size for decoding (default: 16)\n"  \
+  "\t\t\t (list size in distance or energy calculations)\n"             \
   "\t ntot =[integer]\t: total syndromes to generate (default: 1)\n"     \
   "\t nfail=[integer]\t: total fails to terminate (0, do not terminate)\n" \
   "\t seed= [integer]\t: RNG seed or use time(NULL) if 0 (default)\n"	\
-  "\t mode= [integer]\t: bitmap for operation mode (default: 0)\n"      \
-  "\t\t*   0: clear the entire mode bitmap to 0.\n"                     \
-  "\t\t*   1: (reserved)\n"                                             \
-  "\t\t*   2: cycle global probabilities in error model from `pmin` to `pmax`\n" \
-  "\t pmin = [double]\t: min global probability with `mode&2` (-1)\n"   \
-  "\t pmax = [double]\t: max global probability with `mode&2` (-1)\n"   \
-  "\t pstep =[double]\t: step of probability with `mode&2` (1e-3)\n"    \
+  "\t mode= [integer]\t: operation mode (default: 0)\n"                 \
+  "\t\t* 0: use basic decoder; read events from file if spec'd\n"       \
+  "\t\t* 1: (reserved for BP)\n"                                        \
+  "\t\t* 2: generate most likely fault vectors, estimate Prob(Fail)\n"  \
   "\t debug=[integer]\t: bitmap for aux information to output (default: 1)\n" \
   "\t\t*   0: clear the entire debug bitmap to 0.\n"                    \
   "\t\t*   1: output misc general info (on by default)\n"		\
@@ -104,7 +102,6 @@ extern params_t prm;
   "\t See program documentation for input file syntax.\n"               \
   "\t Multiple `debug` parameters are XOR combined except for 0.\n"	\
   "\t Use debug=0 as the 1st argument to suppress all debug messages.\n"
-
 
 #ifdef __cplusplus
 }
