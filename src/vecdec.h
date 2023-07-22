@@ -74,7 +74,7 @@ extern params_t prm;
  * @todo: This has to be checked and updated, especially the `debug` options.
  */
 #define USAGE                                                           \
-  "%s: a simple vectorized random information set decoder.\n"           \
+  "%s:  vecdec - vectorized decoder and LER estimator\n"                \
   "  usage: %s param=value [[param=value] ... ]\n"			\
   "\t Command line arguments are processed in the order given.\n"	\
   "\t Supported parameters:\n"						\

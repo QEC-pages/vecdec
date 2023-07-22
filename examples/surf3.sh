@@ -19,7 +19,7 @@ dmax=3 # maximum code distance
 p0=0.004 # error probability for j=0 
 jmin=0 # range for calculating p1 and p2 (using p0/2**j )
 jmax=4
-Ntotal=$((128*1024)) # total number of steps to use
+Ntotal=$((12*1024)) # total number of steps to use
 nvec=1024
 #echo "# running surf3.sh" > $outfile
 #echo "# same depolarizing probability and measurement error p1" >> $outfile
@@ -53,7 +53,7 @@ for (( d0=$dmin; d0<=$dmax; d0+=2 )) do # distance loop
       pyF=`paste -d " " p$obsf $obsf | grep "0 1\|1 0" | wc -l`
       echo "# pymatching :" $pyOK fail $pyF
 
-      $vecdec debug=0 mode=1 fdet=$detf fobs=$obsf steps=1000 lerr=1 swait=100 \
+      $vecdec debug=0 mode=0 fdet=$detf fobs=$obsf steps=1000 lerr=1 swait=100 \
         ntot=$Ntotal nvec=$((nvec)) nfail=5000 f=$fnam.dem > $fnam.out
       echo $d0 $p1 `awk '{print $1/$2 " " $2 " " $1}' < $fnam.out` \
         `awk "BEGIN { print  $pyF \" \" $pyF/$Ntotal \" \" $pyOK }"`
