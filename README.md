@@ -72,7 +72,7 @@ detector(3, 1) D7
 
 ## Vectorized decoder
 
-This section describes operation with the command-line switch `mode=1`.
+This section describes operation with the command-line switch `mode=0` (the default).
 
 ### How it works 
 
