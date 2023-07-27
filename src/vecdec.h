@@ -109,11 +109,11 @@ extern params_t prm;
   "\t mode= [integer]\t: operation mode (default: 0)\n"                 \
   "\t\t* 0: use basic vectorized decoder\n"                             \
   "\t\t\t read detector events from file 'fdet' if given, otherwise\n"  \
-  "\t\t\t generate 'ntot' detector events and matching observable flips\n" \
-  "\t\t\t read obs. flips from file 'fobs' if given\n"                  \
+  "\t\t\t generate 'ntot' detector events and matching observable flips;\n" \
+  "\t\t\t read observable flips from file 'fobs' if given\n"            \
   "\t\t* 1: (reserved for BP)\n"                                        \
   "\t\t* 2: generate most likely fault vectors, estimate Prob(Fail)\n"  \
-  "\t\t\t generate up to 'ntot' unique min-energy fault  vectors\n"     \
+  "\t\t\t generate up to 'ntot' unique min-energy fault vectors\n"     \
   "\t\t\t use up to 'steps' random window decoding steps unless no new\n"\
   "\t\t\t fault vectors have been found for 'swait' steps.\n"           \
   "\t\t\t Keep vectors of weight up to 'nfail' above min weight found\n" \

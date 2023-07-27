@@ -158,8 +158,8 @@ You can generate the list of supported command line arguments by running
 `vecdec --help`.
 
 ```bash
-./src/vecdec:  vecdec - vectorized decoder and LER estimator
-  usage: ./src/vecdec param=value [[param=value] ... ]
+/vecdec:  vecdec - vectorized decoder and LER estimator
+  usage: ./vecdec param=value [[param=value] ... ]
 	 Command line arguments are processed in the order given.
 	 Supported parameters:
 	 --help	: give this help (also '-h' or just 'help')
@@ -176,9 +176,16 @@ You can generate the list of supported command line arguments by running
 	 nfail=[integer]	: total fails to terminate (0, do not terminate)
 	 seed= [integer]	: RNG seed or use time(NULL) if 0 (default)
 	 mode= [integer]	: operation mode (default: 0)
-		* 0: use basic decoder; read events from file if spec'd
+		* 0: use basic vectorized decoder
+			 read detector events from file 'fdet' if given, otherwise
+			 generate 'ntot' detector events and matching observable flips;
+			 read observable flips from file 'fobs' if given
 		* 1: (reserved for BP)
 		* 2: generate most likely fault vectors, estimate Prob(Fail)
+			 generate up to 'ntot' unique min-energy fault  vectors
+			 use up to 'steps' random window decoding steps unless no new
+			 fault vectors have been found for 'swait' steps.
+			 Keep vectors of weight up to 'nfail' above min weight found
 	 debug=[integer]	: bitmap for aux information to output (default: 1)
 		*   0: clear the entire debug bitmap to 0.
 		*   1: output misc general info (on by default)

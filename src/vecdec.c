@@ -392,7 +392,7 @@ int do_LLR_dist(int dW, params_t  * const p){
   
   if((!mH) || (!ee))
     ERROR("memory allocation failed!\n");
-  if(p->debug & 16)  mzd_print(mH);
+  //  if(p->debug & 16)  mzd_print(mH);
   /** 1. Construct random column permutation P */
 
   mzp_t * perm=mzp_init(p->n); /** identity column permutation */
@@ -400,6 +400,7 @@ int do_LLR_dist(int dW, params_t  * const p){
   if((!pivs) || (!perm))
     ERROR("memory allocation failed!\n");
 
+  int iwait=0, ichanged=0;
   perm = sort_by_prob(perm, p);   /** order of decreasing `p` */
   for (int ii=0; ii< p->steps; ii++){
     if(ii!=0){
@@ -418,7 +419,7 @@ int do_LLR_dist(int dW, params_t  * const p){
     }
     /** construct skip-pivot permutation */
     mzp_t * skip_pivs = do_skip_pivs(rank, pivs);
-    if(p->debug&16) mzd_print(mH);
+    //    if(p->debug&16) mzd_print(mH);
 
     /** calculate sparse version of each vector (list of positions)
      *  [1  a1        b1 ] ->  [a1  1  a2 a3 0 ]
@@ -433,11 +434,13 @@ int do_LLR_dist(int dW, params_t  * const p){
         if(mzd_read_bit(mH,ix,col))
           ee[cnt++] = pivs->values[ix];          
       }
+#if 0      
       if(p->debug & 16){
         printf("vec=[");
         for(int i=0;i<cnt; i++)
           printf("%d%s",ee[i],i+1==cnt ? "]\n" : ", ");
       }
+#endif
       
       /** verify logical operator */
       int nz;
@@ -477,33 +480,37 @@ int do_LLR_dist(int dW, params_t  * const p){
               printf("vector exists, cnt=%d\n",pvec->cnt);
           }
           else{ /** vector not found, inserting */
+            ++ ichanged; /** increment counter how many vectors added */
+            ++(p->num_cws);
+            if(energ>maxE)
+              maxE=energ;
+            pvec = (one_vec_t *) malloc(sizeof(one_vec_t)+keylen);
+            if(!pvec)
+              ERROR("memory allocation failed!\n");
+            pvec->energ = energ; /** energy value */
+            pvec->weight = cnt;
+            pvec->cnt = 1; /** encountered `1`st time */
+            memcpy(pvec->arr, ee, keylen);
+            HASH_ADD(hh, p->codewords, arr, keylen, pvec); /** store in the `hash` */
             if((p->ntot > 0) && (p->num_cws >= p->ntot)) /** todo: sort by energy, replace maxE cw */
               break; /** limit was set, not an error */
-            else{ /**  */
-              p->num_cws++;
-              if(energ>maxE)
-                maxE=energ;
-              pvec = (one_vec_t *) malloc(sizeof(one_vec_t)+keylen);
-              if(!pvec)
-                ERROR("memory allocation failed!\n");
-              pvec->energ=energ; /** energy value */
-              pvec->weight=cnt;
-              pvec->cnt=1; /** encountered `1`st time */
-              memcpy(pvec->arr, ee, keylen);
-              HASH_ADD(hh, p->codewords, arr, keylen, pvec);
-              /** stored in the `hash` - deallocate at the end of main() */
-            }
           }
         }
       }
     } /** end of the dual matrix rows loop */
     if(p->debug & 16)
-      printf(" round=%d of %d minE=%g minW=%d maxE=%g num_cws=%ld\n",
-             ii+1, p->steps, minE, minW, maxE, p->num_cws);
+      printf(" round=%d of %d minE=%g minW=%d maxE=%g num_cws=%ld ichanged=%d iwait=%d\n",
+             ii+1, p->steps, minE, minW, maxE, p->num_cws, ichanged, iwait);
     
     mzp_free(skip_pivs);
-
     
+    iwait = ichanged > 0 ? 0 : iwait+1 ;
+    ichanged=0;
+    if((p->swait > 0)&&(iwait > p->swait)){
+      if(p->debug & 16)
+        printf("  iwait=%d >swait=%d, terminating after %d steps\n", iwait, p->swait, ii+1);
+      break;
+    }
   }/** end of `steps` random window */
   one_vec_t *pvec;
   if(p->debug & 1024) {/** `print` the list of cws found by energy */
