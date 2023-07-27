@@ -519,11 +519,15 @@ int do_LLR_dist(int dW, params_t  * const p){
       print_one_vec(pvec);
   }
   /** finally calculate and output fail probability here */
-  double pfail=0;
-  for(pvec = p->codewords; pvec != NULL; pvec=(one_vec_t *)(pvec->hh.next))
-    pfail += do_prob_one_vec(pvec, p);
+  double pfail=0, pmax=0;
+  for(pvec = p->codewords; pvec != NULL; pvec=(one_vec_t *)(pvec->hh.next)){
+    double prob=do_prob_one_vec(pvec, p);
+    pfail += prob;
+    if(prob>pmax)
+      pmax=prob;
+  }
   /** todo: prefactor calculation */
-  printf("%g %d %ld %g\n", pfail, minW, p->num_cws, minE);
+  printf("%g %g %d %ld\n", pfail, pmax, minW, p->num_cws);
       
   /** clean up */
   mzp_free(perm);
