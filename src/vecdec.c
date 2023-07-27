@@ -57,8 +57,8 @@ double mzd_row_energ(double *coeff, const mzd_t *A, const int i){
 /** @brief print entire `one_vec_t` structure by pointer */
 void print_one_vec(const one_vec_t * const pvec){
   printf(" w=%d E=%g cnt=%d [",pvec->weight, pvec->energ,pvec->cnt);
-  for(int i=0; i < pvec->cnt; i++)
-    printf("%d%s",pvec->arr[i], i+1 < pvec->cnt ? " " :"]\n");
+  for(int i=0; i < pvec->weight; i++)
+    printf("%d%s",pvec->arr[i], i+1 < pvec->weight ? " " :"]\n");
 }
 
 /** @brief calculate the probability of codeword in `one_vec_t` */
@@ -374,6 +374,8 @@ mzp_t * do_skip_pivs(const size_t rank, const mzp_t * const pivs){
  * @return minimum `weight` of a CW found 
  */
 int do_LLR_dist(int dW, params_t  * const p){
+  if(p->nvec == 16) /** default value */
+    p->nvec=0;
   mzd_t * mH = mzd_from_csr(NULL, p->mH);
   mzd_t *mLt = NULL, *eemLt = NULL, *mL = NULL;
   if(p->mLt->cols > 1){ /** several logical ops */
@@ -465,7 +467,7 @@ int do_LLR_dist(int dW, params_t  * const p){
         }
         if (cnt < minW)
           minW=cnt;
-        if (cnt < minW + dW){ /** try to add to hashing storage */
+        if (cnt <= minW + dW){ /** try to add to hashing storage */
           const size_t keylen = cnt * sizeof(int);
           one_vec_t *pvec=NULL;
           HASH_FIND(hh, p->codewords, ee, keylen, pvec);
@@ -474,10 +476,10 @@ int do_LLR_dist(int dW, params_t  * const p){
             if(p->debug &16)
               printf("vector exists, cnt=%d\n",pvec->cnt);
           }
-          else{ /** vector not found */
-            if(p->num_cws >= p->ntot) /** todo: sort by energy, replace maxE cw */
-              ERROR("found %ld codewords, increase 'ntot=%d', exiting\n",p->num_cws+1,p->ntot);
-            else{ /** inserting */
+          else{ /** vector not found, inserting */
+            if((p->ntot > 0) && (p->num_cws >= p->ntot)) /** todo: sort by energy, replace maxE cw */
+              break; /** limit was set, not an error */
+            else{ /**  */
               p->num_cws++;
               if(energ>maxE)
                 maxE=energ;
@@ -500,9 +502,11 @@ int do_LLR_dist(int dW, params_t  * const p){
              ii+1, p->steps, minE, minW, maxE, p->num_cws);
     
     mzp_free(skip_pivs);
-  }
+
+    
+  }/** end of `steps` random window */
   one_vec_t *pvec;
-  if(p->debug & 16){/** `print` the list of cws found by energy */
+  if(p->debug & 1024) {/** `print` the list of cws found by energy */
     HASH_SORT(p->codewords, by_energy);
     for(pvec = p->codewords; pvec != NULL; pvec=(one_vec_t *)(pvec->hh.next))
       print_one_vec(pvec);
@@ -512,7 +516,7 @@ int do_LLR_dist(int dW, params_t  * const p){
   for(pvec = p->codewords; pvec != NULL; pvec=(one_vec_t *)(pvec->hh.next))
     pfail += do_prob_one_vec(pvec, p);
   /** todo: prefactor calculation */
-  printf("%g %d %ld %g\n",pfail,minW,p->num_cws, minE);
+  printf("%g %d %ld %g\n", pfail, minW, p->num_cws, minE);
       
   /** clean up */
   mzp_free(perm);
