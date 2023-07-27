@@ -1,4 +1,3 @@
-/* 	$Id: util_m4ri.c,v 1.1 2017/10/31 21:56:50 leonid Exp leonid $	 */
 /************************************************************************ 
  * helper functions for use with m4ri library, 
  * including binary sparse matrices and conversion utilities 
