@@ -1,4 +1,3 @@
-/* 	$Id: util_m4ri.h,v 1.1 2017/10/31 21:55:24 leonid Exp leonid $	 */
 #ifndef UTIL_M4RI_H
 #define UTIL_M4RI_H
 

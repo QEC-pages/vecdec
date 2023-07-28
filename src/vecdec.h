@@ -20,9 +20,22 @@ extern "C"{
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include "uthash.h" /** hashing storage macros */
 
 /**< minimum probability for LLR calculations */
-#define MINPROB (1e-7)  
+#define MINPROB (1e-7)
+/** this is the maximum value of `k` for LER estimator */
+// #define MAXK 10
+
+/**< @brief structure to hold sparse vectors in a hash */
+typedef struct ONE_VEC_T {
+  UT_hash_handle hh;
+  double energ; /**< sum of LLRs */
+  int weight; /**< number of integers in the list */
+  int cnt; /** how many times this vector was encountered */
+  //  size_t len; /** `weight*sizeof(int)` (is this really needed?) */
+  int arr[0]; /** array of `weight` integers, the actual key  */
+} one_vec_t;
 
 /** @brief structure to read in one line of data */
 typedef struct ONE_PROB_T {
@@ -64,6 +77,8 @@ typedef struct PARAMS_T {
   int maxJ;  /** memory to initially allocate for local storage */
   double LLRmin;
   double LLRmax;
+  one_vec_t *codewords; /** `hash table` with found codewords */
+  long int num_cws; /** `number` of codewords in the `hash` */
 } params_t;
 
 extern params_t prm;
@@ -92,9 +107,16 @@ extern params_t prm;
   "\t nfail=[integer]\t: total fails to terminate (0, do not terminate)\n" \
   "\t seed= [integer]\t: RNG seed or use time(NULL) if 0 (default)\n"	\
   "\t mode= [integer]\t: operation mode (default: 0)\n"                 \
-  "\t\t* 0: use basic decoder; read events from file if spec'd\n"       \
+  "\t\t* 0: use basic vectorized decoder\n"                             \
+  "\t\t\t read detector events from file 'fdet' if given, otherwise\n"  \
+  "\t\t\t generate 'ntot' detector events and matching observable flips;\n" \
+  "\t\t\t read observable flips from file 'fobs' if given\n"            \
   "\t\t* 1: (reserved for BP)\n"                                        \
   "\t\t* 2: generate most likely fault vectors, estimate Prob(Fail)\n"  \
+  "\t\t\t generate up to 'ntot' unique min-energy fault vectors\n"     \
+  "\t\t\t use up to 'steps' random window decoding steps unless no new\n"\
+  "\t\t\t fault vectors have been found for 'swait' steps.\n"           \
+  "\t\t\t Keep vectors of weight up to 'nfail' above min weight found\n" \
   "\t debug=[integer]\t: bitmap for aux information to output (default: 1)\n" \
   "\t\t*   0: clear the entire debug bitmap to 0.\n"                    \
   "\t\t*   1: output misc general info (on by default)\n"		\

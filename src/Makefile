@@ -15,7 +15,7 @@ src = vecdec.c utils_m4ri.c  utils.c tinymt64.c ${VECDEC_HDRS}
 
 #-Wmissing-prototypes   -Wconversion -Wextra
 # -std=gnu11
-VECDEC_HDRS = vecdec.h util_m4ri.h utils.h mmio.h tinymt64.h
+VECDEC_HDRS = vecdec.h util_m4ri.h utils.h mmio.h tinymt64.h uthash.h
 VECDEC_SECS = vecdec.c util_m4ri.c utils.c mmio.c tinymt64.c
 VECDEC_OBJS = vecdec.o util_m4ri.o utils.o mmio.o tinymt64.o
 ## unused (documentation only): mainpage.h

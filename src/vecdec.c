@@ -28,9 +28,21 @@ params_t prm={ .nrows=0, .n=0, .ncws=0, .steps=1,
   .nvec=16, .ntot=1, .nfail=0, .seed=0,
   .debug=1, .fdem=NULL,
   .colw=10, .mode=0, .maxJ=20,
-  .LLRmin=0, .LLRmax=0,
+  .LLRmin=0, .LLRmax=0, .codewords=NULL, .num_cws=0,
   .vP=NULL, .vLLR=NULL, .mH=NULL, .mHt=NULL,
   .mL=NULL, .mLt=NULL};
+
+/** @brief compare two `one_vec_t` structures by energy */
+static inline int by_energy(void *a, void *b){
+  const one_vec_t *pa = (one_vec_t *) a;
+  const one_vec_t *pb = (one_vec_t *) b;
+  if (pa->energ < pb->energ)
+    return -1;
+  else if (pa->energ > pb->energ)
+    return +1;
+  else /** Ea == Eb */
+    return 0;
+}
 
 /** @brief calculate the energy of the row `i` in `A` */
 double mzd_row_energ(double *coeff, const mzd_t *A, const int i){
@@ -40,6 +52,24 @@ double mzd_row_energ(double *coeff, const mzd_t *A, const int i){
       ans += coeff[j];
   return (ans);
   /** todo: rewrite in terms of `__builtin_clzll` */
+}
+
+/** @brief print entire `one_vec_t` structure by pointer */
+void print_one_vec(const one_vec_t * const pvec){
+  printf(" w=%d E=%g cnt=%d [",pvec->weight, pvec->energ,pvec->cnt);
+  for(int i=0; i < pvec->weight; i++)
+    printf("%d%s",pvec->arr[i], i+1 < pvec->weight ? " " :"]\n");
+}
+
+/** @brief calculate the probability of codeword in `one_vec_t` */
+static inline double do_prob_one_vec(const one_vec_t * const pvec, const params_t * const p){
+  double ans=1;
+  const int * idx = pvec->arr;
+  for(int i=0; i< pvec->weight; i++, idx++){
+    const double vP = p->vP[*idx];
+    ans *= 2*sqrt(vP*(1 - vP));
+  }
+  return ans;
 }
 
 /**
@@ -333,9 +363,19 @@ mzp_t * do_skip_pivs(const size_t rank, const mzp_t * const pivs){
   return ans;
 }
 
-/** @brief Random window search for small-E logical operators
+/** @brief Random window search for small-E logical operators.
+ *
+ *  Uses hashing storage to identify unique vectors.  Only vectors of weight no
+ *  more that `minW`+`dW` will be recorded, where `minW` is the current minimum
+ *  weight.
+ * 
+ * @param dW weight increment from the minimum found
+ * @param p pointer to global parameters structure
+ * @return minimum `weight` of a CW found 
  */
-void do_LLR_dist(params_t const * const p){
+int do_LLR_dist(int dW, params_t  * const p){
+  if(p->nvec == 16) /** default value */
+    p->nvec=0;
   mzd_t * mH = mzd_from_csr(NULL, p->mH);
   mzd_t *mLt = NULL, *eemLt = NULL, *mL = NULL;
   if(p->mLt->cols > 1){ /** several logical ops */
@@ -345,13 +385,14 @@ void do_LLR_dist(params_t const * const p){
   else /** just one logical op */
     mL = mzd_from_csr(NULL, p->mL);
     
-  mzd_t * mE = mzd_init(p->nvec, p->mH->cols); /** vectors to constr */
-  double *vE = calloc(p->nvec,sizeof(double));  /**< best energies */
-  vE[0]=1e9;
-  int *ee = malloc(p->mH->cols*sizeof(int));
-  if((!mE) || (!vE) || (!mH) || (!ee))
+  int minW = p->n+1;                         /** min `weight` */ 
+  double minE = minW * p->LLRmax;            /** min `energy` */
+  double maxE = p->LLRmin > 0 ? 0 : minW * p->LLRmin; /** todo: needed? */
+  int *ee = malloc(p->mH->cols*sizeof(int)); /** actual `vector` */
+  
+  if((!mH) || (!ee))
     ERROR("memory allocation failed!\n");
-  if(p->debug & 16)  mzd_print(mH);
+  //  if(p->debug & 16)  mzd_print(mH);
   /** 1. Construct random column permutation P */
 
   mzp_t * perm=mzp_init(p->n); /** identity column permutation */
@@ -359,6 +400,7 @@ void do_LLR_dist(params_t const * const p){
   if((!pivs) || (!perm))
     ERROR("memory allocation failed!\n");
 
+  int iwait=0, ichanged=0;
   perm = sort_by_prob(perm, p);   /** order of decreasing `p` */
   for (int ii=0; ii< p->steps; ii++){
     if(ii!=0){
@@ -377,7 +419,7 @@ void do_LLR_dist(params_t const * const p){
     }
     /** construct skip-pivot permutation */
     mzp_t * skip_pivs = do_skip_pivs(rank, pivs);
-    if(p->debug&16) mzd_print(mH);
+    //    if(p->debug&16) mzd_print(mH);
 
     /** calculate sparse version of each vector (list of positions)
      *  [1  a1        b1 ] ->  [a1  1  a2 a3 0 ]
@@ -392,11 +434,13 @@ void do_LLR_dist(params_t const * const p){
         if(mzd_read_bit(mH,ix,col))
           ee[cnt++] = pivs->values[ix];          
       }
+#if 0      
       if(p->debug & 16){
         printf("vec=[");
         for(int i=0;i<cnt; i++)
           printf("%d%s",ee[i],i+1==cnt ? "]\n" : ", ");
       }
+#endif
       
       /** verify logical operator */
       int nz;
@@ -417,46 +461,93 @@ void do_LLR_dist(params_t const * const p){
         double energ=0;
         for(int i=0; i<cnt; i++) 
           energ += p->vLLR[ee[i]];
-        if (energ < vE[0]){  /** todo: add `hash` storage here */
+        /** at this point we have `cnt` codeword indices in `ee`, and its `energ` */
+       
+        if (energ < minE){  /** legacy code */
           if(p->debug&1)
             printf("nz=%d cnt=%d energ=%g\n",nz,cnt,energ);
-          vE[0]=energ;
-          mzd_row_clear_offset(mE,0,0);
-          for(int i=0; i<cnt; i++)
-            mzd_write_bit(mE,0,ee[i],1);
+          minE=energ;
+        }
+        if (cnt < minW)
+          minW=cnt;
+        if (cnt <= minW + dW){ /** try to add to hashing storage */
+          const size_t keylen = cnt * sizeof(int);
+          one_vec_t *pvec=NULL;
+          HASH_FIND(hh, p->codewords, ee, keylen, pvec);
+          if(pvec){
+            pvec->cnt++; /** just increment the counter */
+            if(p->debug &16)
+              printf("vector exists, cnt=%d\n",pvec->cnt);
+          }
+          else{ /** vector not found, inserting */
+            ++ ichanged; /** increment counter how many vectors added */
+            ++(p->num_cws);
+            if(energ>maxE)
+              maxE=energ;
+            pvec = (one_vec_t *) malloc(sizeof(one_vec_t)+keylen);
+            if(!pvec)
+              ERROR("memory allocation failed!\n");
+            pvec->energ = energ; /** energy value */
+            pvec->weight = cnt;
+            pvec->cnt = 1; /** encountered `1`st time */
+            memcpy(pvec->arr, ee, keylen);
+            HASH_ADD(hh, p->codewords, arr, keylen, pvec); /** store in the `hash` */
+            if((p->ntot > 0) && (p->num_cws >= p->ntot)) /** todo: sort by energy, replace maxE cw */
+              break; /** limit was set, not an error */
+          }
         }
       }
     } /** end of the dual matrix rows loop */
+    if(p->debug & 16)
+      printf(" round=%d of %d minE=%g minW=%d maxE=%g num_cws=%ld ichanged=%d iwait=%d\n",
+             ii+1, p->steps, minE, minW, maxE, p->num_cws, ichanged, iwait);
     
     mzp_free(skip_pivs);
-  }
-  /** finally calculate the energy and estimate the single-error fail prob */
-  double pf=1;
-  int wt=0;
-  for(int i=0; i< p->n; i++)
-    if(mzd_read_bit(mE,0,i)){
-      wt++;
-      pf *= 2*sqrt((p->vP[i])*(1 - (p->vP[i])));
+    
+    iwait = ichanged > 0 ? 0 : iwait+1 ;
+    ichanged=0;
+    if((p->swait > 0)&&(iwait > p->swait)){
+      if(p->debug & 16)
+        printf("  iwait=%d >swait=%d, terminating after %d steps\n", iwait, p->swait, ii+1);
+      break;
     }
-  //  if(p->debug&1)
+  }/** end of `steps` random window */
+  one_vec_t *pvec;
+  if(p->debug & 1024) {/** `print` the list of cws found by energy */
+    HASH_SORT(p->codewords, by_energy);
+    for(pvec = p->codewords; pvec != NULL; pvec=(one_vec_t *)(pvec->hh.next))
+      print_one_vec(pvec);
+  }
+  /** finally calculate and output fail probability here */
+  double pfail=0, pmax=0;
+  for(pvec = p->codewords; pvec != NULL; pvec=(one_vec_t *)(pvec->hh.next)){
+    double prob=do_prob_one_vec(pvec, p);
+    pfail += prob;
+    if(prob>pmax)
+      pmax=prob;
+  }
   /** todo: prefactor calculation */
-  printf("%g %d %g\n",pf,wt,vE[0]);
+  printf("%g %g %d %ld\n", pfail, pmax, minW, p->num_cws);
       
-  /** calculate and output fail probability here */
   /** clean up */
   mzp_free(perm);
   mzp_free(pivs);
-  mzd_free(mE);
-    free(ee);
-    free(vE);
-    if(p->mLt->cols>1){
-      mzd_free(eemLt);
-      mzd_free(mLt);
+  free(ee);
+  if(p->mLt->cols>1){
+    mzd_free(eemLt);
+    mzd_free(mLt);
+  }
+  else
+    mzd_free(mL);
+  mzd_free(mH);
+
+    /** prescribed way to clean the hashing table */
+    one_vec_t *cw, *tmp;
+    HASH_ITER(hh, p->codewords, cw, tmp) {
+      HASH_DEL(p->codewords, cw);
+      free(cw);
     }
-    else
-      mzd_free(mL);
-    mzd_free(mH);
-  
+    return minW;
 }
 
 /**
@@ -1182,7 +1273,7 @@ int main(int argc, char **argv){
     case 2:
       if(p->debug&1)
         printf("estimating fail probability in %d steps\n",p->steps);
-      do_LLR_dist(p);
+      do_LLR_dist(p->nfail, p);
       break;
     default:
       ERROR("mode=%d not supported\n",p->mode);
