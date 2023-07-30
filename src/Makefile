@@ -6,7 +6,9 @@ WARN = -Wall -Wsign-compare -Wextra
 # OPT  = -g -march=native -mtune=native -O3 ${PRODUCTION}
 EXTRA=-DNDEBUG
 # use -DNDEBUG to disable assert, -Wfatal-errors to stop at 1st error
+# to compile on Mac you may need to disable '-march=native` 
 OPT = -g -march=native -mtune=native -O3 ${EXTRA}
+#OPT = -g -mtune=native -O3 ${EXTRA}
 CC = gcc
 CFLAGS = ${OPT} ${WARN}
 CPP = g++
@@ -27,13 +29,25 @@ default: give_help
 
 # The main decoder program
 vecdec: ${VECDEC_OBJS} ${VECDEC_HDRS} Makefile 
-	${CPP} ${VECDEC_OBJS} -o vecdec -l m4ri
+	${CPP} ${CFLAGS} ${VECDEC_OBJS} -o vecdec -l m4ri
 
 # depend on all headers 
 ${VECDEC_OBJS}: ${VECDEC_HDRS} Makefile
 
 mmio.o: mmio.c Makefile
 	${CC} ${OPT} -c $<
+
+vecdec.o: vecdec.c
+	@echo ${CC} ${CFLAGS} -o vecdec.o -c $<
+	@${CC}  ${CFLAGS} -o vecdec.o -c $<
+	@if [ $$? -ne 0 ] ; then \
+	  echo -e 'Do you have libm4ri_dev on your system?' ; \
+	  echo -e "On a Mac, try to disable '-march=native' compiler switch by running" ;\
+	  echo -e "  make vecdec OPT=-g -mtune=native -O3" ;\
+	  echo -e " " ;\
+	  false ; \
+	fi
+
 
 clean:
 	rm -f *~ *.tmp *.out *.o ../input/*~ TAGS

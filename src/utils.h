@@ -48,7 +48,7 @@ static inline double rnd_exponential(void){
   /**< no need to check for zero or one values */
 };
 
-#ifndef linux 
+#ifdef __MINGW32__ /** windows compiler */
 /**
  * @brief home-grown version of unix function with the same name.
  *
@@ -65,7 +65,7 @@ static inline double rnd_exponential(void){
  *         terminator), or -1 on error or EOF.
  */
 int getline(char **line, size_t *n, FILE *fp);
-#endif /* linux */
+#endif /* __MINGW32__ */
 
 /** @brief just a minimum of two integers */
 inline int min(const int a, const int b){ return a<b? a:b; }

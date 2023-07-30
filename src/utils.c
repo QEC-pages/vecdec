@@ -1,3 +1,4 @@
+
 /**
  * @file utils.c
  *
@@ -14,7 +15,7 @@
 
 tinymt64_t tinymt;
 
-#ifndef linux
+#ifdef __MINGW32__ /** windows compiler */
 int getline(char **line, size_t *n, FILE *fp){
   size_t size, oldsize;
   size_t len=0;
@@ -57,4 +58,4 @@ int getline(char **line, size_t *n, FILE *fp){
   return len;   
 }
 
-#endif /* linux */
+#endif /* __MINGW32__ */
