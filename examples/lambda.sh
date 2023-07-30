@@ -1,7 +1,7 @@
 #!/bin/bash
 # -*- shell-script -*-
 #
-# try to estimate the value of Lambda 3/9 using `stim` and `vecdec` 
+# try to estimate the value of Lambda 3/5 using `stim` and `vecdec` 
 #
 
 # For a run with `n` decoding rounds, fit logical error rate to exponential form $P_f=1-(1-2*eps)^n$.
@@ -15,24 +15,31 @@ pymatching=../../PyMatching/pymatching
 # place to put the data in
 outfile=lambda.dat
 
+runstim=1
+runvecd=1
+
 # program parameters
 d1=3 # minimum code distance for Lambda 
 d2=5 # maximum code distance for Lambda 
-p0=0.001 # error probability for j=0 
+p0=0.002 # error probability for j=0 
 jmin=0 # range for calculating p1 and p2 (using p0/2**j )
-jmax=0 # just one valeu
+jmax=0 # just one value
 # nmin=dmin 
-n_factor=5
-Ntotal=$((1028*1024)) # total number of steps to use
+n_factor=2
+Ntotal=$((64*1024*1024)) # total number of steps to use
 echo "# running lambda.sh" > $outfile
-echo "# depolarizing probability p1" >> $outfile
+echo "# depolarizing and measurement probability p1" >> $outfile
 echo "# using stim Ntotal=$Ntotal for comparison" >> $outfile 
 
 for (( j1=jmin; j1<=jmax; j1++)) ; do # p1 loop
   p1=`awk "BEGIN { print ${p0}*exp(-${j1}*log(2)/2.0) } "`
-  fnam=surf_j$j1 # filename to use -- separate for each `j` 
-  #  echo "# output of 'lambda.sh' " > ${fnam}.out
-   echo "# output of 'lambda.sh' " > v${fnam}.out  
+  fnam=surf_j$j1 # filename to use -- separate for each `j`
+  if (( runstim )) ; then 
+    echo "# output of 'lambda.sh' running stim/pymatching sim" > ${fnam}.out
+  fi
+  if (( runvecd )) ; then 
+    echo "# output of 'lambda.sh' running vecdec mode=2 est" > v${fnam}.out
+  fi
   for d0 in $d1 $d2 ; do 
     for (( n=$d2 ; n<=$((d2*n_factor)); n++ )) ; do # n-loop
       detf=tmp_det.01
@@ -51,21 +58,21 @@ for (( j1=jmin; j1<=jmax; j1++)) ; do # p1 loop
       else
         $stim gen --code surface_code --task rotated_memory_x \
           --distance $d0 --rounds $n \
-          --after_clifford_depolarization $p1 \
+          --after_reset_flip_probability $p1 \
+          --before_round_data_depolarization $p1 \
           --before_measure_flip_probability $p1 \
           > $fnam.stim
       fi
 
-      if (( 0 )) ; then # run pymatching  
+      if (( runstim )) ; then # run pymatching  
 
         # analyze errors
-        # also try with  --decompose_errors 
-        $stim analyze_errors --in $fnam.stim > $fnam.dem
-        
-        $stim  sample_dem --shots $Ntotal --in $fnam.dem \
+        $stim analyze_errors --in $fnam.stim > v$fnam.dem
+        $stim  sample_dem --shots $((Ntotal)) --in v$fnam.dem \
           --out $detf --out_format 01 \
           --obs_out $obsf --obs_out_format 01
-        
+        $stim analyze_errors --decompose_errors --in $fnam.stim > $fnam.dem
+                
         $pymatching predict --dem $fnam.dem --in $detf --out p$obsf \
           --in_format 01 --out_format 01 --in $fnam.stim > $fnam.dem_dec 
         
@@ -77,18 +84,22 @@ for (( j1=jmin; j1<=jmax; j1++)) ; do # p1 loop
         echo $n $d0 $p1 `awk "BEGIN { print  $pyF/$Ntotal \" \" $pyF \" \" $pyF+$pyOK }"` >> ${fnam}.out
 
       fi 
-      if (( 1 )) ; then # run vecdec 
+      if (( runvecd )) ; then # run vecdec 
         $stim analyze_errors --in $fnam.stim > v$fnam.dem
-        $vecdec debug=0 steps=$((d0*d0*d0*d0)) mode=2 f=v$fnam.dem > tmp.out 
+        $vecdec debug=0 steps=$((1000*d0*d0*n*n)) swait=$((10*d0*d0*n*n)) mode=2 f=v$fnam.dem > tmp.out 
         echo $n $d0 $p1 `cat tmp.out` >> v$fnam.out
         echo $n $d0 $p1 `cat tmp.out`
       fi
-    done # n loop 
-#      echo "" >> ${fnam}.out 
-#      echo "" >> ${fnam}.out 
+    done # n loop
+    if (( runstim )); then 
+      echo "" >> ${fnam}.out 
+      echo "" >> ${fnam}.out
+    fi
+    if (( runvecd )) ; then 
       echo "" >> v${fnam}.out 
       echo "" >> v${fnam}.out
-      echo ""
+    fi
+    echo ""
   done # d0 loop
   gnuplot <<EOF 
     set fit quiet
@@ -103,17 +114,18 @@ for (( j1=jmin; j1<=jmax; j1++)) ; do # p1 loop
     set style data linespo
     plot "${fnam}.out" index 0 us 1:4 tit "d=$d1" with linespoi lc "red"
     replot "" index 1 us 1:4 tit "d=$d2" with linespoi lc "blue"
-    plot "$v{fnam}.out" index 0 us 1:4 tit "d=$d1 vecdec" with linespoi lc "purple"
+    replot "v${fnam}.out" index 0 us 1:4 tit "d=$d1 vecdec" with linespoi lc "purple"
     replot "" index 1 us 1:4 tit "d=$d2 vecdec" with linespoi lc "green"
     replot a3+b3*x notit lc "red"
     replot a5+b5*x notit lc "blue"
     replot va3+vb3*x notit lc "purple"
     replot va5+vb5*x notit lc "green"
     print "d=3", $p1 ,a3 ,b3, a3_err, b3_err
+    print "d=5", $p1 ,a5 ,b5, a5_err, b5_err
     print "d=3", $p1 ,va3 ,vb3, va3_err, vb3_err, " est"
     print "d=5", $p1 ,va5 ,vb5, va5_err, vb5_err, " est"
     print "lambda(stim)=",b3/b5, " lambda(est)=",vb3/vb5
-    print 
+    print "" 
     set term push
     set term pdfcairo
     set out "tmp.pdf
@@ -145,12 +157,12 @@ EOF
     set term pop
 EOF
   echo "# fit results: d p1 a b a_err b_err (index=$index)"
-      echo "#" `cat tmp.out` 
-      echo "# fit results: d p1 a b a_err b_err" >> $outfile
-      echo "#" `cat tmp.out` >> $outfile
-      echo "" >> $outfile
-      echo "" >> $outfile
-      index=$((index+1))
+  echo "#" `cat tmp.out` 
+  echo "# fit results: d p1 a b a_err b_err" >> $outfile
+  echo "#" `cat tmp.out` >> $outfile
+  echo "" >> $outfile
+  echo "" >> $outfile
+  index=$((index+1))
   fi
   
 
