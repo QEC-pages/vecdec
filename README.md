@@ -199,6 +199,12 @@ You can generate the list of supported command line arguments by running
 
 The program uses `m4ri` library for binary linear algebra.
 
+`Tiny Mersenne Twister` written by Mutsuo Saito and Makoto Matsumoto is used for
+random number generation (header file `src/tinymt64.h`).
+
+`uthash` by Troy D. Hanson and  Arthur O'Dwyer is used for hashing storage (header file
+`src/uthash.h`).
+
 ## Future
 
 Eventually, the program will be able to use more efficient decoders, e.g.,
