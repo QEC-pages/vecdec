@@ -1165,8 +1165,9 @@ int main(int argc, char **argv){
   read_dem_file(p->fdem,p); 
 
   switch(p->mode){
-    case 0: /** internal decoder */
-
+    case 0: /** internal `vecdec` decoder */
+      if(p->debug &1)
+        printf("# mode=%d, running internal decoder\n",p->mode);
       FILE *fdet=NULL, *fobs=NULL;
       rci_t linedet=0, lineobs=0;
       if(p->fdet){/** expect both `fdet` and `fobs` to be defined */
@@ -1272,7 +1273,7 @@ int main(int argc, char **argv){
       break;
     case 2:
       if(p->debug&1)
-        printf("estimating fail probability in %d steps\n",p->steps);
+        printf("# mode=%d, estimating fail probability in %d steps\n",p->mode, p->steps);
       do_LLR_dist(p->nfail, p);
       break;
     default:
