@@ -297,7 +297,7 @@ static inline int cmp_ippairs(const void *a, const void *b){
 }
 
 /** @brief helper function to sort `int`
- *  use `qsort(array, len, sizeof(ippair_t), cmp_int);`
+ *  use `qsort(array, len, sizeof(ippair_t), cmp_rci_t);`
  */
 static inline int cmp_rci_t(const void *a, const void *b){
   const rci_t va= *((rci_t *) a);
@@ -374,13 +374,15 @@ mzp_t * do_skip_pivs(const size_t rank, const mzp_t * const pivs){
  * @return minimum `weight` of a CW found 
  */
 int do_LLR_dist(int dW, params_t  * const p){
+  /** whether to verify logical ops as a vector or individually */
+  const int use_vector = p->mLt->cols >= 16 ? 1 : 0;
   if(p->nvec == 16) /** default value */
     p->nvec=0;
   mzd_t * mH = mzd_from_csr(NULL, p->mH);
   mzd_t *mLt = NULL, *eemLt = NULL, *mL = NULL;
-  if(p->mLt->cols > 1){ /** several logical ops */
+  if(use_vector){ /** all logical ops at once */
     mLt = mzd_from_csr(NULL, p->mLt);
-    eemLt = mzd_init(p->mLt->rows,1);
+    eemLt = mzd_init(1, p->mLt->cols);
   }
   else /** just one logical op */
     mL = mzd_from_csr(NULL, p->mL);
@@ -388,7 +390,7 @@ int do_LLR_dist(int dW, params_t  * const p){
   int minW = p->n+1;                         /** min `weight` */ 
   double minE = minW * p->LLRmax;            /** min `energy` */
   double maxE = p->LLRmin > 0 ? 0 : minW * p->LLRmin; /** todo: needed? */
-  int *ee = malloc(p->mH->cols*sizeof(int)); /** actual `vector` */
+  rci_t *ee = malloc(p->mH->cols*sizeof(rci_t)); /** actual `vector` */
   
   if((!mH) || (!ee))
     ERROR("memory allocation failed!\n");
@@ -434,6 +436,8 @@ int do_LLR_dist(int dW, params_t  * const p){
         if(mzd_read_bit(mH,ix,col))
           ee[cnt++] = pivs->values[ix];          
       }
+      /** sort the column indices */
+      qsort(ee, cnt, sizeof(rci_t), cmp_rci_t);
 #if 0      
       if(p->debug & 16){
         printf("vec=[");
@@ -441,19 +445,23 @@ int do_LLR_dist(int dW, params_t  * const p){
           printf("%d%s",ee[i],i+1==cnt ? "]\n" : ", ");
       }
 #endif
-      
       /** verify logical operator */
       int nz;
-      if(p->mLt->cols > 1){ /** use vector */
+      if(use_vector){ /** use vector */
         mzd_set_ui(eemLt,0);
         for(int i=0; i<cnt; i++) 
           mzd_combine_even_in_place(eemLt,0,0,mLt,ee[i],0);
-        nz = mzd_is_zero(eemLt) ? 1 : 0;
+        nz = mzd_is_zero(eemLt) ? 0 : 1;
       }
-      else{ /** just one logical operator = `0`th row of `mL` */
-        nz=0;
-        for(int i=0; i<cnt; i++) /** bits in one row */
-          nz ^= mzd_read_bit(mL,0,ee[i]); 
+      else{ /** for each logical operator = row of `mL` */
+	nz=0;
+	for(int j=0; j < mL->nrows; j++){
+	  nz=0;
+	  for(int i=0; i<cnt; i++) /** bits in one row */
+	    nz ^= mzd_read_bit(mL,j,ee[i]);
+	  if(nz)
+	    break;
+	}
       }
       if(nz){ /** we got non-trivial codeword! */
         /** todo: try local search to `lerr` */
@@ -471,7 +479,7 @@ int do_LLR_dist(int dW, params_t  * const p){
         if (cnt < minW)
           minW=cnt;
         if (cnt <= minW + dW){ /** try to add to hashing storage */
-          const size_t keylen = cnt * sizeof(int);
+          const size_t keylen = cnt * sizeof(rci_t);
           one_vec_t *pvec=NULL;
           HASH_FIND(hh, p->codewords, ee, keylen, pvec);
           if(pvec){
@@ -533,7 +541,7 @@ int do_LLR_dist(int dW, params_t  * const p){
   mzp_free(perm);
   mzp_free(pivs);
   free(ee);
-  if(p->mLt->cols>1){
+  if(use_vector){
     mzd_free(eemLt);
     mzd_free(mLt);
   }
@@ -918,7 +926,6 @@ void read_dem_file(char *fnam, params_t * const p){
   free(inH);
   free(inL);
 
-#ifndef NDEBUG
   if(p->debug & 64){ /** print matrices */
     mzd_t *mH0 = mzd_from_csr(NULL,p->mH);
     printf("matrix mH0:\n");  mzd_print(mH0);
@@ -928,7 +935,6 @@ void read_dem_file(char *fnam, params_t * const p){
     printf("matrix mL0:\n");  mzd_print(mL0);
     mzd_free(mL0);
   }
-#endif
 }
 
 /** @brief given the error model read, prepare for decoding
