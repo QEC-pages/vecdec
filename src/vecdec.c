@@ -26,7 +26,7 @@
 params_t prm={ .nrows=0, .n=0, .ncws=0, .steps=1,
   .lerr=0, .swait=0,
   .nvec=16, .ntot=1, .nfail=0, .seed=0,
-  .debug=1, .fdem=NULL,
+  .debug=1, .fdem=NULL, .fdet=NULL, .fobs=NULL, .fout="tmp", 
   .colw=10, .mode=0, .maxJ=20,
   .LLRmin=0, .LLRmax=0, .codewords=NULL, .num_cws=0,
   .vP=NULL, .vLLR=NULL, .mH=NULL, .mHt=NULL,
@@ -149,7 +149,7 @@ static inline int twomat_gauss_one(mzd_t *M, mzd_t *S, const int idx, const int 
  *  todo: perhaps allow for an independent error model (matrices `mHt`, `mLt` and vector `vP`) ?
  */
 int do_errors(mzd_t *mHe, mzd_t *mLe,
-               const params_t * const p){
+	      const params_t * const p){
 
   assert((mHe!=NULL) && (mLe!=NULL)); /** sanity check */
 
@@ -185,9 +185,9 @@ int do_errors(mzd_t *mHe, mzd_t *mLe,
       while(j < nvec);
 
 #ifndef NDEBUG
-    if(p->debug & 256) /** details of error setup */
-      for (j=0; j<ivec; j++)
-        printf("vec[%d]=%d%s",j,vec[j],j+1==ivec?" ###\n":" ");
+      if(p->debug & 256) /** details of error setup */
+	for (j=0; j<ivec; j++)
+	  printf("vec[%d]=%d%s",j,vec[j],j+1==ivec?" ###\n":" ");
 #endif /* NDEBUG */
 
       /** flip the bits in `mHe` row by row to speed it up */
@@ -216,6 +216,26 @@ int do_errors(mzd_t *mHe, mzd_t *mLe,
   return max;
 }
 
+/** @brief create `generator` matrix orthogonal to rows of `mH` and `mL` */
+csr_t * do_G_matrix(const csr_t * const mH, const csr_t * const mL,
+		    const params_t * const p){
+  /** init the pairs to construct the matrix */
+  int nz= 3*(mL->cols - mL->rows);
+  int_pair *prs = malloc(sizeof(int_pair)*nz);
+  if(!prs)
+    ERROR("memory allocation fail");
+
+  /** init hash for combined columns of `mH` and `mL` */
+
+  /** combine columns `i` and `j` and search in hash */
+
+  /** free the hash */
+  /** verify the rank (should be `n`-`k`) ???? */
+  /** construct the actual matrix and clean-up */
+  free(prs);
+  return NULL;
+}
+
 /** @brief read up to `lmax` lines from a file in `01` format
 
  * read up to `lmax` binary vectors of length `m` from a `01` file `fin` open
@@ -232,7 +252,7 @@ int do_errors(mzd_t *mHe, mzd_t *mLe,
  *
  */
 rci_t read_01(mzd_t *M, FILE *fin, rci_t *lineno, const char* fnam,
-                const params_t * const p){
+	      const params_t * const p){
   rci_t m   =M->nrows;
   rci_t lmax=M->ncols, il=0;
   if(!M)
@@ -253,27 +273,27 @@ rci_t read_01(mzd_t *M, FILE *fin, rci_t *lineno, const char* fnam,
         ((linelen = getline(&buf, &bufsiz, fin))>=0)){
     (*lineno)++;
     switch(buf[0]){
-      case '0': case '1':
-        if(linelen<=m)
-          ERROR("line is too short, expected %d 01 characters\n"
-                "%s:%d:1: '%s'\n", m,fnam,*lineno,buf);
-        else{
-          for(int i=0; i<m; i++){
-            if (buf[i]=='1')
-              mzd_write_bit(M,i,il,1); /** row `i`, col `il` */
-            else if (buf[i]!='0')
-              ERROR("invalid 01 line\n"
-                    "%s:%d:%d: '%s'\n", fnam,*lineno,i+1,buf);
-          }
-          (il)++; /** success */
-          }
-          break;
-        case '#': /** do nothing - skip this line */
-          break;
-        default:
-          ERROR("invalid 01 line\n"
-                "%s:%d:1: '%s'\n", fnam,*lineno,buf);
+    case '0': case '1':
+      if(linelen<=m)
+	ERROR("line is too short, expected %d 01 characters\n"
+	      "%s:%d:1: '%s'\n", m,fnam,*lineno,buf);
+      else{
+	for(int i=0; i<m; i++){
+	  if (buf[i]=='1')
+	    mzd_write_bit(M,i,il,1); /** row `i`, col `il` */
+	  else if (buf[i]!='0')
+	    ERROR("invalid 01 line\n"
+		  "%s:%d:%d: '%s'\n", fnam,*lineno,i+1,buf);
+	}
+	(il)++; /** success */
       }
+      break;
+    case '#': /** do nothing - skip this line */
+      break;
+    default:
+      ERROR("invalid 01 line\n"
+	    "%s:%d:1: '%s'\n", fnam,*lineno,buf);
+    }
   }
   if(p->debug&8) /** file io */
     printf("# read %d 01 rows from file '%s'\n",il,fnam);
@@ -549,13 +569,13 @@ int do_LLR_dist(int dW, params_t  * const p){
     mzd_free(mL);
   mzd_free(mH);
 
-    /** prescribed way to clean the hashing table */
-    one_vec_t *cw, *tmp;
-    HASH_ITER(hh, p->codewords, cw, tmp) {
-      HASH_DEL(p->codewords, cw);
-      free(cw);
-    }
-    return minW;
+  /** prescribed way to clean the hashing table */
+  one_vec_t *cw, *tmp;
+  HASH_ITER(hh, p->codewords, cw, tmp) {
+    HASH_DEL(p->codewords, cw);
+    free(cw);
+  }
+  return minW;
 }
 
 /**
@@ -573,9 +593,9 @@ int do_LLR_dist(int dW, params_t  * const p){
  * @todo: see if binary ops + transposition is faster
  */
 int do_local_search(double *vE0, mzd_t * mE0, const rci_t jstart, const int lev,
-                     const mzd_t * const mE, const mzd_t * const mH,
-                     const mzp_t * const skip_pivs, const mzp_t * const pivs,
-                     const params_t * const p){
+		    const mzd_t * const mE, const mzd_t * const mH,
+		    const mzp_t * const skip_pivs, const mzp_t * const pivs,
+		    const params_t * const p){
   assert(lev<=p->lerr);
   if(p->debug&128)
     printf("entering lev=%d of recursion jstart=%d\n",lev,jstart);
@@ -867,7 +887,7 @@ void read_dem_file(char *fnam, params_t * const p){
           }
           else
             ERROR("unrecognized entry %s"
-                "%s:%zu:%zu: '%s'\n",c,fnam,lineno,col+1,buf);
+		  "%s:%zu:%zu: '%s'\n",c,fnam,lineno,col+1,buf);
         }
         while((c[0]!='#')&&(c[0]!='\n')&&(c[0]!='\0')&&(col<linelen));
         n++;
@@ -987,18 +1007,18 @@ void mat_init(one_prob_t **in, params_t *p){
     for(int i=0; i< p->n; i++)
       printf("%g%s",p->vLLR[i],i+1<p->n?" ":"\n");
     //    if(init_mat){
-      mzd_t *mdH = mzd_from_csr(NULL,p->mH);
-      printf("mH:\n");
-      //    csr_out(mH);
-      mzd_print(mdH);
-      mzd_free(mdH);
+    mzd_t *mdH = mzd_from_csr(NULL,p->mH);
+    printf("mH:\n");
+    //    csr_out(mH);
+    mzd_print(mdH);
+    mzd_free(mdH);
 
-      printf("mL:\n");
+    printf("mL:\n");
     //    csr_out(mL);
-      mzd_t *mdL = mzd_from_csr(NULL,p->mL);
-      mzd_print(mdL);
-      mzd_free(mdL);
-      //    }
+    mzd_t *mdL = mzd_from_csr(NULL,p->mL);
+    mzd_print(mdL);
+    mzd_free(mdL);
+    //    }
   }
 #endif
 }
@@ -1029,7 +1049,7 @@ int var_init(int argc, char **argv, params_t *p){
         else
           p->debug ^= dbg; /** otherwise `XOR` */
         if(p->debug &1)
-	printf("# read %s, debug=%d octal=%o\n",argv[i],p->debug,p->debug);
+	  printf("# read %s, debug=%d octal=%o\n",argv[i],p->debug,p->debug);
       }
     }
     else if(sscanf(argv[i],"mode=%d",& dbg)==1){
@@ -1075,6 +1095,15 @@ int var_init(int argc, char **argv, params_t *p){
       p->seed=dbg;
       if (p->debug&1)
 	printf("# read %s, seed=%d\n",argv[i],p->seed);
+    }
+    else if (0==strncmp(argv[i],"fout=",5)){
+      if(strlen(argv[i])>5){
+        p->fout = argv[i]+5;
+	if (p->debug&1)
+	  printf("# read %s, fout=%s\n",argv[i],p->fout);
+      }
+      else
+	ERROR("Please specify argument for 'fout=[string]' w/o space\n");
     }
     else if (0==strncmp(argv[i],"f=",2)){/** back compatibility */
       if(strlen(argv[i])>2)
@@ -1124,7 +1153,7 @@ int var_init(int argc, char **argv, params_t *p){
   if (p->seed == 0){
     p->seed=time(NULL)+1000000ul*getpid(); /* ensure a different seed */
     if(p->debug)
-      printf("# initializing seed=%d from time(NULL)\n",p->seed);
+      printf("# initializing seed=%d from time(NULL)+1000000ul*getpid()\n",p->seed);
     /** use `tinymt64_generate_double(&pp.tinymt)` for double [0,1] */
   }
   // srand(time(p->seed));
@@ -1132,22 +1161,24 @@ int var_init(int argc, char **argv, params_t *p){
   if(! p->fdem)
     ERROR("mode=%d, please specify the DEM file\n",p->mode);
   switch(p->mode){
-    case 0: /** internal decoder */
-      if((p->fdet==NULL)&&(p->fobs!=NULL))
-        ERROR(" mode=%d fobs='%s' need detection events file 'fdet'\n",
-              p->mode, p->fobs);
-      else if ((p->fdet!=NULL)&&(p->fobs==NULL))
-        ERROR(" mode=%d fdet='%s' need observables file 'fobs'\n",
-              p->mode, p->fdet);
-      break;
-    case 2: /** estimate success probability */
-      if((p->fdet!=NULL)||(p->fobs!=NULL))
-        ERROR(" mode=%d, do not specify 'fobs' or 'fdet' files\n",
-              p->mode);
-      break;
-    case 1: default:
-      ERROR(" mode=%d is currently not supported\n",p->mode);
-      break;
+  case 0: /** internal decoder */
+    if((p->fdet==NULL)&&(p->fobs!=NULL))
+      ERROR(" mode=%d fobs='%s' need detection events file 'fdet'\n",
+	    p->mode, p->fobs);
+    else if ((p->fdet!=NULL)&&(p->fobs==NULL))
+      ERROR(" mode=%d fdet='%s' need observables file 'fobs'\n",
+	    p->mode, p->fdet);
+    break;
+  case 2: /** estimate success probability */
+    if((p->fdet!=NULL)||(p->fobs!=NULL))
+      ERROR(" mode=%d, do not specify 'fobs' or 'fdet' files\n",
+	    p->mode);
+    break;
+  case 3: /** read in DEM file and output the H, L, G matrices and P vector */
+    break;
+  case 1: default:
+    ERROR(" mode=%d is currently not supported\n",p->mode);
+    break;
   }
  
   return 0;
@@ -1161,6 +1192,7 @@ void var_kill(params_t *p){
   p->mHt = csr_free(p->mHt);
   p->mL =  csr_free(p->mL);
   p->mLt = csr_free(p->mLt);
+  p->mG = csr_free(p->mG);
 }
 
 int main(int argc, char **argv){
@@ -1171,120 +1203,145 @@ int main(int argc, char **argv){
   read_dem_file(p->fdem,p); 
 
   switch(p->mode){
-    case 0: /** internal `vecdec` decoder */
+  case 0: /** internal `vecdec` decoder */
+    if(p->debug &1)
+      printf("# mode=%d, running internal decoder\n",p->mode);
+    FILE *fdet=NULL, *fobs=NULL;
+    rci_t linedet=0, lineobs=0;
+    if(p->fdet){/** expect both `fdet` and `fobs` to be defined */
+      fdet=fopen(p->fdet, "r");
+      if(fdet==NULL)
+	ERROR("can't open the (det) file %s for reading\n",p->fdet);
+      fobs=fopen(p->fobs, "r");
+      if(fobs==NULL)
+	ERROR("can't open the (obs) file %s for reading\n",p->fobs);
+    }
+    
+    /** at least one round always */
+    int rounds=(int )ceil((double) p->ntot / (double) p->nvec);
+    long int synd_tot=0, synd_fail=0;
+    for(int iround=0; iround < rounds; iround++){
       if(p->debug &1)
-        printf("# mode=%d, running internal decoder\n",p->mode);
-      FILE *fdet=NULL, *fobs=NULL;
-      rci_t linedet=0, lineobs=0;
-      if(p->fdet){/** expect both `fdet` and `fobs` to be defined */
-        fdet=fopen(p->fdet, "r");
-        if(fdet==NULL)
-          ERROR("can't open the (det) file %s for reading\n",p->fdet);
-        fobs=fopen(p->fobs, "r");
-        if(fobs==NULL)
-          ERROR("can't open the (obs) file %s for reading\n",p->fobs);
+	printf("# starting round %d of %d\n", iround, rounds);
+      
+      // decoder_init( & prm);
+      mzd_t *mHe = mzd_init(p->nrows, p->nvec); /** each column a syndrome vector `H*e` */
+      mzd_t *mLe = mzd_init(p->ncws,  p->nvec); /** each column `L*e` vector */
+      
+      if (p->mode&1){
+	rci_t il1=read_01(mHe,fdet,&linedet, p->fdet, p);
+	rci_t il2=read_01(mLe,fobs,&lineobs, p->fobs, p);
+	if(il1!=il2)
+	  ERROR("mismatched DET %s (line %d) and OBS %s (line %d) files!",
+		p->fdet,linedet,p->fobs,lineobs);
+	if(il1==0)
+	  break; /** no more rounds */
+      }
+      else
+	p->maxJ = do_errors(mHe,mLe,p);
+
+      if((p->debug & 512)&&(p->debug &4)){ /** print matrices */
+	printf("matrix mLe:\n");  mzd_print(mLe);
+	printf("matrix mHe:\n");  mzd_print(mHe);
       }
 
-      /** at least one round always */
-      int rounds=(int )ceil((double) p->ntot / (double) p->nvec);
-      long int synd_tot=0, synd_fail=0;
-      for(int iround=0; iround < rounds; iround++){
-        if(p->debug &1)
-          printf("# starting round %d of %d\n", iround, rounds);
-
-        // decoder_init( & prm);
-        mzd_t *mHe = mzd_init(p->nrows, p->nvec); /** each column a syndrome vector `H*e` */
-        mzd_t *mLe = mzd_init(p->ncws,  p->nvec); /** each column `L*e` vector */
-
-        if (p->mode&1){
-          rci_t il1=read_01(mHe,fdet,&linedet, p->fdet, p);
-          rci_t il2=read_01(mLe,fobs,&lineobs, p->fobs, p);
-          if(il1!=il2)
-            ERROR("mismatched DET %s (line %d) and OBS %s (line %d) files!",
-                  p->fdet,linedet,p->fobs,lineobs);
-          if(il1==0)
-            break; /** no more rounds */
-        }
-        else
-          p->maxJ = do_errors(mHe,mLe,p);
-
-        if((p->debug & 512)&&(p->debug &4)){ /** print matrices */
-          printf("matrix mLe:\n");  mzd_print(mLe);
-          printf("matrix mHe:\n");  mzd_print(mHe);
-        }
-
-        // actually decode and generate error vectors
-        mzd_t *mE0=NULL;
+      // actually decode and generate error vectors
+      mzd_t *mE0=NULL;
 #ifndef NDEBUG  /** need `mHe` later */
-        mzd_t *mS=mzd_copy(NULL,mHe);
-        mE0=do_decode(mS, p); /** each row a decoded error vector */
-        mzd_free(mS); mS=NULL;
+      mzd_t *mS=mzd_copy(NULL,mHe);
+      mE0=do_decode(mS, p); /** each row a decoded error vector */
+      mzd_free(mS); mS=NULL;
 #else
-        mE0=do_decode(mHe, p); /** each row a decoded error vector */
+      mE0=do_decode(mHe, p); /** each row a decoded error vector */
 #endif /* NDEBUG */
-        mzd_t *mE0t = mzd_transpose(NULL, mE0);
-        mzd_free(mE0); mE0=NULL;
+      mzd_t *mE0t = mzd_transpose(NULL, mE0);
+      mzd_free(mE0); mE0=NULL;
         
 #ifndef NDEBUG
-        mzd_t *prodHe = csr_mzd_mul(NULL,p->mH,mE0t,1);
-        mzd_add(prodHe, prodHe, mHe);
-        if(!mzd_is_zero(prodHe)){
-          if((p->debug&512)||(p->nvec <=64)){
-            printf("syndromes difference:\n");
-            mzd_print(prodHe);
-          }
-          ERROR("some syndromes are not matched!\n");
-        }
-        mzd_free(prodHe); prodHe = NULL;
-        mzd_free(mHe);    mHe    = NULL;
+      mzd_t *prodHe = csr_mzd_mul(NULL,p->mH,mE0t,1);
+      mzd_add(prodHe, prodHe, mHe);
+      if(!mzd_is_zero(prodHe)){
+	if((p->debug&512)||(p->nvec <=64)){
+	  printf("syndromes difference:\n");
+	  mzd_print(prodHe);
+	}
+	ERROR("some syndromes are not matched!\n");
+      }
+      mzd_free(prodHe); prodHe = NULL;
+      mzd_free(mHe);    mHe    = NULL;
 #endif
 
-        mzd_t *prodLe = csr_mzd_mul(NULL,p->mL,mE0t,1);
+      mzd_t *prodLe = csr_mzd_mul(NULL,p->mL,mE0t,1);
 
-        if(p->debug & 512){ /** print matrices */
-          printf("prodLe:\n");
-          mzd_print(prodLe);
-          printf("mLe:\n");
-          mzd_print(mLe);
-        }
-
-        mzd_add(prodLe, prodLe, mLe);
-        mzd_free(mLe); mLe=NULL;
-
-        int fails=0;
-        for(rci_t ic=0; ic< prodLe->ncols; ic++){
-          rci_t ir=0;
-          if(mzd_find_pivot(prodLe, ir, ic, &ir, &ic)){
-            fails++;
-            //      printf("ir=%d ic=%d fails=%d\n",ir,ic,fails);
-          }
-          else /** no more pivots */
-            break;
-        }
-        /** update the global counts */
-        synd_tot  += prodLe->ncols;/** todo: fix this */
-        synd_fail += fails;
-        mzd_free(prodLe); prodLe=NULL;
-        if((p->nfail>0) && (synd_fail >= p->nfail))
-          break;
+      if(p->debug & 512){ /** print matrices */
+	printf("prodLe:\n");
+	mzd_print(prodLe);
+	printf("mLe:\n");
+	mzd_print(mLe);
       }
 
-      printf(" %ld %ld # %s\n",synd_fail, synd_tot, p->fdem);
+      mzd_add(prodLe, prodLe, mLe);
+      mzd_free(mLe); mLe=NULL;
+
+      int fails=0;
+      for(rci_t ic=0; ic< prodLe->ncols; ic++){
+	rci_t ir=0;
+	if(mzd_find_pivot(prodLe, ir, ic, &ir, &ic)){
+	  fails++;
+	  //      printf("ir=%d ic=%d fails=%d\n",ir,ic,fails);
+	}
+	else /** no more pivots */
+	  break;
+      }
+      /** update the global counts */
+      synd_tot  += prodLe->ncols;/** todo: fix this */
+      synd_fail += fails;
+      mzd_free(prodLe); prodLe=NULL;
+      if((p->nfail > 0) && (synd_fail >= p->nfail))
+	break;
+    }
+
+    printf(" %ld %ld # %s\n",synd_fail, synd_tot, p->fdem);
       
-      // clean up
-      if(fdet)
-        fclose(fdet);
-      if(fobs)
-        fclose(fobs);
-      break;
-    case 2:
-      if(p->debug&1)
-        printf("# mode=%d, estimating fail probability in %d steps\n",p->mode, p->steps);
-      do_LLR_dist(p->nfail, p);
-      break;
-    default:
-      ERROR("mode=%d not supported\n",p->mode);
-      break;
+    // clean up
+    if(fdet)
+      fclose(fdet);
+    if(fobs)
+      fclose(fobs);
+    break;
+  case 2:
+    if(p->debug&1)
+      printf("# mode=%d, estimating fail probability in %d steps\n",p->mode, p->steps);
+    do_LLR_dist(p->nfail, p);
+    break;
+  case 3: /** read in DEM file and output the H, L, G matrices and P vector */
+    //    do_G(p);
+    size_t size = snprintf(NULL, 0, "H matrix from DEM file %s", p->fdem);
+    char * comment = malloc(size + 1);
+    sprintf(comment, "H matrix from DEM file %s", p->fdem);
+    if(p->debug&1)
+      printf("writing H matrix to %s\n",p->fout);
+    csr_mm_write(p->fout,"H.mmx",p->mH,comment);
+    if(p->debug&1)
+      printf("writing L matrix to %s\n",p->fout);
+    comment[0]='L';
+    csr_mm_write(p->fout,"L.mmx",p->mL,comment);
+
+    if(p->debug&1)
+      printf("writing P matrix to %s\n",p->fout);
+    comment[0]='P';
+    //    printf("%% %s\n", comment);
+    dbl_mm_write(p->fout,"P.mmx",1,p->n,p->vP,comment);
+
+    if(p->debug&1)
+      printf("creating G matrix and writing to %s\n",p->fout);
+    p->mG = do_G_matrix(p->mH,p->mL,p);
+    
+    free(comment);
+    break;
+  default:
+    ERROR("mode=%d not supported\n",p->mode);
+    break;
   }
 
   var_kill(p);

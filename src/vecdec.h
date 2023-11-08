@@ -63,6 +63,7 @@ typedef struct PARAMS_T {
   int lerr;  /** local search after gauss up to this weight (default: `0`) */
   int mode;  /** operation mode, see help */
   int debug; /** `debug` information */ 
+  char *fout; /** `output file name`  header for files creaded with `mode=3` */
   char *fdem; /** `input file` name for detector error model (`DEM`) */
   char *fdet; /** `input file` name for detector events */
   char *fobs; /** `input file` name for observables */
@@ -74,6 +75,8 @@ typedef struct PARAMS_T {
   csr_t *mHt; /** sparse version of H (by columns) */
   csr_t *mL; /** sparse version of L (by rows) */
   csr_t *mLt; /** sparse version of L (by columns) */
+  csr_t *mG; /** sparse version of generator matrix `G` (by rows) */
+  /** rows of `G` orthogonal to rows of both `H` and `L` */
   int maxJ;  /** memory to initially allocate for local storage */
   double LLRmin;
   double LLRmax;
@@ -94,6 +97,7 @@ extern params_t prm;
   "\t Command line arguments are processed in the order given.\n"	\
   "\t Supported parameters:\n"						\
   "\t --help\t: give this help (also '-h' or just 'help')\n"            \
+  "\t fout=[string]\t: header for output file names ('tmp', see 'mode=3')\n" \
   "\t fdem=[string]\t: name of the input file with detector error model\n" \
   "\t fdet=[string]\t: input file with detector events (01 format)\n"   \
   "\t fobs=[string]\t: file with observables (01 matching lines in fdet)\n" \
@@ -117,6 +121,11 @@ extern params_t prm;
   "\t\t\t use up to 'steps' random window decoding steps unless no new\n"\
   "\t\t\t fault vectors have been found for 'swait' steps.\n"           \
   "\t\t\t Keep vectors of weight up to 'nfail' above min weight found\n" \
+  "\t\t* 3: Read in the DEM file and output the corresponding \n"	\
+  "\t\t\t H, G, and L matrices and the probability vector P.\n"		\
+  "\t\t\t Use 'fout=' command line argument to generate file names\n"	\
+  "\t\t\t ${fout}H.mmx, ${fout}G.mmx, ${fout}L.mmx, and ${fout}P.mmx\n"	\
+  "\t\t\t with 'fout=stdout' all output is sent to 'stdout'\n"	\
   "\t debug=[integer]\t: bitmap for aux information to output (default: 1)\n" \
   "\t\t*   0: clear the entire debug bitmap to 0.\n"                    \
   "\t\t*   1: output misc general info (on by default)\n"		\

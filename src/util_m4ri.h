@@ -10,14 +10,6 @@
 
 #define SWAPINT(a,b) do{ int t=a; a=b; b=t; } while(0)
 
-#define ERROR(fmt,...)                                                 \
-  do{                                                                  \
-    printf("#:[31;1m *** ERROR: " fmt " ***[0m \n",##__VA_ARGS__); \
-    exit(-1);                                                          \
-  }                                                                    \
-  while(0)
-
-
 
 /**
  * macros from nauty.h
@@ -260,15 +252,19 @@ void csr_compress(csr_t *mat);
 /**
  *  output a CSR matrix  
  */ 
-void csr_out(const csr_t *mat);
+  void csr_out(const csr_t *mat);
 
 /**
  * read sparse matrix into a (binary) CSR (all entries default to 1)
  * (re)allocate mat if needed
  * use transpose=1 to transpose.
  */
-csr_t *csr_mm_read(char *fin, csr_t *mat, int transpose);
+  csr_t *csr_mm_read(char *fin, csr_t *mat, int transpose);
 
+  /** write out CSR matrix.  Use fout="stdout" for `stdout` output */
+void csr_mm_write( char * const fout, const char fext[], const csr_t * const mat,
+		  const char comment[]);
+  
 /** 
  * Permute columns of a CSR matrix with permutation perm.
  */
