@@ -152,17 +152,23 @@ probability, $$\prod_{i\in \mathop{\rm supp}c} 2[ p_i(1-p_i)]^{1/2}.$$
 Apart from `mode=2`, relevant command line arguments are `steps=`, `debug=`,
 and, of course, `dem=`.
 
+## Export the matrices 
+
+This section describes operation with the command-line switch `mode=3`.
+
+
+
 ## All command-line arguments 
 
 You can generate the list of supported command line arguments by running 
 `vecdec --help`.
 
 ```bash
-/vecdec:  vecdec - vectorized decoder and LER estimator
-  usage: ./vecdec param=value [[param=value] ... ]
+  usage: src/vecdec param=value [[param=value] ... ]
 	 Command line arguments are processed in the order given.
 	 Supported parameters:
 	 --help	: give this help (also '-h' or just 'help')
+	 fout=[string]	: header for output file names ('tmp', see 'mode=3')
 	 fdem=[string]	: name of the input file with detector error model
 	 fdet=[string]	: input file with detector events (01 format)
 	 fobs=[string]	: file with observables (01 matching lines in fdet)
@@ -182,10 +188,15 @@ You can generate the list of supported command line arguments by running
 			 read observable flips from file 'fobs' if given
 		* 1: (reserved for BP)
 		* 2: generate most likely fault vectors, estimate Prob(Fail)
-			 generate up to 'ntot' unique min-energy fault  vectors
+			 generate up to 'ntot' unique min-energy fault vectors
 			 use up to 'steps' random window decoding steps unless no new
 			 fault vectors have been found for 'swait' steps.
 			 Keep vectors of weight up to 'nfail' above min weight found
+		* 3: Read in the DEM file and output the corresponding 
+			 H, G, and L matrices and the probability vector P.
+			 Use 'fout=' command line argument to generate file names
+			 ${fout}H.mmx, ${fout}G.mmx, ${fout}L.mmx, and ${fout}P.mmx
+			 with 'fout=stdout' all output is sent to 'stdout'
 	 debug=[integer]	: bitmap for aux information to output (default: 1)
 		*   0: clear the entire debug bitmap to 0.
 		*   1: output misc general info (on by default)
@@ -199,11 +210,13 @@ You can generate the list of supported command line arguments by running
 
 The program uses `m4ri` library for binary linear algebra.
 
-`Tiny Mersenne Twister` written by Mutsuo Saito and Makoto Matsumoto is used for
-random number generation (header file `src/tinymt64.h`).
+`Tiny Mersenne Twister` written by Mutsuo Saito and Makoto Matsumoto
+is used for random number generation (header file `src/tinymt64.h` is
+included with the distribution).
 
-`uthash` by Troy D. Hanson and  Arthur O'Dwyer is used for hashing storage (header file
-`src/uthash.h`).
+`uthash` by Troy D. Hanson and Arthur O'Dwyer is used for hashing
+storage (header file `src/uthash.h` is included with the
+distribution).
 
 ## Future
 

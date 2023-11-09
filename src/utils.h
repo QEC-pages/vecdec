@@ -25,11 +25,12 @@ extern "C"{
 
 extern tinymt64_t tinymt;
 
-#define ERROR(fmt,...)                                                 \
-  do{                                                                  \
-    printf("#:[31;1m *** ERROR: " fmt " ***[0m \n",##__VA_ARGS__); \
-    exit(-1);                                                          \
-  }                                                                    \
+#define ERROR(fmt,...)							\
+  do{									\
+    fprintf (stderr, "%s:%d: *** ERROR in function '%s()' ***\n", __FILE__, __LINE__, __FUNCTION__); \
+    printf("[31;1m " fmt " [0m \n",##__VA_ARGS__);			\
+    exit(-1);								\
+  }									\
   while(0)
 
   
