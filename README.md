@@ -150,13 +150,34 @@ outputs an estimate of the corresponding contribution to the logical error
 probability, $$\prod_{i\in \mathop{\rm supp}c} 2[ p_i(1-p_i)]^{1/2}.$$
 
 Apart from `mode=2`, relevant command line arguments are `steps=`, `debug=`,
-and, of course, `dem=`.
+and, of course, `fdem=`.
 
 ## Export the matrices 
 
-This section describes operation with the command-line switch `mode=3`.
+This section describes operation with the command-line switch
+`mode=3`.  In this case the program does not try to run anything and
+just parses the DEM file and saves the corresponding parity-check `H`,
+observables `L` matrices and the error-probabilities `P` vector.  In
+addition, the program constructs the `G` matrix (whose rows are
+orthogonal to rows of `H` and `L` matrices and the total rank equals
+to `n`, the number of columns in these matrices).
 
+The matrices are written in the Matrix Market format to files with names
+`${fout}H.mmx`, `${fout}G.mmx`, `${fout}L.mmx`, and `${fout}P.mmx`,
+where the header string is defined by the value of the `fout=`
+command-line argument.  An exceptional value is `fout=stdout`, in
+which case the contents of the files is directed (surprise!) to
+`stdout`.
 
+**Note:** For some obscure reasons, the `G` matrix is constructed by
+trying to combine all columns pairs in matrices `H` and `L` and
+searching for the corresponding columns.  This works for a DEM file
+created from a circuit which contains one- or two-qubit depolarizing
+noise.  With insufficient rank in weight-3 rows, the program will
+currently fail.
+
+Apart from `mode=3` and `fout=`, relevant command line arguments in
+this regime are `debug=` and, of course, `fdem=`.
 
 ## All command-line arguments 
 
@@ -208,7 +229,12 @@ You can generate the list of supported command line arguments by running
 
 ## Libraries 
 
-The program uses `m4ri` library for binary linear algebra.
+The program uses `m4ri` library for binary linear algebra.  To install
+under Ubuntu, run
+```
+sudo apt-get update -y
+sudo apt-get install -y libm4ri-dev
+```
 
 `Tiny Mersenne Twister` written by Mutsuo Saito and Makoto Matsumoto
 is used for random number generation (header file `src/tinymt64.h` is
@@ -217,6 +243,13 @@ included with the distribution).
 `uthash` by Troy D. Hanson and Arthur O'Dwyer is used for hashing
 storage (header file `src/uthash.h` is included with the
 distribution).
+
+Shell scripts in the `examples/` directory assume command-line
+versions of `PyMatching` and `Stim` packages compiled and located in
+`../PyMatching` and `../Stim` (with respect to the location of this
+file).  These excellent packages written by Oscar Higgott and Craig
+Gidney, respectively, are available from `GitHub`. Please refer to the
+documentation of these packages for the installation instructions.
 
 ## Future
 
