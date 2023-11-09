@@ -25,12 +25,12 @@
 
 params_t prm={ .nrows=0, .n=0, .ncws=0, .steps=1,
   .lerr=0, .swait=0,
-  .nvec=16, .ntot=1, .nfail=0, .seed=0,
+  .nvec=16, .ntot=1, .nfail=0, .seed=0, 
   .debug=1, .fdem=NULL, .fdet=NULL, .fobs=NULL, .fout="tmp", 
-  .colw=10, .mode=0, .maxJ=20,
+  .colw=10, .mode=0, .use_stdout=0, .maxJ=20,
   .LLRmin=0, .LLRmax=0, .codewords=NULL, .num_cws=0,
   .vP=NULL, .vLLR=NULL, .mH=NULL, .mHt=NULL,
-  .mL=NULL, .mLt=NULL};
+  .mL=NULL, .mLt=NULL };
 
 /** @brief compare two `one_vec_t` structures by energy */
 static inline int by_energy(void *a, void *b){
@@ -385,19 +385,26 @@ csr_t * do_G_matrix(const csr_t * const mHt, const csr_t * const mLt,
   int rankG=mzd_gauss_delayed(mmG,0,0);
   mzd_free(mmG);
   mzd_t *mmLt = mzd_from_csr(NULL, mLt);
-  int rankL=mzd_gauss_delayed(mmL,0,0); /** `k` of the code */
+  int rankL=mzd_gauss_delayed(mmLt,0,0); /** `k` of the code */
   mzd_free(mmLt);
   mzd_t *mmHt = mzd_from_csr(NULL, mHt);
   int rankH=mzd_gauss_delayed(mmHt,0,0); 
   mzd_free(mmHt);
-  if(rankH+rankL != rankG)
-    ERROR("FIXME: some longer cycles are missing from G\n");
+  if(p->debug&1){
+    printf("# n=%d k=%d rankG=%d rankH=%d\n"
+	   "# Created matrix G of size %d x %d (all weight-3 rows)\n",
+	   mLt->rows, rankL, rankG, rankH, ans->rows, ans->cols);
+  }
+
+  if(rankH+rankL + rankG != mLt->rows )    
+    ERROR("FIXME: some longer cycles are missing from G\n"
+	  "n=%d != (k=%d) + (rankG=%d) + (rankH=%d)",
+	  mLt->rows, rankL, rankG, rankH );
   /** This would require some extensive changes to the code.  DEMs
       from Stim with depolarizing noise enabled have the shortest
       cycles of length 3, and these are sufficient to generate the
       full G matrix (may not be the case with some error models). */ 
 
-  printf("n=%d k=%d G [ %d x %d ] rankG=%d rankH=%d\n", mLt->rows, rankL, ans->rows, ans->cols, rankG, rankH);  
   
   /** construct the actual matrix and clean-up */
   return ans;
@@ -1305,13 +1312,18 @@ int var_init(int argc, char **argv, params_t *p){
       ERROR(" mode=%d fdet='%s' need observables file 'fobs'\n",
 	    p->mode, p->fdet);
     break;
+    
   case 2: /** estimate success probability */
     if((p->fdet!=NULL)||(p->fobs!=NULL))
       ERROR(" mode=%d, do not specify 'fobs' or 'fdet' files\n",
 	    p->mode);
     break;
+    
   case 3: /** read in DEM file and output the H, L, G matrices and P vector */
+    if(strcmp(p->fout,"stdout")==0)
+      p->use_stdout=1;
     break;
+    
   case 1: default:
     ERROR(" mode=%d is currently not supported\n",p->mode);
     break;
@@ -1457,21 +1469,25 @@ int main(int argc, char **argv){
     char * comment = malloc(size + 1);
     sprintf(comment, "H matrix from DEM file %s", p->fdem);
     if(p->debug&1)
-      printf("writing H matrix [ %d x %d ] to %s\n",p->mH->rows, p->mH->cols, p->fout);
+      printf("# writing H matrix [ %d x %d ] to \t%s%s\n",
+	     p->mH->rows, p->mH->cols, p->fout, p->use_stdout ? "\n" :"H.mmx");
     csr_mm_write(p->fout,"H.mmx",p->mH,comment);
     if(p->debug&1)
-      printf("writing L matrix [ %d x %d ] to %s\n",p->mL->rows, p->mL->cols, p->fout);
+      printf("# writing L matrix [ %d x %d ] to \t%s%s\n",
+	     p->mL->rows, p->mL->cols, p->fout, p->use_stdout ? "\n" :"L.mmx");
     comment[0]='L';
     csr_mm_write(p->fout,"L.mmx",p->mL,comment);
 
     if(p->debug&1)
-      printf("writing P vector [ %d ] to %s\n", p->n, p->fout);
+      printf("# writing P vector [ %d ] to      \t%s%s\n",
+	     p->n, p->fout, p->use_stdout ? "\n" :"P.mmx");
     comment[0]='P';
     //    printf("%% %s\n", comment);
     dbl_mm_write(p->fout,"P.mmx",1,p->n,p->vP,comment);
 
     if(p->debug&1)
-      printf("creating G matrix and writing to %s\n",p->fout);
+      printf("# creating G matrix and writing to\t%s%s\n",
+	     p->fout, p->use_stdout ? "\n" :"G.mmx");
     p->mG = do_G_matrix(p->mHt,p->mLt,p);
     comment[0]='G';
     //    printf("%% %s\n", comment);

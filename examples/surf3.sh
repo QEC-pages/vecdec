@@ -21,14 +21,14 @@ jmax=12
 #Ntotal=$((1024*128)) # total number of steps to use
 Ntotal=$((1024*8)) 
 nvec=$((1024*8))
+factr=10 # NOTE: make it "1000" for an actual calculation ********************** !!!
 #echo "# running surf3.sh" > $outfile
 #echo "# same depolarizing probability and measurement error p1" >> $outfile
 #echo "# columns: d p1 Nfails Ntotal"
 #echo "# columns: d p1 Nfails Ntotal" >> $outfile
 #index=0 # block index to use in gnuplot
 echo "#" d p 'pF(vecdec) ' 
-#for (( ddd = $dmin; ddd <= $dmax; ddd += 2 )) ; do # distance loop
-for ddd in 3 5 6 ; do
+for (( ddd = $dmin; ddd <= $dmax; ddd += 2 )) ; do # distance loop
     fnam=surf_d$ddd # filename to use
     
     for (( j1=$jmin; j1<=$jmax; j1+=2 )) ; do #   p1 loop (depolarizing)
@@ -64,11 +64,11 @@ for ddd in 3 5 6 ; do
       #      pyF=`paste -d " " p$obsf $obsf | grep "0 1\|1 0" | wc -l`
       echo "# pymatching :" $ddd $p1 `awk "BEGIN { print \"  \" $pyF \" \" $pyF/$Ntotal \"    \" $pyFv \" \" $pyFv/$Ntotal \" \" $Ntotal }"`
       # use the same sample in `vecdec`
-      if ((ddd==3)) ; then steps_max=16000 ;
-      elif ((ddd==5)) ; then steps_max=64000 ; # this is going to be very slow, but I want to know how bad `pymatching` actually is
-      elif ((ddd==7)); then steps_max=256000 ; fi
+      if ((ddd==3)) ; then steps_max=$((16*factr)) ;
+      elif ((ddd==5)) ; then steps_max=$((64*factr)) ; # this is going to be very slow, but I want to know how bad `pymatching` actually is
+      elif ((ddd==7)); then steps_max=$((256*factr)) ; fi
                            
-      for (( steps=4000 ; steps <= steps_max ; steps*= 2 )) ; do
+      for (( steps=$((4*factr)) ; steps <= steps_max ; steps*= 2 )) ; do
         $vecdec debug=0 mode=0 fdet=$detf fobs=$obsf steps=$steps lerr=0 swait=0 \
           ntot=$Ntotal nvec=$((nvec)) nfail=0 f=$fnam.dem > $fnam.out
         echo "#" steps=$steps `awk '{print $1/$2 " " $1 " " $2 }' < $fnam.out`

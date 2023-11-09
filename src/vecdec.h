@@ -62,6 +62,7 @@ extern "C"{
     int swait; /** gauss decoding steps with no vectors changed to stop (default: `0`, do not stop) */
     int lerr;  /** local search after gauss up to this weight (default: `0`) */
     int mode;  /** operation mode, see help */
+    int use_stdout; /** with mode=3 */
     int debug; /** `debug` information */ 
     char *fout; /** `output file name`  header for files creaded with `mode=3` */
     char *fdem; /** `input file` name for detector error model (`DEM`) */
