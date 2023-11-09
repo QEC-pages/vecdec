@@ -150,7 +150,34 @@ outputs an estimate of the corresponding contribution to the logical error
 probability, $$\prod_{i\in \mathop{\rm supp}c} 2[ p_i(1-p_i)]^{1/2}.$$
 
 Apart from `mode=2`, relevant command line arguments are `steps=`, `debug=`,
-and, of course, `dem=`.
+and, of course, `fdem=`.
+
+## Export the matrices 
+
+This section describes operation with the command-line switch
+`mode=3`.  In this case the program does not try to run anything and
+just parses the DEM file and saves the corresponding parity-check `H`,
+observables `L` matrices and the error-probabilities `P` vector.  In
+addition, the program constructs the `G` matrix (whose rows are
+orthogonal to rows of `H` and `L` matrices and the total rank equals
+to `n`, the number of columns in these matrices).
+
+The matrices are written in the Matrix Market format to files with names
+`${fout}H.mmx`, `${fout}G.mmx`, `${fout}L.mmx`, and `${fout}P.mmx`,
+where the header string is defined by the value of the `fout=`
+command-line argument.  An exceptional value is `fout=stdout`, in
+which case the contents of the files is directed (surprise!) to
+`stdout`.
+
+**Note:** For some obscure reasons, the `G` matrix is constructed by
+trying to combine all columns pairs in matrices `H` and `L` and
+searching for the corresponding columns.  This works for a DEM file
+created from a circuit which contains one- or two-qubit depolarizing
+noise.  With insufficient rank in weight-3 rows, the program will
+currently fail.
+
+Apart from `mode=3` and `fout=`, relevant command line arguments in
+this regime are `debug=` and, of course, `fdem=`.
 
 ## All command-line arguments 
 
@@ -158,11 +185,11 @@ You can generate the list of supported command line arguments by running
 `vecdec --help`.
 
 ```bash
-/vecdec:  vecdec - vectorized decoder and LER estimator
-  usage: ./vecdec param=value [[param=value] ... ]
+  usage: src/vecdec param=value [[param=value] ... ]
 	 Command line arguments are processed in the order given.
 	 Supported parameters:
 	 --help	: give this help (also '-h' or just 'help')
+	 fout=[string]	: header for output file names ('tmp', see 'mode=3')
 	 fdem=[string]	: name of the input file with detector error model
 	 fdet=[string]	: input file with detector events (01 format)
 	 fobs=[string]	: file with observables (01 matching lines in fdet)
@@ -182,10 +209,15 @@ You can generate the list of supported command line arguments by running
 			 read observable flips from file 'fobs' if given
 		* 1: (reserved for BP)
 		* 2: generate most likely fault vectors, estimate Prob(Fail)
-			 generate up to 'ntot' unique min-energy fault  vectors
+			 generate up to 'ntot' unique min-energy fault vectors
 			 use up to 'steps' random window decoding steps unless no new
 			 fault vectors have been found for 'swait' steps.
 			 Keep vectors of weight up to 'nfail' above min weight found
+		* 3: Read in the DEM file and output the corresponding 
+			 H, G, and L matrices and the probability vector P.
+			 Use 'fout=' command line argument to generate file names
+			 ${fout}H.mmx, ${fout}G.mmx, ${fout}L.mmx, and ${fout}P.mmx
+			 with 'fout=stdout' all output is sent to 'stdout'
 	 debug=[integer]	: bitmap for aux information to output (default: 1)
 		*   0: clear the entire debug bitmap to 0.
 		*   1: output misc general info (on by default)
@@ -197,13 +229,27 @@ You can generate the list of supported command line arguments by running
 
 ## Libraries 
 
-The program uses `m4ri` library for binary linear algebra.
+The program uses `m4ri` library for binary linear algebra.  To install
+under Ubuntu, run
+```
+sudo apt-get update -y
+sudo apt-get install -y libm4ri-dev
+```
 
-`Tiny Mersenne Twister` written by Mutsuo Saito and Makoto Matsumoto is used for
-random number generation (header file `src/tinymt64.h`).
+`Tiny Mersenne Twister` written by Mutsuo Saito and Makoto Matsumoto
+is used for random number generation (header file `src/tinymt64.h` is
+included with the distribution).
 
-`uthash` by Troy D. Hanson and  Arthur O'Dwyer is used for hashing storage (header file
-`src/uthash.h`).
+`uthash` by Troy D. Hanson and Arthur O'Dwyer is used for hashing
+storage (header file `src/uthash.h` is included with the
+distribution).
+
+Shell scripts in the `examples/` directory assume command-line
+versions of `PyMatching` and `Stim` packages compiled and located in
+`../PyMatching` and `../Stim` (with respect to the location of this
+file).  These excellent packages written by Oscar Higgott and Craig
+Gidney, respectively, are available from `GitHub`. Please refer to the
+documentation of these packages for the installation instructions.
 
 ## Future
 

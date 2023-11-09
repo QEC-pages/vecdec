@@ -15,6 +15,47 @@
 
 tinymt64_t tinymt;
 
+void dbl_mm_write( char * const fout, const char fext[],
+		   const int rows, const int cols, const double buf[],
+		  const char comment[]){
+  int result=0; /**< non-zero if write error */
+  size_t len=strlen(fout)+strlen(fext)+1;
+  char *str;
+  
+  FILE *f;
+  if(strcmp(fout,"stdout")!=0){
+    str=calloc(len, sizeof(char));
+    sprintf(str,"%s%s",fout,fext);
+    f=fopen(str,"w");
+  }
+  else{/** fout == "stdout" */
+    str=fout;
+    f=stdout;
+  }
+  
+  if(!f)
+    ERROR("can't open file '%s' for writing",str);
+  if(fprintf(f,"%%MatrixMarket matrix array real general\n")<0)
+    result++;
+  if(comment!=NULL){
+    if(fprintf(f,"%% %s\n",comment)<0)
+      result++;
+  }
+  if(fprintf(f,"%d %d\n",rows,cols)<3)
+    result++;
+  const size_t num=rows*cols;
+  for(size_t i=0;i<num;i++)
+    if(fprintf(f,"%+18.12g\n", buf[i])<0)
+      result++;
+  if(result)
+    ERROR("error writing to file '%s'",str);
+  
+  if(strcmp(fout,"stdout")!=0){
+    fclose(f);
+    free(str);
+  }
+}
+
 #ifdef __MINGW32__ /** windows compiler */
 int getline(char **line, size_t *n, FILE *fp){
   size_t size, oldsize;

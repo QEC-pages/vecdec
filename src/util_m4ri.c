@@ -465,6 +465,58 @@ void csr_out(const csr_t *mat){
   }
 }
 
+/** 
+ * @brief write a CSR matrix in MMX integer form 
+ * @param fout output file name (may be `stdout` in which case ignore `fext`)
+ * @param fext file extension [concatenate `name=${fout}${fext}`]
+ * @param mat the matrix `must be in Compressed Row form.`
+
+ * @param comment if not `NULL`, insert the comment line(s) with an 
+ *   extra `#` at the start of each row 
+ */
+void csr_mm_write( char * const fout, const char fext[], const csr_t * const mat,
+		  const char comment[]){
+  if(mat->nz>0) /** ensure this is CSR matrix */
+    ERROR("list-of-pairs matrix, compress it first");
+  int result=0; /**< non-zero if write error */
+  size_t len=strlen(fout)+strlen(fext)+1;
+  char *str;
+  
+  FILE *f;
+  if(strcmp(fout,"stdout")!=0){
+    str=calloc(len, sizeof(char));
+    sprintf(str,"%s%s",fout,fext);
+    f=fopen(str,"w");
+  }
+  else{
+    str=fout;
+    f=stdout;
+  }
+  
+  if(!f)
+    ERROR("can't open file '%s' for writing",str);
+  if(fprintf(f,"%%MatrixMarket coordinate integer general\n")<0)
+    result++;
+  if(comment!=NULL){
+    if(fprintf(f,"%% %s\n",comment)<0)
+      result++;
+  }
+  if(fprintf(f,"%d %d %d\n",mat->rows,mat->cols, mat->p[mat->rows])<3)
+    result++;
+
+  for(int i=0;i<mat->rows;i++)
+    for(int j=mat->p[i]; j < mat->p[i+1] ; j++)
+      if(fprintf(f,"%d %d 1\n",i+1, mat->i[j]+1)<0)
+	result++;
+  if(result)
+    ERROR("error writing to file '%s'",str);
+  
+  if(strcmp(fout,"stdout")!=0){
+    fclose(f);
+    free(str);
+  }
+}
+
 /**
  * read sparse matrix into a (binary) CSR (all entries default to 1)
  * (re)allocate mat if needed

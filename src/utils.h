@@ -25,6 +25,16 @@ extern "C"{
 
 extern tinymt64_t tinymt;
 
+#define ERROR(fmt,...)							\
+  do{									\
+    fprintf (stderr, "%s:%d: *** ERROR in function '%s()' ***\n", __FILE__, __LINE__, __FUNCTION__); \
+    printf("[31;1m " fmt " [0m \n",##__VA_ARGS__);			\
+    exit(-1);								\
+  }									\
+  while(0)
+
+  
+
 /** 
  * @brief uniformly distributed pseudo random double `x`: `0 <= x < 1`.
  * 
@@ -48,6 +58,10 @@ static inline double rnd_exponential(void){
   /**< no need to check for zero or one values */
 };
 
+void dbl_mm_write( char * const fout, const char fext[],
+		   const int rows, const int cols, const double buf[],
+		   const char comment[]);  
+  
 #ifdef __MINGW32__ /** windows compiler */
 /**
  * @brief home-grown version of unix function with the same name.
