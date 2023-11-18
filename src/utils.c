@@ -12,8 +12,66 @@
  *
  */
 #include "utils.h"
+#include "mmio.h"
 
 tinymt64_t tinymt;
+
+/** @brief read an `MMX` array of doubles
+ * With a column of doubles, `nrows` and `ncols` point to zeros on return.
+ * @param[in] siz number of entries in the pre-allocated array 
+ * @param[out] siz actual number of entries read
+ * @param *arr must be allocated to size `siz` or NULL if `siz==0`.
+ * @return the pointer to the array with the data
+ */
+double * dbl_mm_read(const char * const fin, int *nrows, int *ncols, int *siz, double *  arr){
+  MM_typecode matcode;
+  FILE *f;
+  int num_items;
+  *nrows = 0;
+  *ncols = 0;
+
+  if ((f = fopen(fin, "r")) == NULL) 
+    ERROR("can't open file %s",fin);
+
+  if (mm_read_banner(f, &matcode) != 0)
+    ERROR("Could not process Matrix Market banner.");
+
+  if (!(mm_is_matrix(matcode) && mm_is_dense(matcode) && 
+	mm_is_real(matcode) && mm_is_general(matcode) )){
+    printf("Sorry, this application does not support ");
+    printf("Market Market type: [%s]\n", mm_typecode_to_str(matcode));
+    ERROR("input file %s",fin);
+    exit(1);
+  }
+  
+  if(mm_read_mtx_array_size(f, nrows, ncols))
+    ERROR("Can't read array size");
+  if(arr != NULL){/** allocated array */
+    if(*siz <= 0)
+      ERROR("invalid input value siz=%d",*siz);
+    if((*siz) < (*nrows) * (*ncols)){
+      *siz = (*nrows) * (*ncols);
+      arr = realloc(arr,sizeof(double)*(*siz));
+      if(!arr)
+	ERROR("memory allocation failed");
+    }
+  }
+  else{
+    if(*siz != 0)
+      ERROR("invalid input value siz=%d, arr==NULL",*siz);
+    *siz = (*nrows) * (*ncols);
+    arr = realloc(arr,sizeof(double)*(*siz));
+    if(!arr)
+      ERROR("memory allocation failed");
+  }
+  num_items = *siz;
+  double *ptr = arr; 
+  for(int i=0; i < num_items; i++, ptr++){
+    if(1 != fscanf(f," %lg ", ptr))
+      ERROR("failed to read entry %d of %d",i,num_items);
+  }
+  return arr;
+}
 
 void dbl_mm_write( char * const fout, const char fext[],
 		   const int rows, const int cols, const double buf[],

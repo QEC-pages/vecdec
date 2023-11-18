@@ -1,6 +1,7 @@
-# temp directory is to be ignored 
+# temp directory and tmp files to be ignored 
 tmp/*
 tmp
+tmp*
 
 # tags file
 tags
@@ -36,6 +37,8 @@ TAGS
 # Executables
 src/vecdec
 vecdec
+src/iter_dec
+iter_dec
 *.exe
 *.out
 *.app

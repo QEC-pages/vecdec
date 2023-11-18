@@ -23,12 +23,21 @@ VECDEC_OBJS = vecdec.o util_m4ri.o utils.o tinymt64.o
 VECDEC_XTRA = mmio.o 
 ## unused (documentation only): mainpage.h
 
+ITRDEC_SRC = iter_dec.c util_m4ri.c utils.c tinymt64.c mmio.c
+ITRDEC_OBJ = iter_dec.o util_m4ri.o utils.o tinymt64.o 
+ITRDEC_HDR = iter_dec.h util_m4ri.h utils.h tinymt64.h mmio.h
+
 src = Makefile ${VECDEC_HDRS} ${VECDEC_SRC} 
 
 default: give_help
 
+# iterative decoder program
+${ITRDEC_OBJ}: ${ITRDEC_HDR} Makefile
 
-# The main decoder program
+iter_dec: ${ITRDEC_OBJ} ${VECDEC_XTRA} ${ITRDEC_HDR} Makefile 
+	${CPP} ${CFLAGS} ${ITRDEC_OBJ} ${VECDEC_XTRA} -o iter_dec -l m4ri -l m
+
+# The vecdec program
 vecdec: ${VECDEC_OBJS} ${VECDEC_XTRA} ${VECDEC_HDRS} Makefile 
 	${CPP} ${CFLAGS} ${VECDEC_OBJS} ${VECDEC_XTRA} -o vecdec -l m4ri
 
@@ -37,6 +46,18 @@ ${VECDEC_OBJS}: ${VECDEC_HDRS} Makefile
 
 mmio.o: mmio.c Makefile
 	${CC} ${OPT} -c $<
+
+iter_dec.o: iter_dec.c 
+	@echo ${CC} ${CFLAGS} -o iter_dec.o -c $<
+	@${CC}  ${CFLAGS} -o iter_dec.o -c $<
+	@if [ $$? -ne 0 ] ; then \
+	  echo -e 'Do you have libm4ri_dev on your system?' ; \
+	  echo -e "On a Mac, try to disable '-march=native' compiler switch by running" ;\
+	  echo -e "  make iter_dec OPT=-g -mtune=native -O3" ;\
+	  echo -e " " ;\
+	  false ; \
+	fi
+
 
 vecdec.o: vecdec.c
 	@echo ${CC} ${CFLAGS} -o vecdec.o -c $<
