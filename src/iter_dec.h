@@ -33,12 +33,17 @@ extern "C"{
     int lerr;  /** OSD level (default: `0`) */
     int mode;  /** operation mode bitmap, see help */
     int debug; /** `debug` information */ 
-    char *finH; /** `input file` name for H (if input separately or a classical code) */
+    char *finH; /** `input file` name for Hx=H (if input separately or a classical code) */
+    char *finL; /** `input file` name for Lx=L (if input separately or a classical code) */
+    char *finG; /** `input file` name for Hz=G (must use separate input) */
     char *finP; /** `input file` name for P (if input separately or a classical code) */
     char *fdem; /** `input file` name for detector error model (`DEM`) */
     char *fdet; /** `input file` name for detector events */
     char *fobs; /** `input file` name for observables */
+    int internal; /** `1` if we are using the internal error generator */
+    int classical; /** `1` if this is a classical code? */
     int seed;  /** rng `seed`, set=0 for automatic */
+    double Perr; /** global error probability `overriding` values in the `DEM` file */
     double *vP; /** probability vector (total of `n`) */
     double *vLLR; /** vector of LLRs (total of `n`) */
     int nzH, nzL; /** count of non-zero entries in `H` and `L` */
@@ -51,6 +56,10 @@ extern "C"{
     int maxJ;  /** memory to initially allocate for local storage */
     double LLRmin;
     double LLRmax;
+    FILE *file_det;
+    FILE *file_obs;
+    int line_det; /** current line of the det file */
+    int line_obs; /** current line of the obs file */
   } params_t;
 
   extern params_t prm;
@@ -62,16 +71,19 @@ extern "C"{
    */
 #define USAGE                                                           \
   "%s:  iter_dec - BP decoder for quantum and classical codes\n"	\
-  "  usage: %s param=value [[param=value] ... ]\n"			\
+  "  Usage: %s param=value [[param=value] ... ]\n"			\
   "\t Command line arguments are processed in the order given.\n"	\
   "\t Supported parameters:\n"						\
   "\t --help\t: give this help (also '-h' or just 'help')\n"            \
+  "\t --morehelp\t: get more help (also '-mh' or just 'morehelp')\n"	\
   "\t fdem=[string]\t: name of the input file with detector error model\n" \
   "\t finP=[string]\t: input file for probabilities (mtx or a column of doubles)\n" \
-  "\t finH=[string]\t: input file with parity check matrix (mtx format)\n" \
+  "\t finH=[string]\t: file with parity check matrix (mtx)\n"	\
+  "\t finG=[string]\t: file with dual check matrix (mtx)\n"	\
+  "\t finL=[string]\t: file with logical dual check matrix (mtx)\n" \
   "\t fdet=[string]\t: input file with detector events (01 format)\n"   \
   "\t fobs=[string]\t: file with observables (01 matching lines in fdet)\n" \
-  "\t\t\t (space is OK in front of file name to enable shell completion)\n" \
+  "\t\t\t(space is OK in front of file names to enable shell completion)\n" \
   "\t steps=[integer]\t: num of BP decoding steps (default: 50)\n"	\
   "\t lerr =[integer]\t: OSD level (0, no OSD)\n"			\
   "\t ntot =[integer]\t: total syndromes to generate (default: 1)\n"	\
@@ -90,6 +102,27 @@ extern "C"{
   "\t Multiple `debug` parameters are XOR combined except for 0.\n"	\
   "\t Use debug=0 as the 1st argument to suppress all debug messages.\n"
 
+#define MORE_HELP							\
+  "   Matrices used by %s:\n"						\
+  "\t Think about a CSS code with binary generator matrices Hx=H, Hz=G,\n" \
+  "\t and logical-operator generating matrices Lx=L and Lz=K.  These\n"	\
+  "\t matrices have n columns each and satisfy orthogonality properties\n" \
+  "\t\t Hx*Hz^T=0, Lx*Hz^T=0, Lx*Lz^T=0, and Lx*Lz^T=I (identity matrix).\n" \
+  "\t We are trying to correct binary Z errors, whose probabilities\n"	\
+  "\t are given by the error vector P (or can be overridden with\n"	\
+  "\t the command-line parameter 'Perr').\n"				\
+  "   A detector error model (DEM) file, in the format produced by Stim,\n" \
+  "\t contains matrices H and Lx, and the error probability vector P.\n" \
+  "\t The same code can be obtained by specifying the matrices \n"	\
+  "\t independently, via separate files.\n"				\
+  "   The dual CSS matrix Hz can be specified instead of Lx.\n"	\
+  "\t In such a case, the internal error generator must be used\n"	\
+  "\t (an attempt to specify 'fdet' and 'fobs' files will result in an error).\n" \
+  "   For a classical code, specify only the parity check matrix Hx=H.\n" \
+  "\t In this case G and Lx matrices are trivial (have zero rank).  \n"	\
+  "\t Only the internal error generator can be used for the classical code\n"
+
+  
 #ifdef __cplusplus
 }
 #endif

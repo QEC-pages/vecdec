@@ -83,6 +83,11 @@ extern "C"{
     double LLRmax;
     one_vec_t *codewords; /** `hash table` with found codewords */
     long int num_cws; /** `number` of codewords in the `hash` */
+    int internal; /** `1` to generate errors internally */
+    FILE *file_det;
+    FILE *file_obs;
+    int line_det; /** current line of the det file */
+    int line_obs; /** current line of the obs file */
   } params_t;
 
   extern params_t prm;

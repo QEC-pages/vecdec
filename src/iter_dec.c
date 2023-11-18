@@ -26,11 +26,13 @@
 params_t prm={ .nrows=0, .n=0, .ncws=0, .steps=50,
   .lerr=0, //.swait=0, //  .nvec=16,
   .ntot=1, .nfail=0, .seed=0, 
-  .debug=1, .fdem=NULL, .fdet=NULL, .fobs=NULL, .finH=NULL, .finP=NULL, 
+  .debug=1, .fdem=NULL, .fdet=NULL, .fobs=NULL, .finH=NULL, .finP=NULL,
+  .finG=NULL, .finL=NULL, .internal=0, 
   .mode=0, 
   .LLRmin=0, .LLRmax=0, 
   .vP=NULL, .vLLR=NULL, .mH=NULL, .mHt=NULL,
-  .mL=NULL, .mLt=NULL };
+  .mL=NULL, .mLt=NULL,
+  .file_det=NULL, .file_obs=NULL, .line_det=0, .line_obs=0 };
 
 int var_init(int argc, char **argv, params_t *p){
 
@@ -102,6 +104,38 @@ int var_init(int argc, char **argv, params_t *p){
       if (p->debug&1)
 	printf("# read %s, fdem=%s\n",argv[i],p->fdem);
     }
+    else if (0==strncmp(argv[i],"finH=",5)){
+      if(strlen(argv[i])>5)
+        p->finH = argv[i]+5;
+      else
+        p->finH = argv[++i]; /**< allow space before file name */
+      if (p->debug&1)
+	printf("# read %s, finH=%s\n",argv[i],p->finH);
+    }
+    else if (0==strncmp(argv[i],"finP=",5)){
+      if(strlen(argv[i])>5)
+        p->finP = argv[i]+5;
+      else
+        p->finP = argv[++i]; /**< allow space before file name */
+      if (p->debug&1)
+	printf("# read %s, finP=%s\n",argv[i],p->finP);
+    }
+    else if (0==strncmp(argv[i],"finL=",5)){
+      if(strlen(argv[i])>5)
+        p->finL = argv[i]+5;
+      else
+        p->finL = argv[++i]; /**< allow space before file name */
+      if (p->debug&1)
+	printf("# read %s, finL=%s\n",argv[i],p->finL);
+    }
+    else if (0==strncmp(argv[i],"finG=",5)){
+      if(strlen(argv[i])>5)
+        p->finG = argv[i]+5;
+      else
+        p->finG = argv[++i]; /**< allow space before file name */
+      if (p->debug&1)
+	printf("# read %s, finG=%s\n",argv[i],p->finG);
+    }
     else if (0==strncmp(argv[i],"fdet=",5)){
       if(strlen(argv[i])>5)
         p->fdet = argv[i]+5;
@@ -124,16 +158,133 @@ int var_init(int argc, char **argv, params_t *p){
       printf( USAGE , argv[0],argv[0]);
       exit (-1);
     }
+    else if((strcmp(argv[i],"--morehelp")==0)
+            ||(strcmp(argv[i],"-mh")==0)
+            ||(strcmp(argv[i],"morehelp")==0)){
+      printf( USAGE "\n", argv[0],argv[0]);
+      printf( MORE_HELP,argv[0]);
+      exit (-1);
+    }
     else{ /* unrecognized option */
       printf("# unrecognized parameter \"%s\" at position %d\n",argv[i],i);
       ERROR("try \"%s -h\" for help",argv[0]);
     }
 
   }
+ 
+  if (p->seed == 0){
+    p->seed=time(NULL)+1000000ul*getpid(); /* ensure a different seed */
+    if((p->debug)&&(p->mode!=3))
+      printf("# initializing seed=%d from time(NULL)+1000000ul*getpid()\n",p->seed);
+    /** use `tinymt64_generate_double(&pp.tinymt)` for double [0,1] */
+  }
+  // srand(time(p->seed));
+  tinymt64_init(&tinymt,p->seed);
+
+  if((! p->fdem) && (! p->finH))
+    ERROR("Please specify the DEM file 'fdem' or check matrix file 'finH'\n");
+  if((p->fdem) && (p->finH))
+    ERROR("Please specify fdem=%s OR finH=%s but not both\n",p->fdem, p->finH);
+
+  if(p->fdem){
+    if((p->finL)||(p->finP)||(p->finG)||(p->finH))
+      ERROR("DEM file fdem=%s can not be specified together with \n"
+	    " finH=%s or finL=%s or finP=%s or finG=%s\n", p->fdem,  
+	    p->finH ? p->finH : "",  p->finL ? p->finL : "",
+	    p->finP ? p->finP : "",  p->finG ? p->finG : "");
+    /** read in the DEM file, initialize sparse matrices */
+    void * ptrs[]= {p->mH,p->mL,p->vP};
+    read_dem_file(p->fdem, ptrs, p->debug);
+    p->mH=ptrs[0];
+    p->mL=ptrs[1];
+    p->vP=ptrs[2];
+    //    csr_out(p->mH);
+    p->n = p->mH->cols;
+    p->nrows = p->mH->rows;
+    p->ncws = p->mL->rows;
+  }
+  
+  if(p->finH){
+    if(! p->finL){
+      if((p->fobs) || (p->fdet))
+	ERROR("Without L matrix, cannot specify fdet=%s or fobs=%s\n",
+	      p->fdet ? p->fdet : "",  p->fobs ? p->fobs : "");
+    }
+    if((! p->finL) && (! p->finG)){
+      p->classical=1;
+      p->internal=1;
+    }
+    p->mH=csr_mm_read(p->finH, p->mH, 0);
+    p->n = p->mH->cols;
+    p->nrows = p->mH->rows;
+  }
+
+  if(p->finL){
+    p->mL=csr_mm_read(p->finL, p->mL, 0);
+    p->ncws = p->mL->rows;
+    if(p->mL->cols != p->n)
+      ERROR("column number mismatch L[%d,%d] and H[%d,%d]\n",
+	    p->mL->rows, p->mL->cols, p->mH->rows, p->mH->cols);
+  }
+
+  if(p->finG){
+    p->mG=csr_mm_read(p->finG, p->mG, 0);
+    if(p->mG->cols != p->n)
+      ERROR("column number mismatch G[%d,%d] and H[%d,%d]\n",
+	    p->mG->rows, p->mG->cols, p->mH->rows, p->mH->cols);
+    /** TODO: create `L` matrix here OR verify rank and orthogonality */
+  }
+
+  if(p->finP){
+    int nrows, ncols, siz=0;
+    p->vP=dbl_mm_read(p->finP, &nrows, &ncols, &siz, NULL);
+    if(nrows*ncols != p->n)
+      ERROR("invalid dimension=%d of P vector for H[%d,%d]\n",
+	    nrows*ncols,p->mH->rows, p->mH->cols);
+  }
+
+  // rci_t linedet=0, lineobs=0;
+  if(((p->fdet)&&(!p->fobs))||((!p->fdet)&&(p->fobs)))
+    ERROR("need both fdet=%s and fobs=%s or none\n",
+	  p->fdet ? p->fdet : "",  p->fobs ? p->fobs : "");
+  
+  if(p->fdet){/** expect both `fdet` and `fobs` to be defined */
+    p->file_det=fopen(p->fdet, "r");
+    if(p->file_det==NULL)
+      ERROR("can't open the (det) file %s for reading\n",p->fdet);
+    p->file_obs=fopen(p->fobs, "r");
+    if(p->file_obs==NULL)
+      ERROR("can't open the (obs) file %s for reading\n",p->fobs);
+  }
+  else{
+    p->internal=1;
+    /** TODO: generate a sufficient sample of errors (here?) */
+    
+  }
+
+  if(p->debug & 64){ /** print matrices */
+    assert(p->n != 0);
+    mzd_t *mH0 = mzd_from_csr(NULL,p->mH);
+    printf("matrix mH0:\n");  mzd_print(mH0);
+    mzd_free(mH0);
+    
+    mzd_t *mL0 = mzd_from_csr(NULL,p->mL);
+    printf("matrix mL0:\n");  mzd_print(mL0);
+    mzd_free(mL0);
+
+    for(int i=0; i < p->n; i++)
+      printf(" P[%d]=%g \n",i,p->vP[i]);
+  }
+  
   return 0;
 }
 
 void var_kill(params_t *p){
+  if(p->file_det)
+    fclose(p->file_det);
+  if(p->file_obs)
+    fclose(p->file_obs);
+  
   if(p->vP)
     free(p->vP);
   if(p->vLLR)
@@ -148,6 +299,8 @@ void var_kill(params_t *p){
   
 int main(int argc, char **argv){
   params_t * const p=&prm;
-  var_init(argc,argv, p); /* initialize variables */
+  var_init(argc,argv, p); /* initialize variables, read matrices, and open file (if any) */
+
+  
   var_kill(p);
 }

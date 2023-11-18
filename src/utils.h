@@ -58,14 +58,21 @@ static inline double rnd_exponential(void){
   /**< no need to check for zero or one values */
 };
 
+void read_dem_file(char *fnam, void * ptrs[3], int debug);
+  
+double * dbl_mm_read(const char * const fin, int *nrows, int *ncols, int *siz, double *  arr);
+  
 void dbl_mm_write( char * const fout, const char fext[],
 		   const int rows, const int cols, const double buf[],
-		   const char comment[]);  
+		   const char comment[]);
+
+rci_t read_01(mzd_t *M, FILE *fin, rci_t *lineno, const char* fnam,
+	      const int debug);  
   
 #ifdef __MINGW32__ /** windows compiler */
 /**
  * @brief home-grown version of unix function with the same name.
- *
+ * 
  * Read up to (and including) a newline from STREAM into `*line` (and
  * null-terminate it). On input, `*line` is a pointer returned from
  * malloc (or NULL), pointing to `*n` characters of space.  It is
