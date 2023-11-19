@@ -343,6 +343,7 @@ void var_kill(params_t *p){
 int main(int argc, char **argv){
   params_t * const p=&prm;
   var_init(argc,argv, p); /* initialize variables, read matrices, and open file (if any) */
+
   
   
   var_kill(p);

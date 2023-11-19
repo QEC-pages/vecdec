@@ -321,6 +321,16 @@ int do_reduce(mzd_t *row, const mzd_t *matP0, const rci_t rankP0);
  */
 void make_err(mzd_t *row, double p);
 
+
+  /** @brief create a sample of errors to play with.
+   *  @param mHe matrix with `nvec` columns to return the syndrome `H*e`
+   *  @param mLe matrix with `nvec` columns for logical error `L*e`
+   *  @param Ht, Lt the initial matrices (transposed)
+   * @return 0
+   */
+  int do_errors(mzd_t *mHe, mzd_t *mLe, const csr_t * const Ht, const csr_t * const Lt,
+		const double vP[]);
+
 #if defined(__cplusplus) && !defined (_MSC_VER)
 }
 #endif

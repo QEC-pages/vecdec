@@ -27,7 +27,7 @@ params_t prm={ .nrows=0, .n=0, .ncws=0, .steps=1,
   .lerr=0, .swait=0,
   .nvec=16, .ntot=1, .nfail=0, .seed=0, 
   .debug=1, .fdem=NULL, .fdet=NULL, .fobs=NULL, .fout="tmp", 
-  .colw=10, .mode=0, .use_stdout=0, .maxJ=20,
+  .colw=10, .mode=0, .use_stdout=0, //.maxJ=20,
   .LLRmin=0, .LLRmax=0, .codewords=NULL, .num_cws=0,
   .vP=NULL, .vLLR=NULL, .mH=NULL, .mHt=NULL,
   .mL=NULL, .mLt=NULL, .internal=0, 
@@ -142,81 +142,6 @@ static inline int twomat_gauss_one(mzd_t *M, mzd_t *S, const int idx, const int 
   // if one, need to update the current pivot list
 }
 
-/** @brief create a sample of errors to play with.
- *  @param mHe matrix with `nvec` columns to return the syndrome `H*e`
- *  @param mLe matrix with `nvec` columns for logical error `L*e`
- *  @param p params_t structure with error model information
- * @return max number of generated errors of any one kind
- */
-int do_errors(mzd_t *mHe, mzd_t *mLe,
-	      const params_t * const p){
-
-  assert((mHe!=NULL) && (mLe!=NULL)); /** sanity check */
-
-  int max = p->maxJ;  /** current size of `vec` */
-  int * vec = malloc(p->maxJ * sizeof(int));
-
-  mzd_set_ui(mHe,0); /** zero matrix */
-  mzd_set_ui(mLe,0); /** zero matrix */
-  int nvec = mHe->ncols;
-  /** for each error type (column of `mH` = row of `mHt`) */
-  for(int i=0; i < p->mHt->rows; i++){
-    int ivec=0;
-    /** prepare the list of syndrome columns to deal with */
-    double onebyL = -1.0/log(1.0 - p->vP[i]);
-    if(onebyL<0)
-      ERROR("this should not happen P[%d]=%g onebyL=%g",i,p->vP[i],onebyL);
-    int j =(int )floor(onebyL * rnd_exponential());
-#ifndef NDEBUG
-    if(p->debug & 256) /** details of error setup */
-      printf("p[%d]=%g onebyL=%g j=%d nvec=%d\n",i,p->vP[i],onebyL,j,nvec);
-#endif /* NDEBUG */
-    if(j < nvec){/** otherwise we are to skip this error altogether */
-      do{
-        if(ivec >= max){
-          max=2*max;
-          vec=realloc(vec,max * sizeof(int));
-        }
-        vec[ivec++]=j;
-        j += (int )ceil(onebyL * rnd_exponential());
-#ifndef NDEBUG
-        if(p->debug & 256) /** details of error setup */
-          printf("p[%d]=%g onebyL=%g j=%d nvec=%d\n",i,p->vP[i],onebyL,j,nvec);
-#endif /* NDEBUG */
-      }
-      while(j < nvec);
-
-#ifndef NDEBUG
-      if(p->debug & 256) /** details of error setup */
-	for (j=0; j<ivec; j++)
-	  printf("vec[%d]=%d%s",j,vec[j],j+1==ivec?" ###\n":" ");
-#endif /* NDEBUG */
-
-      /** flip the bits in `mHe` row by row to speed it up */
-      for(int ir = p->mHt->p[i]; ir < p->mHt->p[i+1]; ir++){
-        int irow = p->mHt->i[ir]; /** column index in `mH` = row in `mHt` */
-        for(j=0; j < ivec; j++)
-          mzd_flip_bit(mHe,irow,vec[j]);
-      }
-#ifndef NDEBUG
-      if(p->debug & 256){ /** details of error setup */
-        printf("i=%d j=%d\n",i,j);
-        printf("matrix mHe:\n");  mzd_print(mHe);
-      }
-#endif /* NDEBUG */
-
-      /** flip the bits in `mLe` row by row */
-      for(int ir = p->mLt->p[i]; ir < p->mLt->p[i+1]; ir++){
-        int irow = p->mLt->i[ir]; /** column index in `mL` */
-        for(j=0; j<ivec; j++)
-          mzd_flip_bit(mLe,irow,vec[j]);
-      }
-    }
-  }
-  //  p->maxJ = max; /** to reduce the number of `realloc`s next time */
-  free(vec);
-  return max;
-}
 
 /** @brief create `generator` matrix orthogonal to rows of `mH` and `mL` */
 csr_t * do_G_matrix(const csr_t * const mHt, const csr_t * const mLt,
@@ -1235,9 +1160,9 @@ int main(int argc, char **argv){
       mzd_t *mLe = mzd_init(p->ncws,  p->nvec); /** each column `L*e` vector */
 
       if(p->internal){ /** generate errors internally */
-	p->maxJ = do_errors(mHe,mLe,p);
+	do_errors(mHe,mLe,p->mHt, p->mLt, p->vP);
 	if(p->debug&1)
-	  printf("generated %d error/obs pairs, maxJ=%d\n",mHe->ncols, p->maxJ);		 
+	  printf("generated %d error/obs pairs\n",mHe->ncols);		 
       }
       else{
 	rci_t il1=read_01(mHe,p->file_det, &p->line_det, p->fdet, p->debug);

@@ -78,7 +78,7 @@ extern "C"{
     csr_t *mLt; /** sparse version of L (by columns) */
     csr_t *mG; /** sparse version of generator matrix `G` (by rows) */
     /** rows of `G` orthogonal to rows of both `H` and `L` */
-    int maxJ;  /** memory to initially allocate for local storage */
+    //    int maxJ;  /** memory to initially allocate for local storage */
     double LLRmin;
     double LLRmax;
     one_vec_t *codewords; /** `hash table` with found codewords */
