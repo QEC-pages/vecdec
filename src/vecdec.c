@@ -143,8 +143,8 @@ static inline int twomat_gauss_one(mzd_t *M, mzd_t *S, const int idx, const int 
 }
 
 /** @brief create a sample of errors to play with.
- *  @param mHe matrix with `maxJ` columns to return the syndrome `H*e`
- *  @param mLe matrix with `maxJ` columns for logical error `L*e`
+ *  @param mHe matrix with `nvec` columns to return the syndrome `H*e`
+ *  @param mLe matrix with `nvec` columns for logical error `L*e`
  *  @param p params_t structure with error model information
  * @return max number of generated errors of any one kind
  */

@@ -24,7 +24,7 @@
 #include "iter_dec.h"
 
 params_t prm={ .nrows=0, .n=0, .ncws=0, .steps=50,
-  .lerr=0, //.swait=0, //  .nvec=16,
+  .lerr=0, .useP=0.0, //.swait=0, //  .nvec=16,
   .ntot=1, .nfail=0, .seed=0, 
   .debug=1, .fdem=NULL, .fdet=NULL, .fobs=NULL, .finH=NULL, .finP=NULL,
   .finG=NULL, .finL=NULL, .internal=0, 
@@ -37,7 +37,7 @@ params_t prm={ .nrows=0, .n=0, .ncws=0, .steps=50,
 int var_init(int argc, char **argv, params_t *p){
 
   int dbg=0;
-
+  double val;
   if(argc<=1)
     ERROR("try \"%s -h\" for help",argv[0]);
 
@@ -87,6 +87,11 @@ int var_init(int argc, char **argv, params_t *p){
       p->seed=dbg;
       if (p->debug&1)
 	printf("# read %s, seed=%d\n",argv[i],p->seed);
+    }
+    else if (sscanf(argv[i],"useP=%lg",&val)==1){ /** `useP` */
+      p -> useP = val;
+      if (p->debug&1)
+	printf("# read %s, useP=%g\n",argv[i],p-> useP);
     }
     else if (0==strncmp(argv[i],"f=",2)){/** back compatibility */
       if(strlen(argv[i])>2)
@@ -189,9 +194,9 @@ int var_init(int argc, char **argv, params_t *p){
   if(p->fdem){
     if((p->finL)||(p->finP)||(p->finG)||(p->finH))
       ERROR("DEM file fdem=%s can not be specified together with \n"
-	    " finH=%s or finL=%s or finP=%s or finG=%s\n", p->fdem,  
-	    p->finH ? p->finH : "",  p->finL ? p->finL : "",
-	    p->finP ? p->finP : "",  p->finG ? p->finG : "");
+	    " finH=%s or finL=%s or finP=%s\n", p->fdem,  
+	    p->finH ? p->finH : "",  p->finL ? p->finL : "",  p->finP ? p->finP : "");
+
     /** read in the DEM file, initialize sparse matrices */
     void * ptrs[]= {p->mH,p->mL,p->vP};
     read_dem_file(p->fdem, ptrs, p->debug);
@@ -209,8 +214,10 @@ int var_init(int argc, char **argv, params_t *p){
       if((p->fobs) || (p->fdet))
 	ERROR("Without L matrix, cannot specify fdet=%s or fobs=%s\n",
 	      p->fdet ? p->fdet : "",  p->fobs ? p->fobs : "");
+      else
+	p->internal=1;
     }
-    if((! p->finL) && (! p->finG)){
+    if((! p->finL) && (! p->finG)){ /** only `H` matrix specified */
       p->classical=1;
       p->internal=1;
     }
@@ -218,7 +225,9 @@ int var_init(int argc, char **argv, params_t *p){
     p->n = p->mH->cols;
     p->nrows = p->mH->rows;
   }
-
+  /** at this point we should have `H` matrix for sure */
+  assert(p->mH);
+  
   if(p->finL){
     p->mL=csr_mm_read(p->finL, p->mL, 0);
     p->ncws = p->mL->rows;
@@ -232,7 +241,21 @@ int var_init(int argc, char **argv, params_t *p){
     if(p->mG->cols != p->n)
       ERROR("column number mismatch G[%d,%d] and H[%d,%d]\n",
 	    p->mG->rows, p->mG->cols, p->mH->rows, p->mH->cols);
-    /** TODO: create `L` matrix here OR verify rank and orthogonality */
+
+    /** verify row orthogonality of `G` and `H` */
+    csr_t *Gt = csr_transpose(NULL, p->mG);
+    mzd_t *MGt = mzd_from_csr(NULL,Gt); /* convert to dense matrix */
+    csr_free(Gt);
+    if((p->mH)&&(product_weight_csr_mzd(p->mH,MGt,0)))
+      ERROR("rows of H=Hx and G=Hz should be orthogonal \n");
+
+    if(!p->mL) /** create `Lx` */
+      p->mL=Lx_for_CSS_code(p->mH,p->mG);
+
+    /** verify row orthogonality of `G` and `L` */
+    if((p->mL)&&(product_weight_csr_mzd(p->mL,MGt,0)))
+      ERROR("rows of L=Lx and G=Hz should be orthogonal \n");
+    mzd_free(MGt);        
   }
 
   if(p->finP){
@@ -243,6 +266,18 @@ int var_init(int argc, char **argv, params_t *p){
 	    nrows*ncols,p->mH->rows, p->mH->cols);
   }
 
+  if(p->useP > 0){/** override */
+    if(!p->vP)
+      p->vP=malloc(p->n * sizeof(double));
+    if(!p->vP)
+      ERROR("memory allocation failed, n=%d",p->n);
+    double *ptr=p->vP;
+    for(int i=0;i<p->n;i++, ptr++)
+      *ptr = p->useP;    
+  }
+  if(!p->vP)
+    ERROR("probabilities missing, specify 'fdem', 'finP', or 'useP'");
+  
   // rci_t linedet=0, lineobs=0;
   if(((p->fdet)&&(!p->fobs))||((!p->fdet)&&(p->fobs)))
     ERROR("need both fdet=%s and fobs=%s or none\n",
@@ -262,20 +297,28 @@ int var_init(int argc, char **argv, params_t *p){
     
   }
 
-  if(p->debug & 64){ /** print matrices */
+  if((p->debug & 64)&&(p->n < 128)){ /** print matrices */   
     assert(p->n != 0);
-    mzd_t *mH0 = mzd_from_csr(NULL,p->mH);
-    printf("matrix mH0:\n");  mzd_print(mH0);
-    mzd_free(mH0);
-    
-    mzd_t *mL0 = mzd_from_csr(NULL,p->mL);
-    printf("matrix mL0:\n");  mzd_print(mL0);
-    mzd_free(mL0);
-
-    for(int i=0; i < p->n; i++)
-      printf(" P[%d]=%g \n",i,p->vP[i]);
+    if(p->mH){
+      mzd_t *mH0 = mzd_from_csr(NULL,p->mH);
+      printf("matrix mH0:\n");  mzd_print(mH0);
+      mzd_free(mH0);
+    }
+    if(p->mG){
+      mzd_t *mG0 = mzd_from_csr(NULL,p->mG);
+      printf("matrix mG0:\n");  mzd_print(mG0);
+      mzd_free(mG0);
+    }
+    if(p->mL){
+      mzd_t *mL0 = mzd_from_csr(NULL,p->mL);
+      printf("matrix mL0:\n");  mzd_print(mL0);
+      mzd_free(mL0);
+    }   
+    if(p->vP){      
+      for(int i=0; i < p->n; i++)
+	printf(" P[%d]=%g \n",i,p->vP[i]);
+    }
   }
-  
   return 0;
 }
 
@@ -300,7 +343,7 @@ void var_kill(params_t *p){
 int main(int argc, char **argv){
   params_t * const p=&prm;
   var_init(argc,argv, p); /* initialize variables, read matrices, and open file (if any) */
-
+  
   
   var_kill(p);
 }

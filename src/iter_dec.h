@@ -43,7 +43,7 @@ extern "C"{
     int internal; /** `1` if we are using the internal error generator */
     int classical; /** `1` if this is a classical code? */
     int seed;  /** rng `seed`, set=0 for automatic */
-    double Perr; /** global error probability `overriding` values in the `DEM` file */
+    double useP; /** global error probability `overriding` values in the `DEM` file (default: 0, no override) */
     double *vP; /** probability vector (total of `n`) */
     double *vLLR; /** vector of LLRs (total of `n`) */
     int nzH, nzL; /** count of non-zero entries in `H` and `L` */
@@ -86,6 +86,7 @@ extern "C"{
   "\t\t\t(space is OK in front of file names to enable shell completion)\n" \
   "\t steps=[integer]\t: num of BP decoding steps (default: 50)\n"	\
   "\t lerr =[integer]\t: OSD level (0, no OSD)\n"			\
+  "\t useP =[float]\t: use this probability value override 'vP' (0, no override)\n" \
   "\t ntot =[integer]\t: total syndromes to generate (default: 1)\n"	\
   "\t nfail=[integer]\t: total fails to terminate (0, do not terminate)\n" \
   "\t seed= [integer]\t: RNG seed or use time(NULL) if 0 (default)\n"	\

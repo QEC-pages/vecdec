@@ -159,7 +159,7 @@ mzd_t *mzd_from_csr(mzd_t *dst, const csr_t *p) {
  * [ CT I ], and permute the cols back.  
  * (re)allocate G if needed.
  */
-mzd_t *mzd_generator_from_csr(mzd_t *G, csr_t *H){  
+mzd_t *mzd_generator_from_csr(mzd_t *G, const csr_t * const H){  
   rci_t n=H->cols;
   mzd_t *mat=mzd_from_csr(NULL,H); /* convert to dense matrix */
   mzp_t * pivots = mzp_init(n);    /* initialize the permutation */
@@ -414,6 +414,91 @@ csr_t * csr_from_pairs(csr_t *mat, int nz, int_pair *prs, int nrows, int ncols){
   return mat;
 }
 
+
+/** 
+ * @brief convert `m4ri` dense matrix to `csr`
+ * 
+ * Optimized for sparse matrices.  
+ * 
+ * @param mat pointer to existing matrix or NULL 
+ *
+ */
+csr_t * csr_from_mzd(csr_t *mat, const mzd_t * const orig){
+  int nz=mzd_weight(orig);
+  mat = csr_init(mat, orig->nrows, orig->ncols, nz);/** will reallocate if needed */
+  int i, j=0;
+  for(i=0;i < mat->rows; i++){
+    mat->p[i]=j;
+#if 1 /** optimized version */
+    int idx=0;
+    const word * const rawrow = orig->rows[i];
+    while(((idx=nextelement(rawrow,orig->width,idx))!=-1)&&(idx<orig->ncols)){
+      mat->i[j++]=idx++;
+    }
+#else /** naive version */
+    for(int idx=0; idx< orig->ncols; idx++)
+      if(mzd_read_bit(orig,i,idx)){
+	mat->i[j++]=idx;
+	//	printf("i=%d j=%d idx=%d\n",i,j,idx);
+      }
+#endif /* 0 */    
+  }      
+  mat->p[i]=j; /* final value */
+  assert(j==nz);
+  mat->nz=-1; /* indicate compressed form */
+  return mat;
+}
+
+/**
+ * @brief Compute logical generator matrix Lx for a CSS code
+ *
+ * Given a pair of binary CSS generator matrices in CSR format,
+ * `Hx*Hz^T=0`, compute a sparse matrix `Lx` s.t. `Lx*Hz^T=0`
+ * and rows of `Lx` be linearly independent from those of `Hx`.
+ * TODO: see if sparsity of Lx can be improved.
+ */
+
+csr_t * Lx_for_CSS_code(const csr_t * const Hx, const csr_t *const Hz){
+  rci_t n=Hx->cols;
+  if(n!=Hz->cols)
+    ERROR("unequal number of columns in matrices Hx[%d,%d] and Hz[%d,%d]",
+	  Hx->rows, Hx->cols, Hz->rows, Hz->cols);  
+  mzd_t *Mx = mzd_from_csr(NULL,Hx); /* convert to dense matrix */
+  mzp_t *pivots = mzp_init(n);     /* initialize the permutation */
+  rci_t rank = mzd_gauss_naive(Mx, pivots, 1);
+  mzd_apply_p_right_trans(Mx,pivots); /** permute columns to make std form [ I C ] */
+  mzp_t *perm  = perm_p(      NULL, pivots,0);
+  mzp_t *permT = perm_p_trans(NULL, pivots,0);
+  mzp_free(pivots);
+  csr_t* HzPerm=csr_apply_perm(NULL,Hz,permT);
+  mzp_free(permT);
+#ifndef NDEBUG /** `verify` orthogonality */
+  mzd_t *MxT = mzd_transpose(NULL,Mx); 
+  if(product_weight_csr_mzd(HzPerm,MxT,0))
+    ERROR("rows of Hx and Hz should be orthogonal \n");
+  mzd_free(MxT);
+#endif
+  mzd_t *MzStar = mzd_generator_from_csr(NULL, HzPerm);
+  csr_free(HzPerm);
+
+  mzd_t *mat = mzd_stack(NULL,Mx,MzStar);
+  mzd_free(MzStar);
+  //  printf("stacked:\n");  mzd_print(mat);
+  int rank1=mzd_echelonize(mat,0);
+  //  printf("after gauss %d -> %d:\n", rank, rank1); mzd_print(mat);
+
+  mzd_t *window = mzd_init_window(mat,rank,0,rank1,n);
+  csr_t *Lx=csr_from_mzd(NULL, window);
+  csr_t *ans = csr_apply_perm(NULL,Lx,perm);
+  csr_free(Lx);  
+  mzd_free(window);
+  mzp_free(perm);
+
+  return ans;
+}
+  
+
+
 /**
  *  compress a CSR matrix  
  */ 
@@ -576,7 +661,7 @@ csr_t *csr_mm_read(char *fin, csr_t *mat, int transpose){
 /** 
  * Permute columns of a CSR matrix with permutation perm.
  */
-csr_t *csr_apply_perm(csr_t *dst, csr_t *src, mzp_t *perm){
+csr_t *csr_apply_perm(csr_t *dst, const csr_t * const src, const mzp_t * const perm){
   int m=src->rows, n=src->cols;
   if (src->nz!=-1)
     ERROR("pair format unsupported, nz=%d; expected \"-1\"",src->nz);
@@ -603,16 +688,18 @@ csr_t *csr_apply_perm(csr_t *dst, csr_t *src, mzp_t *perm){
 
 
 /** 
- * Check if row is linearly dependent with the rows of matP0
+ * Check if row is linearly dependent with the rows of `matP0`
  * which is assumed to be in standard form.
- * rankP0 is the number of non-zero rows in rankP0.
- * return: -1 if empty line after simplification
- * 	otherwise position of the first non-zero bit in the simplified vector 
+ * `rankP0` is the number of non-zero rows in `matP0`.
+ *
+ * @return -1 if empty line after simplification otherwise position of
+ * 	the first non-zero bit in the simplified vector
+ * TODO: verify that it works as claimed 
  */
 
 int do_reduce(mzd_t *row, const mzd_t *matP0, const rci_t rankP0){
   word * rawrow = row->rows[0];  
-  rci_t j=-1;
+  rci_t j=0;
   rci_t n=row->ncols;
   do{
     j=nextelement(rawrow,row->width,j);
@@ -620,14 +707,16 @@ int do_reduce(mzd_t *row, const mzd_t *matP0, const rci_t rankP0){
       return j; 
     else if (j<rankP0)
       mzd_combine_even_in_place(row,0,0,matP0,j,0);
+    j++;
   } while (j < rankP0);
   if (j<n)
     return j;
   return -1;
 }
 
-/*
+/**
  * generate binary error vector with error probability p 
+ * TODO: use a different generator; also double in `[0,1)`.
  */
 void make_err(mzd_t *row, double p){
   const int max=1000000;
