@@ -58,6 +58,21 @@ static inline double rnd_exponential(void){
   /**< no need to check for zero or one values */
 };
 
+/** @brief Hagenauer boxplus operator 
+ *  WARNING: this requires `half-LLR` values 
+ *  using the equivalent form `0.5*(a-b)+logexp(a)-logexp(b);` 
+ *  where `a=abs(x+y); b=abs(x-y);` and `logexp(x)=log(1-exp(-x))`    
+ *  @return `arctahn(tanh(x)*tanh(y))=log[cosh[(x+y)/2]/cosh[(x-y)/2]]`
+ */
+
+static inline double boxplus(const double x, const double y){
+  const double a = fabs(x+y);
+  const double b = fabs(x-y);
+  return 0.5*(a-b)+log((1+exp(-a))/(1+exp(-b)));
+  //  return 0.5*(a-b); /** min-sum version */
+}
+
+  
 void read_dem_file(char *fnam, void * ptrs[3], int debug);
   
 double * dbl_mm_read(const char * const fin, int *nrows, int *ncols, int *siz, double *  arr);

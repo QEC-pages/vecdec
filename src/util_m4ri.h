@@ -261,6 +261,11 @@ csr_t *csr_free(csr_t *p);
  */
 csr_t *csr_init(csr_t *mat, int rows, int cols, int nzmax);
 
+/** 
+ * @brief return sparse identity matrix 
+ */
+  csr_t *csr_identity(int rows, int cols);
+  
 /**
  *  compress a CSR matrix  
  */ 

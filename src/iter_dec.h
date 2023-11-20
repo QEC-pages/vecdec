@@ -21,6 +21,8 @@ extern "C"{
 #include <string.h>
 #include <math.h>
 
+#define MINPROB (1.0e-9)
+  
   /** structure to hold global variables */
 
   typedef struct PARAMS_T {
@@ -28,6 +30,7 @@ extern "C"{
     int ncws;  /** how many codewords `k` (set in the `input file`) */
     int n;     /** columns in H `n` (set in the `input file`) */
     int steps; /** number of BP steps, default: `50` */
+    int nvec;  /** max number of syndromes to process in one bunch (default: `16`) */
     int ntot;  /** total number of syndromes to generate (default: `1`) */
     int nfail; /** when non-zero, num of fails to terminate the run (default: `0`, do not terminate) */
     int lerr;  /** OSD level (default: `0`) */
@@ -86,6 +89,7 @@ extern "C"{
   "\t\t\t(space is OK in front of file names to enable shell completion)\n" \
   "\t steps=[integer]\t: num of BP decoding steps (default: 50)\n"	\
   "\t lerr =[integer]\t: OSD level (0, no OSD)\n"			\
+  "\t nvec =[integer]\t: max vector size for decoding (default: 1024)\n"  \
   "\t useP =[float]\t: use this probability value override 'vP' (0, no override)\n" \
   "\t ntot =[integer]\t: total syndromes to generate (default: 1)\n"	\
   "\t nfail=[integer]\t: total fails to terminate (0, do not terminate)\n" \

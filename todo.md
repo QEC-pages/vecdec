@@ -147,7 +147,7 @@ stim sample_dem \
   --obs_out obs_flips.01 \
   --obs_out_format 01
 ```
-- [ ] Implement a mode for finding the list of most likely zero-syndrome error
+- [x] Implement a mode for finding the list of most likely zero-syndrome error
       vectors.
 - [ ] Implement hashing storage for small-weight errors (say, up to weight 2)
       and the corresponding syndromes for fast lookup decoding.  Subsequently,
@@ -159,6 +159,16 @@ stim sample_dem \
       and the corresponding probabilities need to be store.  E.g., try using the
       [`uthash` library](https://github.com/troydhanson/uthash).
 - [ ] Implement BP decoding with OSD
+  - [x] Actual BP steps 
+  - [ ] Add `BoxPlus()` from `it++` library
+  - [ ] Add error estimation
+  - [ ] BP with randomization
+  - [ ] BP with Freezing / Stabilizer inactivation (Savin et al)
+  - [ ] BP version by Kung, Kuo, Lai (http://arXiv.org/abs/2305.03321) and/or Kuo, Lai (http://arXiv.org/abs/2104.13659)
+  - [ ] Add OSD
+  - [ ] Stopping sets analysis?
+  - [ ] Initial BP acceleration ? 
+  - [ ] Narayanan; Kuo+Lai; Roffe; Valentin Savin
 - [ ] Come up with alternative simulation mechanisms, e.g., in the regime of
       small error probabilities $p$.
 - [ ] Hashimoto matrix implementation steps

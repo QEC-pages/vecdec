@@ -24,7 +24,8 @@
 #include "iter_dec.h"
 
 params_t prm={ .nrows=0, .n=0, .ncws=0, .steps=50,
-  .lerr=0, .useP=0.0, //.swait=0, //  .nvec=16,
+  .lerr=0, .useP=0.0, //.swait=0,
+  .nvec=1024,
   .ntot=1, .nfail=0, .seed=0, 
   .debug=1, .fdem=NULL, .fdet=NULL, .fobs=NULL, .finH=NULL, .finP=NULL,
   .finG=NULL, .finL=NULL, .internal=0, 
@@ -33,6 +34,8 @@ params_t prm={ .nrows=0, .n=0, .ncws=0, .steps=50,
   .vP=NULL, .vLLR=NULL, .mH=NULL, .mHt=NULL,
   .mL=NULL, .mLt=NULL,
   .file_det=NULL, .file_obs=NULL, .line_det=0, .line_obs=0 };
+
+/** TODO: add estimation function to compute the result */
 
 int var_init(int argc, char **argv, params_t *p){
 
@@ -62,6 +65,11 @@ int var_init(int argc, char **argv, params_t *p){
         if(p->debug&1)
           printf("# read %s, mode=%d octal=%o\n",argv[i],p->mode,p->mode);
       }
+    }
+    else if (sscanf(argv[i],"nvec=%d",&dbg)==1){ /** `nvec` */
+      p -> nvec = dbg;
+      if (p->debug&1)
+	printf("# read %s, nvec=%d\n",argv[i],p-> nvec);
     }
     else if (sscanf(argv[i],"steps=%d",&dbg)==1){ /** `steps` */
       p -> steps = dbg;
@@ -251,11 +259,18 @@ int var_init(int argc, char **argv, params_t *p){
 
     if(!p->mL) /** create `Lx` */
       p->mL=Lx_for_CSS_code(p->mH,p->mG);
+    p->ncws = p->mL->rows;
 
     /** verify row orthogonality of `G` and `L` */
     if((p->mL)&&(product_weight_csr_mzd(p->mL,MGt,0)))
       ERROR("rows of L=Lx and G=Hz should be orthogonal \n");
     mzd_free(MGt);        
+  }
+
+  if(!p->mL){
+    p->mL = csr_identity(p->n, p->n);
+    p->ncws = p->mL->rows;
+    p->classical = 1;
   }
 
   if(p->finP){
@@ -293,8 +308,6 @@ int var_init(int argc, char **argv, params_t *p){
   }
   else{
     p->internal=1;
-    /** TODO: generate a sufficient sample of errors (here?) */
-    
   }
 
   if((p->debug & 64)&&(p->n < 128)){ /** print matrices */   
@@ -319,6 +332,30 @@ int var_init(int argc, char **argv, params_t *p){
 	printf(" P[%d]=%g \n",i,p->vP[i]);
     }
   }
+
+  /** prepare transposed matrices */
+  const int n = p->n;
+  p->mHt = csr_transpose(p->mHt, p->mH);
+  p->mLt = csr_transpose(p->mLt,p->mL);
+  p->vLLR = malloc(n*sizeof(double));
+  assert(p->vLLR !=0);
+  p->LLRmin=1e9;
+  p->LLRmax=-1e9;
+  for(int i=0;  i < n; i++){
+    double val=p->vP[i] > MINPROB ? log((1.0/p->vP[i] -1.0)) : log(1/MINPROB - 1);
+    p->vLLR[i] = val;
+    if(val < p->LLRmin)
+      p->LLRmin = val;
+    if(val > p->LLRmax)
+      p->LLRmax = val;
+  }
+  if(p->LLRmin<=0)
+    ERROR("LLR values should be positive!  LLRmin=%g LLRmax=%g", p->LLRmin,p->LLRmax);
+  if(p->debug & 2){/** `print` out the entire error model ******************** */
+    printf("# error model read: r=%d k=%d n=%d LLR min=%g max=%g\n",
+           p->nrows, p->ncws, p->n, p->LLRmin,p->LLRmax);
+  }
+
   return 0;
 }
 
@@ -344,7 +381,124 @@ int main(int argc, char **argv){
   params_t * const p=&prm;
   var_init(argc,argv, p); /* initialize variables, read matrices, and open file (if any) */
 
+  /** prepare error vectors ************************************************************/
+  mzd_t *mHe = mzd_init(p->nrows, p->nvec); /** each column a syndrome vector `H*e` */
+  mzd_t *mLe = mzd_init(p->ncws,  p->nvec); /** each column `L*e` vector */
+
+  if(p->internal){ /** generate errors internally */
+    do_errors(mHe,mLe,p->mHt, p->mLt, p->vP);
+    if(p->debug&1)
+      printf("generated %d error/obs pairs\n",mHe->ncols);		 
+  }
+  else{
+    rci_t il1=read_01(mHe,p->file_det, &p->line_det, p->fdet, p->debug);
+    rci_t il2=read_01(mLe,p->file_obs, &p->line_obs, p->fobs, p->debug);
+    if(il1!=il2)
+      ERROR("mismatched DET %s (line %d) and OBS %s (line %d) files!",
+	    p->fdet,p->line_det,p->fobs,p->line_obs);
+    //    if(il1==0)      break; /** no more rounds */
+    if(p->debug&1)
+      printf("read %d error/obs pairs\n",il1);		 
+  }
+  mzd_t *mHeT = mzd_transpose(NULL, mHe);
+  mzd_t *mLeT = mzd_transpose(NULL, mLe);
+
+  /** prepare for BP *****************************************************************/
+  const int nchk = p->nrows; /** number of check nodes */
+  const int nvar = p->n;     /** number of variable nodes */
+  const int nz = p->mH->p[p->nrows]; /** number of messages */
+  double *mesVtoC = malloc(nz*sizeof(double));
+  double *mesCtoV = malloc(nz*sizeof(double));
+  const csr_t * const H = p->mH;
+  const csr_t * const Ht = p->mHt;
+  const double * const vLLR = p->vLLR;
+  double * xLLR = malloc(nvar*sizeof(double));
+  double * aLLR = calloc(nvar,sizeof(double)); /** averaged LLR */
+  if((!xLLR)||(!aLLR))
+    ERROR("memory allocation failed");
+    
+  for(int ierr = 0; ierr < mHeT->nrows; ierr++){ /** cycle over errors */
+    for(int iv=0; iv<nvar; iv++)
+      aLLR[iv]=0.0;
+    
+    /** init V->C messages to bare half-LLR */
+    for(int ic=0; ic<nchk; ic++){ /** target `check` node index */
+      for(int j = H->p[ic]; j < H->p[ic+1] ; j++){
+	const int iv = H->i[j]; /** `variable` node index */
+	mesVtoC[j]= 0.5 * vLLR[iv];   /** `j` is the edge (message) index */
+      }
+    }
+    if(p->debug&8){
+      mzd_print_row(mHeT,ierr);
+      mzd_print_row(mLeT,ierr);
+      for(int iv = 0; iv < nvar; iv++)
+	printf(" %6.2g%s", 0.5 * vLLR[iv], iv+1< nvar ? "" : "\n");
+
+    }
   
+    for (int istep=0; istep < p->steps ; istep++){ /** main decoding cycle */
+      /** C -> V messages */
+      for(int iv=0; iv<nvar; iv++){ /** target `variable` node index */
+	for(int j = Ht->p[iv]; j < Ht->p[iv+1] ; j++){
+	  const int ic = Ht->i[j];/** origin `check` node index */
+	  int sbit = mzd_read_bit(mHeT,ierr,ic); /** syndrome bit */
+	  double msg=0;
+	  int new=1;
+	  for(int j1 = H->p[ic]; j1 < H->p[ic+1] ; j1++){
+	    const int iv1 = H->i[j1]; /** aux `variable` node index */
+	    if(iv1!=iv){
+	      if(new){
+		msg = mesVtoC[j1];
+		new=0;
+	      }
+	      else
+		msg = boxplus(msg, mesVtoC[j1]);
+	    }
+	  }
+	  mesCtoV[j] = (sbit ? -1 : 1) *msg;
+	}
+      }
+      
+      /* V -> C messages */
+      for(int ic=0; ic<nchk; ic++){ /** target `check` node */
+	for(int j = H->p[ic]; j < H->p[ic+1] ; j++){
+	  const int iv = H->i[j]; /** origin `variable` node index */
+	  double msg = 0.5 * vLLR[iv];
+	  for(int j1 = Ht->p[iv]; j1 < Ht->p[iv+1] ; j1++){
+	    const int ic1 = Ht->i[j1];/** aux `check` node index */
+	    if(ic1 != ic)
+	      msg += mesCtoV[j1];
+	  }
+	  mesVtoC[j] = msg;	  
+	}
+      }
+      
+      for(int iv = 0; iv< nvar; iv++){
+	double val=0.5 * vLLR[iv]; /** HERE! */
+	for(int j1 = Ht->p[iv]; j1 < Ht->p[iv+1] ; j1++){
+	  // const int ic1 = Ht->i[j1];/** aux `check` node index */
+	  val += mesCtoV[j1];
+	}
+	xLLR[iv] = val;
+	aLLR[iv] = 0.5 * aLLR[iv] + val;
+      }
+
+      if(p->debug & 8){
+	for(int iv = 0; iv < nvar; iv++)
+	  printf(" %6.2g%s", xLLR[iv], iv+1< nvar ? "" : "\n");
+	for(int iv = 0; iv < nvar; iv++)
+	  printf(" %6.2g%s", aLLR[iv], iv+1< nvar ? "" : "\n");
+      }
+    }
+  }
+  /** clean-up ***********************************************************************/
+    free(xLLR);
+  free(mesVtoC);
+  free(mesCtoV);
+  mzd_free(mHe);
+  mzd_free(mLe);
+  mzd_free(mHeT);
+  mzd_free(mLeT);
   
   var_kill(p);
 }

@@ -383,6 +383,23 @@ csr_t *csr_init(csr_t *mat, int rows, int cols, int nzmax){
   return mat;
 }
 
+/** 
+ * @brief return sparse identity matrix 
+ */
+csr_t *csr_identity(int rows, int cols){
+  const int nzmax= rows < cols ? rows : cols ;
+  csr_t * mat = csr_init(NULL, rows, cols, nzmax);
+  int i;
+  for(i=0; i < nzmax; i++){
+    mat->p[i]=i;
+    mat->i[i]=i;    
+  }
+  for(int j=i ; j<=rows; j++) /** including the final value */
+    mat->p[j]=i; 
+  mat->nz=-1; /* indicate compressed form */
+  return mat;
+}
+
 /* helper function */
 static int cmp_int_pairs(const void *p1, const void *p2){
   if ((((int_pair *) p1)->a)!=(((int_pair *) p2)->a))
