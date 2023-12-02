@@ -137,6 +137,9 @@ csr_t * csr_from_mzd(csr_t *mat, const mzd_t * const orig);
  */
 size_t mzd_weight(const mzd_t *A);
 
+/** @brief return 1 if row `i` of `A` is zero */
+int mzd_row_is_zero(const mzd_t * const A, const int i);
+
 /**
 * nextelement(set1,m,pos) = the position of the first element in set set1   
 * which occupies a position greater or equal than pos.  If no such element exists,   

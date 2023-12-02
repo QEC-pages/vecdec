@@ -59,10 +59,16 @@ static inline double rnd_exponential(void){
 };
 
 /** @brief Hagenauer boxplus operator 
- *  WARNING: this requires `half-LLR` values 
- *  using the equivalent form `0.5*(a-b)+logexp(a)-logexp(b);` 
- *  where `a=abs(x+y); b=abs(x-y);` and `logexp(x)=log(1-exp(-x))`    
- *  @return `arctahn(tanh(x)*tanh(y))=log[cosh[(x+y)/2]/cosh[(x-y)/2]]`
+ * 
+ * WARNING: this requires full `LLR` values `x` and `y`.  Resulting
+ * LLR is calculated using the equivalent form (`**verified**`):
+ * `arctahn(tanh(x)*tanh(y))=log[cosh[(x+y)/2]/cosh[(x-y)/2]]`, which
+ * is further simplified using the fact that `cosh` is an even
+ * function, by introducing `a=abs(x+y); b=abs(x-y);` and
+ * `logexp(x)=log(1-exp(-x))`, to give, finally
+ * `0.5*(a-b)+logexp(a)-logexp(b);`
+
+ *  @return LLR of the probability to have only one non-zero
  */
 
 static inline double boxplus(const double x, const double y){

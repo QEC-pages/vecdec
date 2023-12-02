@@ -44,6 +44,16 @@ size_t mzd_weight(const mzd_t *A){
   return count ;
 }
 
+int mzd_row_is_zero(const mzd_t const *A, const int i) {
+  const word mask_end = A->high_bitmask;
+  for (wi_t j = 0; j < A->width - 1; ++j)
+    if(A->rows[i][j])
+      return 0;
+  if(A->rows[i][A->width - 1] & mask_end)
+    return 0;
+  return 1;
+}
+
 
 /**
  * Copy of mzd_gauss_delayed from mzd.c (m4ri package) except additionally 
@@ -207,16 +217,21 @@ mzd_t * csr_mzd_mul(mzd_t *C, const csr_t *S, const mzd_t *B, int clear){
     C = mzd_init(S->rows, B->ncols);
   else {
     if (C->nrows != S->rows || C->ncols != B->ncols) 
-      ERROR("Provided return matrix has wrong dimensions.\n");    
+      ERROR("Provided return matrix has wrong dimensions.\n");
+    if(clear)
+      mzd_set_ui(C,0); 
   }
-  if(clear)
-    mzd_set_ui(C,0); 
   rci_t const m = S->rows;
   
   for(rci_t i = 0; i < m; ++i)
     for(int j=S->p[i]; j < S->p[i+1] ; j++)
       mzd_combine(C,i,0, C,i,0, B,S->i[j],0); /* combine the two rows */
   return C;
+}
+
+/** @brief calculate `C = C + A*B`, optimized to the case where `A` is a single row */
+mzd_t * mzd_csr_mul(mzd_t *C, const mzd_t *A, const csr_t *B, int clear){
+
 }
 
 
