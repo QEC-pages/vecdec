@@ -28,8 +28,8 @@ extern "C"{
 #ifdef USE_QLLR  
 
   typedef  signed int qllr_t;
-  const qllr_t QLLR_MAX = ((INT_MAX) >> 4);
-  const double MINPROB = 1.0e-15;
+  static const qllr_t QLLR_MAX = ((INT_MAX) >> 4);
+  static const double MINPROB = 1.0e-15;
 
   typedef struct QLLR_PARAMS_T {
     short int Dint1, Dint2, Dint3;
@@ -115,7 +115,7 @@ extern "C"{
   
 #else /* not USE_QLLR */
 
-#define MINPROB (1.0e-9)
+  static const double MINPROB = 1.0e-15;
 
   typedef  double qllr_t;
   
@@ -157,10 +157,12 @@ static inline qllr_t boxplus(const qllr_t x, const qllr_t y){
 
   extern qllr_params_t *LLR_table;
   
-  qllr_params_t * init_LLR_tables (const int d1, const int d2, const int d3);
   
     
-#endif /* USE_QLLR */  
+#endif /* USE_QLLR */
+
+  qllr_params_t * init_LLR_tables (const int d1, const int d2, const int d3);
+  void out_LLR_params([[maybe_unused]] qllr_params_t *lcu);
   
 #ifdef __cplusplus
 }

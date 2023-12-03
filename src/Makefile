@@ -4,7 +4,7 @@ WARN = -Wall -Wsign-compare -Wextra
 ## EXTRA may be set on the command line, e.g., "EXTRA=''" or "EXTRA='-pg -DNDEBUG'"
 # EXTRA = -DNDEBUG -Wno-unused-variable -Wno-unused-parameter  
 # OPT  = -g -march=native -mtune=native -O3 ${PRODUCTION}
-EXTRA=-DNDEBUG
+EXTRA=-DNDEBUG -DUSE_QLLR
 # use -DNDEBUG to disable assert, -Wfatal-errors to stop at 1st error
 # to compile on Mac you may need to disable '-march=native` 
 OPT = -g -march=native -mtune=native -O3 ${EXTRA}
@@ -23,9 +23,9 @@ VECDEC_OBJS = vecdec.o util_m4ri.o utils.o tinymt64.o
 VECDEC_XTRA = mmio.o 
 ## unused (documentation only): mainpage.h
 
-ITRDEC_SRC = iter_dec.c util_m4ri.c utils.c tinymt64.c mmio.c
-ITRDEC_OBJ = iter_dec.o util_m4ri.o utils.o tinymt64.o 
-ITRDEC_HDR = iter_dec.h util_m4ri.h utils.h tinymt64.h mmio.h
+ITRDEC_SRC = iter_dec.c util_m4ri.c utils.c tinymt64.c mmio.c qllr.c
+ITRDEC_OBJ = iter_dec.o util_m4ri.o utils.o tinymt64.o qllr.o
+ITRDEC_HDR = iter_dec.h util_m4ri.h utils.h tinymt64.h mmio.h qllr.h
 
 src = Makefile ${VECDEC_HDRS} ${VECDEC_SRC} 
 

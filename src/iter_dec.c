@@ -30,7 +30,8 @@ params_t prm={ .nchk=0, .nvar=0, .ncws=0, .steps=50,
   .ntot=1, .nfail=0, .seed=0, 
   .debug=1, .fdem=NULL, .fdet=NULL, .fobs=NULL, .finH=NULL, .finP=NULL,
   .finG=NULL, .finL=NULL, .internal=0, 
-  .mode=0, 
+  .mode=0,
+  .d1=0, .d2=0, .d3=0,
   .LLRmin=0, .LLRmax=0, 
   .vP=NULL, .vLLR=NULL, .mH=NULL, .mHt=NULL,
   .mL=NULL, .mLt=NULL,
@@ -69,6 +70,9 @@ int var_init(int argc, char **argv, params_t *p){
   double val;
   if(argc<=1)
     ERROR("try \"%s -h\" for help",argv[0]);
+#ifdef USE_QLLR
+  p->d1=12; p->d2=300; p->d3=7; /** recommended values */
+#endif   
 
   for(int i=1; i<argc; i++){  /** `debug` */
     if(sscanf(argv[i],"debug=%d",& dbg)==1){
@@ -91,6 +95,21 @@ int var_init(int argc, char **argv, params_t *p){
         if(p->debug&1)
           printf("# read %s, mode=%d octal=%o\n",argv[i],p->mode,p->mode);
       }
+    }
+    else if (sscanf(argv[i],"qllr1=%d",&dbg)==1){ /** `nvec` */
+      p -> d1 = dbg;
+      if (p->debug&1)
+	printf("# read %s, QLLR parameter d1=%d\n",argv[i],p-> d1);
+    }
+    else if (sscanf(argv[i],"qllr2=%d",&dbg)==1){ /** `nvec` */
+      p -> d2 = dbg;
+      if (p->debug&1)
+	printf("# read %s, QLLR parameter d2=%d\n",argv[i],p-> d2);
+    }
+    else if (sscanf(argv[i],"qllr3=%d",&dbg)==1){ /** `nvec` */
+      p -> d3 = dbg;
+      if (p->debug&1)
+	printf("# read %s, QLLR parameter d3=%d\n",argv[i],p-> d3);
     }
     else if (sscanf(argv[i],"nvec=%d",&dbg)==1){ /** `nvec` */
       p -> nvec = dbg;
@@ -210,6 +229,10 @@ int var_init(int argc, char **argv, params_t *p){
     }
 
   }
+  LLR_table = init_LLR_tables(p->d1,p->d2,p->d3);
+  //  printf("here\n"); fflush(stdout);
+  if(p->debug&1)
+    out_LLR_params(LLR_table);
  
   if (p->seed == 0){
     p->seed=time(NULL)+1000000ul*getpid(); /* ensure a different seed */
@@ -394,6 +417,7 @@ int var_init(int argc, char **argv, params_t *p){
 }
 
 void var_kill(params_t *p){
+    
   if(p->file_det)
     fclose(p->file_det);
   if(p->file_obs)
@@ -403,12 +427,16 @@ void var_kill(params_t *p){
     free(p->vP);
   if(p->vLLR)
     free(p->vLLR);
-  p->vP = p->vLLR = NULL;
+  p->vP = NULL;
+  p->vLLR = NULL;
   p->mH =  csr_free(p->mH); /** OK if `NULL` */
   p->mHt = csr_free(p->mHt);
   p->mL =  csr_free(p->mL);
   p->mLt = csr_free(p->mLt);
   p->mG = csr_free(p->mG);
+
+  free(LLR_table);
+  LLR_table = NULL;
 }
 
 /** @brief Check the syndrome for the LLR vector given (`0`th row of `syndrome`).

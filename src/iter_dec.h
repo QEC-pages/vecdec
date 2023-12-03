@@ -34,6 +34,7 @@ extern "C"{
     int nfail; /** when non-zero, num of fails to terminate the run (default: `0`, do not terminate) */
     int lerr;  /** OSD level (default: `0`) */
     int mode;  /** operation mode bitmap, see help */
+    int d1, d2, d3; /** QLLR parameters */
     int debug; /** `debug` information */ 
     char *finH; /** `input file` name for Hx=H (if input separately or a classical code) */
     char *finL; /** `input file` name for Lx=L (if input separately or a classical code) */

@@ -1,5 +1,5 @@
 /**
- * @file qllr.h
+ * @file qllr.c
  *
  * @brief vecdec - a simple vectorized decoder (quantized LLR unit)
  * 
@@ -19,14 +19,14 @@ extern "C"{
 #include "utils.h"  
 #include "qllr.h"
 
-#ifdef USE_QLLR 
-
   qllr_params_t * LLR_table = NULL;
+
+#ifdef USE_QLLR 
 
   static inline double pow2i(int x){
     if(x>=0)
-      return (double) (1<<x);
-    return 1.0/(1<<(-x));
+      return (double) ( (long long unsigned) 1<<x);
+    return 1.0/((long long unsigned) 1<<(-x));
   }
   
   qllr_params_t * init_LLR_tables (const int d1, const int d2, const int d3){
@@ -35,13 +35,17 @@ extern "C"{
     if((d2<0)||(d1<0))
       ERROR("invalid QLLR table parameters d1=%d d2=%d should both be non-negative", d1,d2);
     qllr_params_t * ans = malloc(sizeof(qllr_params_t) + sizeof(qllr_t)*d2);
+    if(!ans)
+      ERROR("memory allocation failed");
     ans->Dint1=d1;
     ans->Dint2=d2;
     ans->Dint3=d3;
     const double delta = pow2i(d3 - d1);
+    const double coeff = ((long long unsigned) 1 << d1);
+    //    printf("delta=%g\n",delta);
     for (int i = 0; i < d2; i++) {
       double x = delta * i;
-      ans->logexp_table[i] = llr_from_dbl(log(1.0 + exp(-x)));
+      ans->logexp_table[i] = floor(0.5 +  coeff * log(1.0 + exp(-x)));
     }
     return ans;
   } 
