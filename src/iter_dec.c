@@ -572,7 +572,7 @@ int main(int argc, char **argv){
   if(p->internal){ /** generate errors internally */
     do_errors(mHe,mLe,p->mHt, p->mLt, p->vP);
     if(p->debug&1)
-      printf("generated %d error/obs pairs\n",mHe->ncols);		 
+      printf("# generated %d error/obs pairs\n",mHe->ncols);		 
   }
   else{
     rci_t il1=read_01(mHe,p->file_det, &p->line_det, p->fdet, p->debug);
@@ -631,7 +631,11 @@ int main(int argc, char **argv){
 	}
 	mzd_free(obsrow);
       }
+      if(p->debug&16)
+	printf("i=%d of %d succ=%d\n",ierr,mHeT->nrows,succ_BP);
     }
+    if((p->nfail) && cnt[TOTAL]-cnt[SUCC_TOT] >= p->nfail)
+      break;
   }
   
   cnt_out(p->debug&1);

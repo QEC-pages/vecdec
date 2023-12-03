@@ -702,7 +702,7 @@ csr_t *csr_alist_read(const char fnam[], csr_t * mat, int transpose, int debug){
 	ERROR("\n%s:%ld: invalid alist file",fnam, linenum);
       if(j<num_mlist[ir])
 	{
-	  if(transpose)
+	  if(!transpose)
 	    inH[idx++] = (int_pair) {val, ir};
 	  else 
 	    inH[idx++] = (int_pair) {ir, val};
@@ -713,7 +713,7 @@ csr_t *csr_alist_read(const char fnam[], csr_t * mat, int transpose, int debug){
       }
     }      
   }
-  if(transpose)
+  if(!transpose)
     mat = csr_from_pairs(mat, idx, inH, M, N);
   else
     mat = csr_from_pairs(mat, idx, inH, N, M);
@@ -723,7 +723,7 @@ csr_t *csr_alist_read(const char fnam[], csr_t * mat, int transpose, int debug){
 
   if(debug &1)
     printf("# read alist file %s %s: rows=%d cols=%d nz=%d\n",
-	   fnam,transpose?"":"(transposed)",mat->rows,mat->cols,mat->nz);
+	   fnam,!transpose?"(transposed)":"",mat->rows,mat->cols,mat->nz);
 
   return mat;    
 }
@@ -747,7 +747,7 @@ csr_t *csr_mm_read(char *fnam, csr_t *mat, int transpose, int debug){
   if (mm_read_banner(f, &matcode) != 0){
     /** try to read in `alist` format */
     if(debug&1)
-      printf("Could not process Matrix Market banner; try 'alist' format\n");
+      printf("# Could not process Matrix Market banner; try 'alist' format\n");
     fclose(f);
     mat = csr_alist_read(fnam,mat,transpose,debug);    
     if(!mat)
