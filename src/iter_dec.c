@@ -255,7 +255,7 @@ int var_init(int argc, char **argv, params_t *p){
       p->classical=1;
       p->internal=1;
     }
-    p->mH=csr_mm_read(p->finH, p->mH, 0);
+    p->mH=csr_mm_read(p->finH, p->mH, 0, p->debug);
     p->n = p->mH->cols;
     p->nrows = p->mH->rows;
   }
@@ -263,7 +263,7 @@ int var_init(int argc, char **argv, params_t *p){
   assert(p->mH);
   
   if(p->finL){
-    p->mL=csr_mm_read(p->finL, p->mL, 0);
+    p->mL=csr_mm_read(p->finL, p->mL, 0, p->debug);
     p->ncws = p->mL->rows;
     if(p->mL->cols != p->n)
       ERROR("column number mismatch L[%d,%d] and H[%d,%d]\n",
@@ -271,7 +271,7 @@ int var_init(int argc, char **argv, params_t *p){
   }
 
   if(p->finG){
-    p->mG=csr_mm_read(p->finG, p->mG, 0);
+    p->mG=csr_mm_read(p->finG, p->mG, 0, p->debug);
     if(p->mG->cols != p->n)
       ERROR("column number mismatch G[%d,%d] and H[%d,%d]\n",
 	    p->mG->rows, p->mG->cols, p->mH->rows, p->mH->cols);
@@ -413,8 +413,9 @@ void var_kill(params_t *p){
 /** @brief Check the syndrome for the LLR vector given (`0`th row of `syndrome`).
  * @return 1 if codeword is valid, 0 otherwise */
 int syndrome_check(const double LLR[], const mzd_t * const syndrome,
-		   const csr_t * const H, const params_t * const p){
-  const int nchk = p->nrows;
+		   const csr_t * const H,
+		   [[maybe_unused]] const params_t * const p){
+  const int nchk = H->rows;
   //  const csr_t * const H = p->mH;
   for(int ic=0; ic<nchk; ic++){ /** target `check` node */
     int synd = mzd_read_bit(syndrome,0,ic);
@@ -450,9 +451,9 @@ int do_parallel_BP(double * outLLR, const mzd_t * const srow,
   //  double * xLLR = malloc(nvar*sizeof(double));
   double * const xLLR = outLLR; /** return soft vector of LLR here */
   double * aLLR = calloc(nvar,sizeof(double)); /** averaged LLR */
-  int succ_BP=0;
   if((!aLLR)||(!mesVtoC)||(!mesCtoV))
     ERROR("memory allocation failed");
+  int succ_BP=0;
   
     /** init V->C messages to bare LLR */
   for(int ic=0; ic<nchk; ic++){ /** target `check` node index */
@@ -463,7 +464,7 @@ int do_parallel_BP(double * outLLR, const mzd_t * const srow,
   }
   
   for (int istep=1; istep <= p->steps  ; istep++){ /** main decoding cycle */
-    cnt[TOTAL]++;
+    //    cnt[TOTAL]++;
     /** C -> V messages */
     for(int iv=0; iv<nvar; iv++){ /** target `variable` node index */
       for(int j = Ht->p[iv]; j < Ht->p[iv+1] ; j++){
@@ -548,8 +549,11 @@ int do_parallel_BP(double * outLLR, const mzd_t * const srow,
   if(!succ_BP)
     outLLR = xLLR; /** TODO: make an option to change this to aLLR */
   /** clean up ********************/
-  free(xLLR);
-  free(aLLR);
+  //  free(xLLR);
+  if(aLLR){
+    free(aLLR);
+    aLLR=NULL;
+      }
   free(mesVtoC);
   free(mesCtoV);
 
@@ -615,13 +619,12 @@ int main(int argc, char **argv){
 	for(int iv = 0; iv < p->n; iv++)
 	  printf(" %6.2g%s", p->vLLR[iv], iv+1< p->n ? "" : "\n");
       }
-      mzd_t * const srow = mzd_init_window(mHeT, ierr,0, ierr+1,p->nrows); /* syndrome row */
-      
+      mzd_t * const srow = mzd_init_window(mHeT, ierr,0, ierr+1,p->nrows); /* syndrome row */     
       succ_BP = do_parallel_BP(ans, srow, p->mH, p->mHt, p->vLLR, p);    
       mzd_free(srow);
 
       if(succ_BP){/* convergence success  */
-	mzd_t * const obsrow = mzd_init_window(mLeT, ierr,0, ierr+1,p->n);
+	mzd_t * const obsrow = mzd_init_window(mLeT, ierr,0, ierr+1,mLeT->ncols);
 	if(syndrome_check(ans, obsrow, p->mL, p)){
 	  cnt[SUCC_BP]++;
 	  cnt[SUCC_TOT]++;
@@ -629,9 +632,9 @@ int main(int argc, char **argv){
 	mzd_free(obsrow);
       }
     }
-
   }
-  cnt_out(1);
+  
+  cnt_out(p->debug&1);
   /** clean-up ***********************************************************************/
   if(ans){
     free(ans);

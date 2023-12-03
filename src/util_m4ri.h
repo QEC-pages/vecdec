@@ -284,7 +284,7 @@ void csr_compress(csr_t *mat);
  * (re)allocate mat if needed
  * use transpose=1 to transpose.
  */
-  csr_t *csr_mm_read(char *fin, csr_t *mat, int transpose);
+csr_t *csr_mm_read(char *fnam, csr_t *mat, int transpose, int debug);
 
   /** write out CSR matrix.  Use fout="stdout" for `stdout` output */
 void csr_mm_write( char * const fout, const char fext[], const csr_t * const mat,

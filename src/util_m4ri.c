@@ -44,7 +44,7 @@ size_t mzd_weight(const mzd_t *A){
   return count ;
 }
 
-int mzd_row_is_zero(const mzd_t const *A, const int i) {
+int mzd_row_is_zero(const mzd_t  * const A, const int i) {
   const word mask_end = A->high_bitmask;
   for (wi_t j = 0; j < A->width - 1; ++j)
     if(A->rows[i][j])
@@ -229,10 +229,12 @@ mzd_t * csr_mzd_mul(mzd_t *C, const csr_t *S, const mzd_t *B, int clear){
   return C;
 }
 
+#if 0
 /** @brief calculate `C = C + A*B`, optimized to the case where `A` is a single row */
 mzd_t * mzd_csr_mul(mzd_t *C, const mzd_t *A, const csr_t *B, int clear){
-
+  return NULL;  
 }
+#endif 
 
 
 /** 
@@ -634,34 +636,137 @@ void csr_mm_write( char * const fout, const char fext[], const csr_t * const mat
   }
 }
 
+/** @brief read sparse binary matrix in `alist` format.
+ * This is the format created by David MacKay, see 
+ * (https://www.inference.org.uk/mackay/CodesFiles.html)
+ * 
+ * @Returns the corresponding CSR matrix `mH` (first in the file)
+ */
+csr_t *csr_alist_read(const char fnam[], csr_t * mat, int transpose, int debug){
+  int N, M; /** rows, columns */
+  int *num_mlist; /** num of non-zero entries per row */
+  int biggest_n, biggest_m; /** max nz entries per col, row */ 
+  int num_pairs=0;
+  long int linenum=0;
+  FILE *f = fopen(fnam, "r");
+  if(f==NULL)
+    ERROR("can't open the (alist) file %s for reading\n",fnam);
+  
+  linenum++;
+  if(2!=fscanf(f," %d %d \n",&N,&M))
+    ERROR("\n%s:%ld: invalid alist file",fnam, linenum);
+  
+  linenum++;
+  if(2!=fscanf(f," %d %d \n",&biggest_m,&biggest_n))
+    ERROR("\n%s:%ld: invalid alist file",fnam, linenum);
+
+  linenum++;
+  num_mlist = malloc(N*sizeof(int));
+  if(!num_mlist) ERROR("memory allocation fail");
+  for(int i=0; i<N; i++){
+    int val=0;
+    if((1!=fscanf(f," %d ",&val))||(val>biggest_m))
+      ERROR("\n%s:%ld: invalid alist file",fnam, linenum);
+    else{
+      num_pairs += val;
+      num_mlist[i] = val;
+    }
+  }
+
+  linenum++;
+  int nz=0;
+  for(int i=0; i<M; i++){
+    int val=0;
+    if((1!=fscanf(f," %d ",&val))||(val>biggest_n))
+      {
+	printf("val=%d i=%d N=%d M=%d biggest_n=%d\n",val,i,N,M, biggest_n);	
+	ERROR("\n%s:%ld: invalid alist file",fnam, linenum);
+      }
+    
+    else
+      nz+=val;
+    /** otherwise `ignore` column weight entries */
+  }
+  assert(nz==num_pairs);
+  
+  int_pair * inH = malloc(nz*sizeof(int_pair));
+  if (!inH)
+    ERROR("memory allocation fail");
+  
+  int idx=0;
+  for(int ir=0; ir<N; ir++){
+    linenum++;
+    for(int j=0; j<biggest_m; j++){
+      int val=0;
+      if((1!=fscanf(f," %d ",&val))||(val>M))
+	ERROR("\n%s:%ld: invalid alist file",fnam, linenum);
+      if(j<num_mlist[ir])
+	{
+	  if(transpose)
+	    inH[idx++] = (int_pair) {val, ir};
+	  else 
+	    inH[idx++] = (int_pair) {ir, val};
+	}
+      else{
+	if(val!=0)
+	  ERROR("\n%s:%ld: invalid alist file",fnam, linenum);
+      }
+    }      
+  }
+  if(transpose)
+    mat = csr_from_pairs(mat, idx, inH, M, N);
+  else
+    mat = csr_from_pairs(mat, idx, inH, N, M);
+    
+  free(inH);
+  free(num_mlist);
+
+  if(debug &1)
+    printf("# read alist file %s %s: rows=%d cols=%d nz=%d\n",
+	   fnam,transpose?"":"(transposed)",mat->rows,mat->cols,mat->nz);
+
+  return mat;    
+}
+
+
 /**
  * read sparse matrix into a (binary) CSR (all entries default to 1)
  * (re)allocate mat if needed
+ * will also try to read matrix in `alist` format 
  * use transpose=1 to transpose.
  */
-csr_t *csr_mm_read(char *fin, csr_t *mat, int transpose){
+csr_t *csr_mm_read(char *fnam, csr_t *mat, int transpose, int debug){
   int ret_code;
   MM_typecode matcode;
   FILE *f;
   int M, N, nz;   
  
-  if ((f = fopen(fin, "r")) == NULL) 
-    ERROR("can't open file %s",fin);
+  if ((f = fopen(fnam, "r")) == NULL) 
+    ERROR("can't open file %s",fnam);
 
-  if (mm_read_banner(f, &matcode) != 0)
-    ERROR("Could not process Matrix Market banner.");
-
+  if (mm_read_banner(f, &matcode) != 0){
+    /** try to read in `alist` format */
+    if(debug&1)
+      printf("Could not process Matrix Market banner; try 'alist' format\n");
+    fclose(f);
+    mat = csr_alist_read(fnam,mat,transpose,debug);    
+    if(!mat)
+      ERROR("Could not process Matrix Market banner or load 'alist' file.");
+    else
+      return mat;    
+  }
+  
   if (!(mm_is_matrix(matcode) && mm_is_sparse(matcode) && 
 	mm_is_integer(matcode) && mm_is_general(matcode) )){
     printf("Sorry, this application does not support ");
     printf("Market Market type: [%s]\n", mm_typecode_to_str(matcode));
-    ERROR("input file %s",fin);
+    ERROR("input file %s",fnam);
     exit(1);
   }
 
   /* find out size of sparse matrix .... */
   if ((ret_code = mm_read_mtx_crd_size(f, &M, &N, &nz)) !=0)
-    ERROR("Cannot read size in input file %s",fin);
+    ERROR("Cannot read size in input file %s",fnam);
 
   if(transpose) {int tmp=M;M=N;N=tmp;} /* swap M and N */
   mat=csr_init(mat,M,N,nz); /* at this point mat will fit the data */  
@@ -689,6 +794,8 @@ csr_t *csr_mm_read(char *fin, csr_t *mat, int transpose){
   // csr_out(mat);
   return mat;
 }
+
+
 
 /** 
  * Permute columns of a CSR matrix with permutation perm.

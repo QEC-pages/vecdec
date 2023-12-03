@@ -121,6 +121,7 @@ void dbl_mm_write( char * const fout, const char fext[],
 /** @brief read detector error model (DEM) created by `stim`.
  * Immediately create CSR matrices `mH` and `mL` and vector `vP`; 
  * return the corresponding pointers via `ptrs` (in this order).
+ * TODO: make it test for file type 
  * @param fnam file name for reading DEM from
  * @param p structure to store produced matrices
  */
@@ -229,7 +230,6 @@ void read_dem_file(char *fnam, void * ptrs[3], int debug){
   fclose(f);
 
 }
-
 
 
 #ifdef __MINGW32__ /** windows compiler */

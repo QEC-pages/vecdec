@@ -80,10 +80,10 @@ extern "C"{
   "\t --help\t: give this help (also '-h' or just 'help')\n"            \
   "\t --morehelp\t: get more help (also '-mh' or just 'morehelp')\n"	\
   "\t fdem=[string]\t: name of the input file with detector error model\n" \
-  "\t finP=[string]\t: input file for probabilities (mtx or a column of doubles)\n" \
-  "\t finH=[string]\t: file with parity check matrix (mtx)\n"	\
-  "\t finG=[string]\t: file with dual check matrix (mtx)\n"	\
-  "\t finL=[string]\t: file with logical dual check matrix (mtx)\n" \
+  "\t finP=[string]\t: input file for probabilities (mm or a column of doubles)\n" \
+  "\t finH=[string]\t: file with parity check matrix (mm or alist)\n"	\
+  "\t finG=[string]\t: file with dual check matrix (mm or alist)\n"	\
+  "\t finL=[string]\t: file with logical dual check matrix (mm or alist)\n" \
   "\t fdet=[string]\t: input file with detector events (01 format)\n"   \
   "\t fobs=[string]\t: file with observables (01 matching lines in fdet)\n" \
   "\t\t\t(space is OK in front of file names to enable shell completion)\n" \
