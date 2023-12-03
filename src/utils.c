@@ -294,14 +294,14 @@ int getline(char **line, size_t *n, FILE *fp){
  * @return the number of rows actually read.
  *
  */
-rci_t read_01(mzd_t *M, FILE *fin, rci_t *lineno, const char* fnam,
+int read_01(mzd_t *M, FILE *fin, int *lineno, const char* fnam,
 	      const int debug){
   if(!M)
     ERROR("expected initialized matrix 'M'!\n");
   else
     mzd_set_ui(M,0);
-  rci_t m   =M->nrows;
-  rci_t lmax=M->ncols, il=0;
+  int m   =M->nrows;
+  int lmax=M->ncols, il=0;
   if(!fin)
     ERROR("file 'fin' named '%s' must be open for reading\n",fnam);
   if(debug&8) /** file io */

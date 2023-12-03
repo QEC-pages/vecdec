@@ -24,7 +24,7 @@
 #include "util_m4ri.h"
 #include "iter_dec.h"
 
-params_t prm={ .nrows=0, .n=0, .ncws=0, .steps=50,
+params_t prm={ .nchk=0, .nvar=0, .ncws=0, .steps=50,
   .lerr=0, .useP=0.0, //.swait=0,
   .nvec=1024,
   .ntot=1, .nfail=0, .seed=0, 
@@ -238,8 +238,8 @@ int var_init(int argc, char **argv, params_t *p){
     p->mL=ptrs[1];
     p->vP=ptrs[2];
     //    csr_out(p->mH);
-    p->n = p->mH->cols;
-    p->nrows = p->mH->rows;
+    p->nvar = p->mH->cols;
+    p->nchk = p->mH->rows;
     p->ncws = p->mL->rows;
   }
   
@@ -256,8 +256,8 @@ int var_init(int argc, char **argv, params_t *p){
       p->internal=1;
     }
     p->mH=csr_mm_read(p->finH, p->mH, 0, p->debug);
-    p->n = p->mH->cols;
-    p->nrows = p->mH->rows;
+    p->nvar = p->mH->cols;
+    p->nchk = p->mH->rows;
   }
   /** at this point we should have `H` matrix for sure */
   assert(p->mH);
@@ -265,14 +265,14 @@ int var_init(int argc, char **argv, params_t *p){
   if(p->finL){
     p->mL=csr_mm_read(p->finL, p->mL, 0, p->debug);
     p->ncws = p->mL->rows;
-    if(p->mL->cols != p->n)
+    if(p->mL->cols != p->nvar)
       ERROR("column number mismatch L[%d,%d] and H[%d,%d]\n",
 	    p->mL->rows, p->mL->cols, p->mH->rows, p->mH->cols);
   }
 
   if(p->finG){
     p->mG=csr_mm_read(p->finG, p->mG, 0, p->debug);
-    if(p->mG->cols != p->n)
+    if(p->mG->cols != p->nvar)
       ERROR("column number mismatch G[%d,%d] and H[%d,%d]\n",
 	    p->mG->rows, p->mG->cols, p->mH->rows, p->mH->cols);
 
@@ -294,7 +294,7 @@ int var_init(int argc, char **argv, params_t *p){
   }
 
   if(!p->mL){
-    p->mL = csr_identity(p->n, p->n);
+    p->mL = csr_identity(p->nvar, p->nvar);
     p->ncws = p->mL->rows;
     p->classical = 1;
   }
@@ -302,18 +302,18 @@ int var_init(int argc, char **argv, params_t *p){
   if(p->finP){
     int nrows, ncols, siz=0;
     p->vP=dbl_mm_read(p->finP, &nrows, &ncols, &siz, NULL);
-    if(nrows*ncols != p->n)
+    if(nrows*ncols != p->nvar)
       ERROR("invalid dimension=%d of P vector for H[%d,%d]\n",
 	    nrows*ncols,p->mH->rows, p->mH->cols);
   }
 
   if(p->useP > 0){/** override */
     if(!p->vP)
-      p->vP=malloc(p->n * sizeof(double));
+      p->vP=malloc(p->nvar * sizeof(double));
     if(!p->vP)
-      ERROR("memory allocation failed, n=%d",p->n);
+      ERROR("memory allocation failed, n=%d",p->nvar);
     double *ptr=p->vP;
-    for(int i=0;i<p->n;i++, ptr++)
+    for(int i=0;i<p->nvar;i++, ptr++)
       *ptr = p->useP;    
   }
   if(!p->vP)
@@ -336,8 +336,8 @@ int var_init(int argc, char **argv, params_t *p){
     p->internal=1;
   }
 
-  if((p->debug & 64)&&(p->n < 128)){ /** print matrices */   
-    assert(p->n != 0);
+  if((p->debug & 64)&&(p->nvar < 128)){ /** print matrices */   
+    assert(p->nvar != 0);
     if(p->mH){
       mzd_t *mH0 = mzd_from_csr(NULL,p->mH);
       printf("matrix mH0:\n");  mzd_print(mH0);
@@ -354,21 +354,21 @@ int var_init(int argc, char **argv, params_t *p){
       mzd_free(mL0);
     }   
     if(p->vP){      
-      for(int i=0; i < p->n; i++)
+      for(int i=0; i < p->nvar; i++)
 	printf(" P[%d]=%g \n",i,p->vP[i]);
     }
   }
 
   /** prepare transposed matrices */
-  const int n = p->n;
+  const int n = p->nvar;
   p->mHt = csr_transpose(p->mHt, p->mH);
   p->mLt = csr_transpose(p->mLt,p->mL);
-  p->vLLR = malloc(n*sizeof(double));
+  p->vLLR = malloc(n*sizeof(qllr_t));
   assert(p->vLLR !=0);
   p->LLRmin=1e9;
   p->LLRmax=-1e9;
   for(int i=0;  i < n; i++){
-    double val=p->vP[i] > MINPROB ? log((1.0/p->vP[i] -1.0)) : log(1/MINPROB - 1);
+    qllr_t val=llr_from_P(p->vP[i]);
     p->vLLR[i] = val;
     if(val < p->LLRmin)
       p->LLRmin = val;
@@ -376,10 +376,11 @@ int var_init(int argc, char **argv, params_t *p){
       p->LLRmax = val;
   }
   if(p->LLRmin<=0)
-    ERROR("LLR values should be positive!  LLRmin=%g LLRmax=%g", p->LLRmin,p->LLRmax);
+    ERROR("LLR values should be positive!  LLRmin=%g LLRmax=%g",
+	  dbl_from_llr(p->LLRmin),dbl_from_llr(p->LLRmax));
   if(p->debug & 2){/** `print` out the entire error model ******************** */
     printf("# error model read: r=%d k=%d n=%d LLR min=%g max=%g\n",
-           p->nrows, p->ncws, p->n, p->LLRmin,p->LLRmax);
+           p->nchk, p->ncws, p->nvar, dbl_from_llr(p->LLRmin),dbl_from_llr(p->LLRmax));
   }
 
   /** initialize the counters */
@@ -412,7 +413,7 @@ void var_kill(params_t *p){
 
 /** @brief Check the syndrome for the LLR vector given (`0`th row of `syndrome`).
  * @return 1 if codeword is valid, 0 otherwise */
-int syndrome_check(const double LLR[], const mzd_t * const syndrome,
+int syndrome_check(const qllr_t LLR[], const mzd_t * const syndrome,
 		   const csr_t * const H,
 		   [[maybe_unused]] const params_t * const p){
   const int nchk = H->rows;
@@ -430,7 +431,7 @@ int syndrome_check(const double LLR[], const mzd_t * const syndrome,
   return 1; /** valid codeword */
 }
 
-/** @brief baseline parallel BP algorithm (sum-product using double LLRs).  
+/** @brief baseline parallel BP algorithm (sum-product or max-product depending on LLRs used).  
  * 
  * Decode `e` vector using syndrome bits in `srow = e*Ht` and apriori
  * bit LLR values in `LLR`.  Assume `srow` non-zero (no check for a
@@ -439,18 +440,18 @@ int syndrome_check(const double LLR[], const mzd_t * const syndrome,
  * @param[out] outLLR the resulting LLR (whether converged or not)
  * @return 0 if failed to converge or (the number of steps) if converged successfully
  */
-int do_parallel_BP(double * outLLR, const mzd_t * const srow,
+int do_parallel_BP(qllr_t * outLLR, const mzd_t * const srow,
 		   const csr_t * const H, const csr_t * const Ht,
-		   const double LLR[], const params_t * const p){
+		   const qllr_t LLR[], const params_t * const p){
   assert(outLLR != NULL);
-  const int nchk = p->nrows; /** number of check nodes */
-  const int nvar = p->n;     /** number of variable nodes */
-  const int nz = p->mH->p[p->nrows]; /** number of messages */
-  double *mesVtoC = malloc(nz*sizeof(double));
-  double *mesCtoV = malloc(nz*sizeof(double));
+  const int nchk = p->nchk; /** number of check nodes */
+  const int nvar = p->nvar;     /** number of variable nodes */
+  const int nz = p->mH->p[p->nchk]; /** number of messages */
+  qllr_t *mesVtoC = malloc(nz*sizeof(qllr_t));
+  qllr_t *mesCtoV = malloc(nz*sizeof(qllr_t));
   //  double * xLLR = malloc(nvar*sizeof(double));
-  double * const xLLR = outLLR; /** return soft vector of LLR here */
-  double * aLLR = calloc(nvar,sizeof(double)); /** averaged LLR */
+  qllr_t * const xLLR = outLLR; /** return soft vector of LLR here */
+  qllr_t * aLLR = calloc(nvar,sizeof(qllr_t)); /** averaged LLR */
   if((!aLLR)||(!mesVtoC)||(!mesCtoV))
     ERROR("memory allocation failed");
   int succ_BP=0;
@@ -471,7 +472,7 @@ int do_parallel_BP(double * outLLR, const mzd_t * const srow,
 	/** TODO: optimize this loop as in `LDPC_Code::bp_decode()` of `itpp` package */
 	const int ic = Ht->i[j];/** origin `check` node index */
 	int sbit = mzd_read_bit(srow,0,ic); /** syndrome bit */
-	double msg=0; 
+	qllr_t msg=0; 
 	int new=1;
 	for(int j1 = H->p[ic]; j1 < H->p[ic+1] ; j1++){
 	  const int iv1 = H->i[j1]; /** aux `variable` node index */
@@ -490,19 +491,20 @@ int do_parallel_BP(double * outLLR, const mzd_t * const srow,
 
         
     for(int iv = 0; iv< nvar; iv++){
-      double val= LLR[iv]; /** HERE! (WARNING: do we need this?) */
+      qllr_t val= LLR[iv]; /** HERE! (WARNING: do we need this?) */
       for(int j1 = Ht->p[iv]; j1 < Ht->p[iv+1] ; j1++){
 	// const int ic1 = Ht->i[j1];/** aux `check` node index */
 	val += mesCtoV[j1];
       }
       xLLR[iv] = val;
-      aLLR[iv] = 0.5 * aLLR[iv] + val; /** TODO: play with the decay value `0.5` */ 
+      /** TODO: play with the decay value `0.5` */
+      aLLR[iv] = llr_from_dbl(0.5 * dbl_from_llr(aLLR[iv]) + dbl_from_llr(val)); 
     }
     if(p->debug & 8){
       for(int iv = 0; iv < nvar; iv++)
-	printf(" %6.2g%s", xLLR[iv], iv+1< nvar ? "" : "\n");
+	printf(" %6.2g%s", dbl_from_llr(xLLR[iv]), iv+1< nvar ? "" : "\n");
       for(int iv = 0; iv < nvar; iv++)
-	printf(" %6.2g%s", aLLR[iv], iv+1< nvar ? "" : "\n");
+	printf(" %6.2g%s", dbl_from_llr(aLLR[iv]), iv+1< nvar ? "" : "\n");
     }
 
 
@@ -513,7 +515,7 @@ int do_parallel_BP(double * outLLR, const mzd_t * const srow,
       break;
     }
     else if(syndrome_check(aLLR,srow,p->mH, p)){
-      for(int iv=0; iv< p->n; iv++)
+      for(int iv=0; iv< p->nvar; iv++)
 	outLLR[iv] = aLLR[iv];
       cnt_update(CONV_BP_AVG, istep);
       succ_BP=-istep;
@@ -526,7 +528,7 @@ int do_parallel_BP(double * outLLR, const mzd_t * const srow,
       for(int j = H->p[ic]; j < H->p[ic+1] ; j++){
 	const int iv = H->i[j]; /** origin `variable` node index */
 #if 0 /** TODO: verify these give identical results! */
-	double msg = LLR[iv];
+	qllr_t msg = LLR[iv];
 	for(int j1 = Ht->p[iv]; j1 < Ht->p[iv+1] ; j1++){
 	  const int ic1 = Ht->i[j1];/** aux `check` node index */
 	  if(ic1 != ic)
@@ -553,7 +555,7 @@ int do_parallel_BP(double * outLLR, const mzd_t * const srow,
   if(aLLR){
     free(aLLR);
     aLLR=NULL;
-      }
+  }
   free(mesVtoC);
   free(mesCtoV);
 
@@ -566,7 +568,7 @@ int main(int argc, char **argv){
   var_init(argc,argv, p); /* initialize variables, read matrices, and open file (if any) */
 
   /** prepare error vectors ************************************************************/
-  mzd_t *mHe = mzd_init(p->nrows, p->nvec); /** each column a syndrome vector `H*e` */
+  mzd_t *mHe = mzd_init(p->nchk, p->nvec); /** each column a syndrome vector `H*e` */
   mzd_t *mLe = mzd_init(p->ncws,  p->nvec); /** each column `L*e` vector */
 
   if(p->internal){ /** generate errors internally */
@@ -587,7 +589,7 @@ int main(int argc, char **argv){
   }
   mzd_t *mHeT = mzd_transpose(NULL, mHe);
   mzd_t *mLeT = mzd_transpose(NULL, mLe);
-  double *ans = calloc(p->n, sizeof(double));
+  qllr_t *ans = calloc(p->nvar, sizeof(qllr_t));
   if(!ans) ERROR("memory allocation failed!"); 
   /** counters */
   for(int ierr = 0; ierr < mHeT->nrows; ierr++){ /** cycle over errors */
@@ -600,15 +602,6 @@ int main(int argc, char **argv){
 	cnt[SUCC_TRIVIAL]++;
 	cnt[SUCC_TOT]++;
       }
-#if 0       
-      else{
-	ans=p->vLLR; /** trivial decoding result to be verified */
-	mzd_init_window(obs,mLeT,ierr,0, ierr+1, p->nrows);
-	if(syndrome_check(ans, obs, p->mL, p))
-	  cnt[SUCC_TOT]++;
-	mzd_free(obs);
-      }
-#endif /* 0 */
       continue ; /** next error / syndrome vector pair */     
     }
     else{ /** non-trivial syndrome */
@@ -616,10 +609,10 @@ int main(int argc, char **argv){
 	printf("non-trivial error %d:\n",ierr);
 	mzd_print_row(mHeT,ierr);
 	mzd_print_row(mLeT,ierr);
-	for(int iv = 0; iv < p->n; iv++)
-	  printf(" %6.2g%s", p->vLLR[iv], iv+1< p->n ? "" : "\n");
+	for(int iv = 0; iv < p->nvar; iv++)
+	  printf(" %6.2g%s", dbl_from_llr(p->vLLR[iv]), iv+1< p->nvar ? "" : "\n");
       }
-      mzd_t * const srow = mzd_init_window(mHeT, ierr,0, ierr+1,p->nrows); /* syndrome row */     
+      mzd_t * const srow = mzd_init_window(mHeT, ierr,0, ierr+1,p->nchk); /* syndrome row */     
       succ_BP = do_parallel_BP(ans, srow, p->mH, p->mHt, p->vLLR, p);    
       mzd_free(srow);
 
@@ -650,4 +643,5 @@ int main(int argc, char **argv){
   mzd_free(mLeT);
   
   var_kill(p);
+  return 0;
 }

@@ -20,17 +20,16 @@ extern "C"{
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-
-#define MINPROB (1.0e-9)
+#include "qllr.h"
   
   /** structure to hold global variables */
 
   typedef struct PARAMS_T {
-    int nrows; /** rows in `H` or `r` (set in the `input file`) */
-    int ncws;  /** how many codewords `k` (set in the `input file`) */
-    int n;     /** columns in H `n` (set in the `input file`) */
+    int nchk; /** `check nodes` or rows in `H` or `r` (set in the `input file`) */
+    int ncws; /** how many codewords `k` (set in the `input file`) */
+    int nvar; /** `variable nodes` or columns in H `n` (set in the `input file`) */
     int steps; /** number of BP steps, default: `50` */
-    int nvec;  /** max number of syndromes to process in one bunch (default: `16`) */
+    int nvec;  /** max number of syndromes to process in one bunch (default: `1024`) */
     int ntot;  /** total number of syndromes to generate (default: `1`) */
     int nfail; /** when non-zero, num of fails to terminate the run (default: `0`, do not terminate) */
     int lerr;  /** OSD level (default: `0`) */
@@ -47,8 +46,8 @@ extern "C"{
     int classical; /** `1` if this is a classical code? */
     int seed;  /** rng `seed`, set=0 for automatic */
     double useP; /** global error probability `overriding` values in the `DEM` file (default: 0, no override) */
-    double *vP; /** probability vector (total of `n`) */
-    double *vLLR; /** vector of LLRs (total of `n`) */
+    double *vP; /** probability vector (total of `nvar`) */
+    qllr_t *vLLR; /** vector of LLRs (total of `nvar`) */
     int nzH, nzL; /** count of non-zero entries in `H` and `L` */
     csr_t *mH; /** sparse version of H (by rows) */
     csr_t *mHt; /** sparse version of H (by columns) */
@@ -57,8 +56,8 @@ extern "C"{
     csr_t *mG; /** sparse version of generator matrix `G` (by rows) */
     /** rows of `G` orthogonal to rows of both `H` and `L` */
     int maxJ;  /** memory to initially allocate for local storage */
-    double LLRmin;
-    double LLRmax;
+    qllr_t LLRmin;
+    qllr_t LLRmax;
     FILE *file_det;
     FILE *file_obs;
     int line_det; /** current line of the det file */

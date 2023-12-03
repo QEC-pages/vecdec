@@ -58,26 +58,6 @@ static inline double rnd_exponential(void){
   /**< no need to check for zero or one values */
 };
 
-/** @brief Hagenauer boxplus operator 
- * 
- * WARNING: this requires full `LLR` values `x` and `y`.  Resulting
- * LLR is calculated using the equivalent form (`**verified**`):
- * `arctahn(tanh(x)*tanh(y))=log[cosh[(x+y)/2]/cosh[(x-y)/2]]`, which
- * is further simplified using the fact that `cosh` is an even
- * function, by introducing `a=abs(x+y); b=abs(x-y);` and
- * `logexp(x)=log(1-exp(-x))`, to give, finally
- * `0.5*(a-b)+logexp(a)-logexp(b);`
-
- *  @return LLR of the probability to have only one non-zero
- */
-
-static inline double boxplus(const double x, const double y){
-  const double a = fabs(x+y);
-  const double b = fabs(x-y);
-  return 0.5*(a-b)+log((1+exp(-a))/(1+exp(-b)));
-  //  return 0.5*(a-b); /** min-sum version */
-}
-
   
 void read_dem_file(char *fnam, void * ptrs[3], int debug);
   
@@ -87,9 +67,6 @@ void dbl_mm_write( char * const fout, const char fext[],
 		   const int rows, const int cols, const double buf[],
 		   const char comment[]);
 
-rci_t read_01(mzd_t *M, FILE *fin, rci_t *lineno, const char* fnam,
-	      const int debug);  
-  
 #ifdef __MINGW32__ /** windows compiler */
 /**
  * @brief home-grown version of unix function with the same name.
