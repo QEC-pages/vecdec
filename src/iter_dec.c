@@ -28,14 +28,16 @@ params_t prm={ .nchk=0, .nvar=0, .ncws=0, .steps=50,
   .lerr=0, .useP=0.0, //.swait=0,
   .nvec=1024,
   .ntot=1, .nfail=0, .seed=0, 
-  .debug=1, .fdem=NULL, .fdet=NULL, .fobs=NULL, .finH=NULL, .finP=NULL,
+  .debug=1, .fdem=NULL, .fdet=NULL, .fobs=NULL, .ferr=NULL, 
+  .finH=NULL, .finP=NULL,
   .finG=NULL, .finL=NULL, .internal=0, 
   .mode=0,
   .d1=0, .d2=0, .d3=0,
   .LLRmin=0, .LLRmax=0, 
   .vP=NULL, .vLLR=NULL, .mH=NULL, .mHt=NULL,
   .mL=NULL, .mLt=NULL,
-  .file_det=NULL, .file_obs=NULL, .line_det=0, .line_obs=0 };
+  .file_err=NULL,
+  .file_det=NULL, .file_obs=NULL, .line_err=0, .line_det=0, .line_obs=0 };
 
 typedef enum EXTR_T { TOTAL, CONV_TRIVIAL, CONV_BP, CONV_BP_AVG,
   SUCC_TRIVIAL, SUCC_BP, SUCC_OSD0, SUCC_OSD1, SUCC_OSD2,
@@ -47,8 +49,9 @@ long long int iter2[EXTR_MAX]; /** sums of BP iteration numbers squared */
 
 void cnt_out(int print_banner){
   if(print_banner)
-    printf("# TOTAL CONV_TRIVIAL CONV_BP CONV_BP_AVG SUCC_TRIVIAL SUCC_BP SUCC_TOT\n");
-  printf(" %lld %lld %lld %lld %lld %lld %lld\n",
+    printf("# FAIL_FRAC TOTAL CONV_TRIVIAL CONV_BP CONV_BP_AVG SUCC_TRIVIAL SUCC_BP SUCC_TOT\n");
+  printf(" %g %lld %lld %lld %lld %lld %lld %lld\n",
+	 (double ) (cnt[TOTAL]-cnt[SUCC_TOT])/cnt[TOTAL],
 	 cnt[TOTAL], cnt[CONV_TRIVIAL],cnt[CONV_BP], cnt[CONV_BP_AVG],
 	 cnt[SUCC_TRIVIAL], cnt[SUCC_BP], cnt[SUCC_TOT]);
 }
@@ -210,6 +213,14 @@ int var_init(int argc, char **argv, params_t *p){
       if (p->debug&1)
 	printf("# read %s, fobs=%s\n",argv[i],p->fobs);
     }
+    else if (0==strncmp(argv[i],"ferr=",5)){
+      if(strlen(argv[i])>5)
+        p->ferr = argv[i]+5;
+      else
+        p->ferr = argv[++i]; /**< allow space before file name */
+      if (p->debug&1)
+	printf("# read %s, ferr=%s\n",argv[i],p->ferr);
+    }
     else if((strcmp(argv[i],"--help")==0)
             ||(strcmp(argv[i],"-h")==0)
             ||(strcmp(argv[i],"help")==0)){
@@ -242,12 +253,14 @@ int var_init(int argc, char **argv, params_t *p){
   }
   // srand(time(p->seed));
   tinymt64_init(&tinymt,p->seed);
-
   if((! p->fdem) && (! p->finH))
     ERROR("Please specify the DEM file 'fdem' or check matrix file 'finH'\n");
   if((p->fdem) && (p->finH))
     ERROR("Please specify fdem=%s OR finH=%s but not both\n",p->fdem, p->finH);
-
+  if((p->ferr) && (p->fobs))
+     ERROR("With ferr=%s cannot specify fobs=%s (will calculate)\n",p->fdem, p->fobs);
+  if((p->ferr) && (p->fdet))
+     ERROR("With ferr=%s cannot specify fdet=%s (will calculate)\n",p->fdem, p->fdet);
   if(p->fdem){
     if((p->finL)||(p->finP)||(p->finG)||(p->finH))
       ERROR("DEM file fdem=%s can not be specified together with \n"
@@ -265,14 +278,17 @@ int var_init(int argc, char **argv, params_t *p){
     p->nchk = p->mH->rows;
     p->ncws = p->mL->rows;
   }
+
+  if(p->ferr)
+    p->internal=2; /* generate observables and detector events from errors provided */
+  else if ((! p->fobs) && (! p->fdet))
+    p->internal=1; /* generate observables and detector events internally */
   
   if(p->finH){
     if(! p->finL){
       if((p->fobs) || (p->fdet))
 	ERROR("Without L matrix, cannot specify fdet=%s or fobs=%s\n",
-	      p->fdet ? p->fdet : "",  p->fobs ? p->fobs : "");
-      else
-	p->internal=1;
+	      p->fdet ? p->fdet : "",  p->fobs ? p->fobs : "");      
     }
     if((! p->finL) && (! p->finG)){ /** only `H` matrix specified */
       p->classical=1;
@@ -284,7 +300,7 @@ int var_init(int argc, char **argv, params_t *p){
   }
   /** at this point we should have `H` matrix for sure */
   assert(p->mH);
-  
+
   if(p->finL){
     p->mL=csr_mm_read(p->finL, p->mL, 0, p->debug);
     p->ncws = p->mL->rows;
@@ -321,7 +337,6 @@ int var_init(int argc, char **argv, params_t *p){
     p->ncws = p->mL->rows;
     p->classical = 1;
   }
-
   if(p->finP){
     int nrows, ncols, siz=0;
     p->vP=dbl_mm_read(p->finP, &nrows, &ncols, &siz, NULL);
@@ -354,6 +369,12 @@ int var_init(int argc, char **argv, params_t *p){
     p->file_obs=fopen(p->fobs, "r");
     if(p->file_obs==NULL)
       ERROR("can't open the (obs) file %s for reading\n",p->fobs);
+  }
+  else if (p->ferr){
+    p->file_err=fopen(p->ferr, "r");
+    if(p->file_err==NULL)
+      ERROR("can't open the (err) file %s for reading\n",p->ferr);
+    p->internal=2;
   }
   else{
     p->internal=1;
@@ -403,8 +424,13 @@ int var_init(int argc, char **argv, params_t *p){
 	  dbl_from_llr(p->LLRmin),dbl_from_llr(p->LLRmax));
   if(p->debug & 2){/** `print` out the entire error model ******************** */
     printf("# error model read: r=%d k=%d n=%d LLR min=%g max=%g\n",
-           p->nchk, p->ncws, p->nvar, dbl_from_llr(p->LLRmin),dbl_from_llr(p->LLRmax));
+	   p->nchk, p->ncws, p->nvar, dbl_from_llr(p->LLRmin),dbl_from_llr(p->LLRmax));  
   }
+  else if(p->debug & 2){/** `print` out the entire error model ******************** */
+    printf("# using external errors: r=%d k=%d n=%d\n",
+	   p->nchk, p->ncws, p->nvar);
+    }
+
 
   /** initialize the counters */
   for(extr_t i=0; i< EXTR_MAX; i++){
@@ -418,6 +444,8 @@ int var_init(int argc, char **argv, params_t *p){
 
 void var_kill(params_t *p){
     
+  if(p->file_err)
+    fclose(p->file_err);
   if(p->file_det)
     fclose(p->file_det);
   if(p->file_obs)
@@ -437,6 +465,13 @@ void var_kill(params_t *p){
 
   free(LLR_table);
   LLR_table = NULL;
+}
+
+void out_llr(const char str[], const int num, const qllr_t llr[]){
+  const int max= num > 20 ? 20 : num-1 ;
+  printf("%s[",str);
+  for(int iv = 0; iv <= max; iv++)
+    printf("%+6.1g%s", dbl_from_llr(llr[iv]), iv< max ? " " : "]\n");
 }
 
 /** @brief Check the syndrome for the LLR vector given (`0`th row of `syndrome`).
@@ -529,10 +564,11 @@ int do_parallel_BP(qllr_t * outLLR, const mzd_t * const srow,
       aLLR[iv] = llr_from_dbl(0.5 * dbl_from_llr(aLLR[iv]) + dbl_from_llr(val)); 
     }
     if(p->debug & 8){
-      for(int iv = 0; iv < nvar; iv++)
-	printf(" %6.2g%s", dbl_from_llr(xLLR[iv]), iv+1< nvar ? "" : "\n");
-      for(int iv = 0; iv < nvar; iv++)
-	printf(" %6.2g%s", dbl_from_llr(aLLR[iv]), iv+1< nvar ? "" : "\n");
+      out_llr("x",p->nvar, xLLR);
+      out_llr("a",p->nvar, aLLR);
+      
+      //      for(int iv = 0; iv < max; iv++)
+      //	printf(" %5.1g%s", dbl_from_llr(aLLR[iv]), iv< max ? "" : "\n");
     }
 
 
@@ -594,33 +630,59 @@ int do_parallel_BP(qllr_t * outLLR, const mzd_t * const srow,
 int main(int argc, char **argv){
   params_t * const p=&prm;
   var_init(argc,argv, p); /* initialize variables, read matrices, and open file (if any) */
+  mzd_t *mE = NULL;
 
   /** prepare error vectors ************************************************************/
   mzd_t *mHe = mzd_init(p->nchk, p->nvec); /** each column a syndrome vector `H*e` */
   mzd_t *mLe = mzd_init(p->ncws,  p->nvec); /** each column `L*e` vector */
-
-  if(p->internal){ /** generate errors internally */
-    do_errors(mHe,mLe,p->mHt, p->mLt, p->vP);
-    if(p->debug&1)
-      printf("# generated %d error/obs pairs\n",mHe->ncols);		 
-  }
-  else{
+  int ierr_total=p->nvec;
+  switch(p->internal){
+  case 0: /** read `det` and `obs` files */
     rci_t il1=read_01(mHe,p->file_det, &p->line_det, p->fdet, p->debug);
     /** TODO: enable external processing of observables */
     rci_t il2=read_01(mLe,p->file_obs, &p->line_obs, p->fobs, p->debug);
     if(il1!=il2)
       ERROR("mismatched DET %s (line %d) and OBS %s (line %d) files!",
 	    p->fdet,p->line_det,p->fobs,p->line_obs);
-    //    if(il1==0)      break; /** no more rounds */
+    if(il1<ierr_total)
+      ierr_total=il1;
     if(p->debug&1)
-      printf("read %d error/obs pairs\n",il1);		 
+      printf("read %d det/obs pairs\n",il1);		 
+    break;
+  case 1: /** generate errors internally */
+    do_errors(mHe,mLe,p->mHt, p->mLt, p->vP);
+    if(p->debug&1)
+      printf("# generated %d error/obs pairs\n",mHe->ncols);
+    break;
+  case 2: /** read errors from file and generate corresponding `obs` and `det` matrices */
+    mE = mzd_init(p->nvar, p->nvec);
+    printf("about to read errors from %s\n",p->ferr);    
+    rci_t il0=read_01(mE,p->file_err, &p->line_err, p->ferr, p->debug);
+    if(il0<ierr_total)
+      ierr_total=il0;
+    if(p->debug&1)
+      printf("# read %d errors from file %s\n",il0,p->ferr);
+    csr_mzd_mul(mHe,p->mH,mE,1);
+    csr_mzd_mul(mLe,p->mL,mE,1);
+    if((p->debug&128)&&(p->nvar <= 128)&&(p->nvec <= 128)){
+      printf("error columns read:\n");
+      mzd_print(mE);
+      //      printf("He:\n");
+      //      mzd_print(mHe);
+      //      printf("Le:\n");
+      //      mzd_print(mLe);
+    }
+    break;
+  default:
+    ERROR("internal=%d, this should not happen",p->internal);
   }
+
   mzd_t *mHeT = mzd_transpose(NULL, mHe);
   mzd_t *mLeT = mzd_transpose(NULL, mLe);
   qllr_t *ans = calloc(p->nvar, sizeof(qllr_t));
   if(!ans) ERROR("memory allocation failed!"); 
   /** counters */
-  for(int ierr = 0; ierr < mHeT->nrows; ierr++){ /** cycle over errors */
+  for(int ierr = 0; ierr < ierr_total; ierr++){ /** cycle over errors */
     cnt[TOTAL]++;
     int succ_BP = 0;
     assert(p->LLRmin>0); /** sanity check */
@@ -630,17 +692,21 @@ int main(int argc, char **argv){
 	cnt[SUCC_TRIVIAL]++;
 	cnt[SUCC_TOT]++;
       }
+      if(p->debug & 128)
+	printf("error %d of %d is trivial\n",ierr+1,ierr_total);
       continue ; /** next error / syndrome vector pair */     
     }
     else{ /** non-trivial syndrome */
-      if(p->debug&8){
-	printf("non-trivial error %d:\n",ierr);
+      if((p->debug&8)&&(p->nvar <= 128)){
+	printf("non-trivial error %d of %d:\n",ierr+1,ierr_total);
+	if(mE)
+	  for(int i=0; i<p->nvar; i++)
+	    printf("%s%d%s",i==0?"[":" ",mzd_read_bit(mE,i,ierr),i+1<p->nvar?"":"]\n");
 	mzd_print_row(mHeT,ierr);
 	mzd_print_row(mLeT,ierr);
-	for(int iv = 0; iv < p->nvar; iv++)
-	  printf(" %6.2g%s", dbl_from_llr(p->vLLR[iv]), iv+1< p->nvar ? "" : "\n");
+	out_llr("i",p->nvar,p->vLLR);
       }
-      mzd_t * const srow = mzd_init_window(mHeT, ierr,0, ierr+1,p->nchk); /* syndrome row */     
+      mzd_t * const srow = mzd_init_window(mHeT, ierr,0, ierr+1,p->nchk); /* syndrome row */
       succ_BP = do_parallel_BP(ans, srow, p->mH, p->mHt, p->vLLR, p);    
       mzd_free(srow);
 
@@ -653,7 +719,7 @@ int main(int argc, char **argv){
 	mzd_free(obsrow);
       }
       if(p->debug&16)
-	printf("i=%d of %d succ=%d\n",ierr,mHeT->nrows,succ_BP);
+	printf("i=%d of %d succ=%d\n",ierr,ierr_total,succ_BP);
     }
     if((p->nfail) && cnt[TOTAL]-cnt[SUCC_TOT] >= p->nfail)
       break;
@@ -665,6 +731,7 @@ int main(int argc, char **argv){
     free(ans);
     ans=NULL;
   }
+  if(mE) mzd_free(mE);
   mzd_free(mHe);
   mzd_free(mLe);
   mzd_free(mHeT);

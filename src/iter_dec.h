@@ -43,6 +43,7 @@ extern "C"{
     char *fdem; /** `input file` name for detector error model (`DEM`) */
     char *fdet; /** `input file` name for detector events */
     char *fobs; /** `input file` name for observables */
+    char *ferr; /** `input file` name for error vectors */
     int internal; /** `1` if we are using the internal error generator */
     int classical; /** `1` if this is a classical code? */
     int seed;  /** rng `seed`, set=0 for automatic */
@@ -59,8 +60,10 @@ extern "C"{
     int maxJ;  /** memory to initially allocate for local storage */
     qllr_t LLRmin;
     qllr_t LLRmax;
+    FILE *file_err;
     FILE *file_det;
     FILE *file_obs;
+    int line_err; /** current line of the err file */
     int line_det; /** current line of the det file */
     int line_obs; /** current line of the obs file */
   } params_t;
@@ -84,6 +87,7 @@ extern "C"{
   "\t finH=[string]\t: file with parity check matrix (mm or alist)\n"	\
   "\t finG=[string]\t: file with dual check matrix (mm or alist)\n"	\
   "\t finL=[string]\t: file with logical dual check matrix (mm or alist)\n" \
+  "\t ferr=[string]\t: input file with error vectors (01 format)\n"	\
   "\t fdet=[string]\t: input file with detector events (01 format)\n"   \
   "\t fobs=[string]\t: file with observables (01 matching lines in fdet)\n" \
   "\t\t\t(space is OK in front of file names to enable shell completion)\n" \
