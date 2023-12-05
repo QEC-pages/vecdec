@@ -277,7 +277,13 @@ int getline(char **line, size_t *n, FILE *fp){
 
 #endif /* __MINGW32__ */
 
-
+/** verify that line has only space */
+int all_space(const char * str) {
+  while (*str) 
+    if (!isspace(*str++)) 
+      return 0;    
+  return 1;
+}
 
 /** @brief read up to `lmax` lines from a file in `01` format
 
@@ -331,11 +337,13 @@ int read_01(mzd_t *M, FILE *fin, int *lineno, const char* fnam,
 	(il)++; /** success */
       }
       break;
-    case '#': /** do nothing - skip this line */
+    case '#':       /** do nothing - skip this line */
       break;
     default:
-      ERROR("invalid 01 line\n"
-	    "%s:%d:1: '%s'\n", fnam,*lineno,buf);
+      if (!all_space(buf))
+	ERROR("invalid 01 line\n"
+	      "%s:%d:1: '%s'\n", fnam,*lineno,buf);
+      break;
     }
   }
   if(debug&8) /** file io */
