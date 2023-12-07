@@ -8,6 +8,7 @@
 #include <stdio.h>
 // #include <"copy_m4ri.h"
 #include "mmio.h"
+#include <ctype.h>
 
 #include "utils.h"
 #include "util_m4ri.h"
@@ -592,7 +593,7 @@ void csr_out(const csr_t *mat){
 
  * @param comment if not `NULL`, insert the comment line(s) with an 
  *   extra `#` at the start of each row 
- */
+ */ 
 void csr_mm_write( char * const fout, const char fext[], const csr_t * const mat,
 		  const char comment[]){
   if(mat->nz>0) /** ensure this is CSR matrix */
@@ -614,7 +615,7 @@ void csr_mm_write( char * const fout, const char fext[], const csr_t * const mat
   
   if(!f)
     ERROR("can't open file '%s' for writing",str);
-  if(fprintf(f,"%%MatrixMarket coordinate integer general\n")<0)
+  if(fprintf(f,"%%%%MatrixMarket matrix coordinate integer general\n")<0)
     result++;
   if(comment!=NULL){
     if(fprintf(f,"%% %s\n",comment)<0)
@@ -795,6 +796,81 @@ csr_t *csr_mm_read(char *fnam, csr_t *mat, int transpose, int debug){
   return mat;
 }
 
+/** verify that line has only space */
+int all_space(const char * str) {
+  while (*str) 
+    if (!isspace(*str++)) 
+      return 0;    
+  return 1;
+}
+
+/** @brief read up to `lmax` lines from a file in `01` format
+
+ * read up to `lmax` binary vectors of length `m` from a `01` file `fin` open
+ * for reading.  Place the vectors as columns of matrix `M` of size `m` rows by
+ * `lmax` colums.  Lines starting with `#` are silently ignored; a non-`01`
+ * line, or a `01` line of an incorrect length will give an error.
+ *
+ * @param M initialized output matrix with `lmax` rows and `m` columns
+ * @param fin file with 01 data open for reading
+ * @param[input,output] lineno current line number in the file.
+ * @param fnam file name (for debugging purposes)
+ * @param p Other parameters (only `p->debug` is used).
+ * @return the number of rows actually read.
+ *
+ */
+int read_01(mzd_t *M, FILE *fin, int *lineno, const char* fnam,
+	      const int debug){
+  if(!M)
+    ERROR("expected initialized matrix 'M'!\n");
+  else
+    mzd_set_ui(M,0);
+  int m   =M->nrows;
+  int lmax=M->ncols, il=0;
+  if(!fin)
+    ERROR("file 'fin' named '%s' must be open for reading\n",fnam);
+  if(debug&8) /** file io */
+    printf("# about to read 01 data from line %d in file '%s'\n",
+           *lineno,fnam);
+
+  char *buf=NULL;
+  size_t bufsiz=0;
+
+  ssize_t linelen;
+  while((il<lmax) && (!feof(fin)) &&
+        ((linelen = getline(&buf, &bufsiz, fin))>=0)){
+    (*lineno)++;
+    switch(buf[0]){
+    case '0': case '1':
+      if(linelen<=m)
+	ERROR("line is too short, expected %d 01 characters\n"
+	      "%s:%d:1: '%s'\n", m,fnam,*lineno,buf);
+      else{
+	for(int i=0; i<m; i++){
+	  if (buf[i]=='1')
+	    mzd_write_bit(M,i,il,1); /** row `i`, col `il` */
+	  else if (buf[i]!='0')
+	    ERROR("invalid 01 line\n"
+		  "%s:%d:%d: '%s'\n", fnam,*lineno,i+1,buf);
+	}
+	(il)++; /** success */
+      }
+      break;
+    case '#':       /** do nothing - skip this line */
+      break;
+    default:
+      if (!all_space(buf))
+	ERROR("invalid 01 line\n"
+	      "%s:%d:1: '%s'\n", fnam,*lineno,buf);
+      break;
+    }
+  }
+  if(debug&8) /** file io */
+    printf("# read %d 01 rows from file '%s'\n",il,fnam);
+  if(buf)
+    free(buf);
+  return il;
+}
 
 
 /** 
