@@ -85,7 +85,7 @@ extern "C"{
     int seed;  /** rng `seed`, set=0 for automatic */
     double useP; /** global error probability `overriding` values in the `DEM` file (default: 0, no override) */
     double *vP; /** probability vector (total of `n`) */
-    double *vLLR; /** vector of LLRs (total of `n`) */
+    qllr_t *vLLR; /** vector of LLRs (total of `n`) */
     int nzH, nzL; /** count of non-zero entries in `H` and `L` */
     csr_t *mH; /** sparse version of H (by rows) */
     csr_t *mHt; /** sparse version of H (by columns) */

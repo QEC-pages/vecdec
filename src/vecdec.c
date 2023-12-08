@@ -56,8 +56,8 @@ static inline int by_energy(void *a, void *b){
 }
 
 /** @brief calculate the energy of the row `i` in `A` */
-double mzd_row_energ(double *coeff, const mzd_t *A, const int i){
-  double ans=0;
+qllr_t mzd_row_energ(qllr_t *coeff, const mzd_t *A, const int i){
+  qllr_t ans=0;
   for(rci_t j = 0; j < A->ncols; ++j)
     if(mzd_read_bit(A, i, j))
       ans += coeff[j];
@@ -67,7 +67,7 @@ double mzd_row_energ(double *coeff, const mzd_t *A, const int i){
 
 /** @brief print entire `one_vec_t` structure by pointer */
 void print_one_vec(const one_vec_t * const pvec){
-  printf(" w=%d E=%g cnt=%d [",pvec->weight, pvec->energ,pvec->cnt);
+  printf(" w=%d E=%g cnt=%d [",pvec->weight, dbl_from_llr(pvec->energ),pvec->cnt);
   for(int i=0; i < pvec->weight; i++)
     printf("%d%s",pvec->arr[i], i+1 < pvec->weight ? " " :"]\n");
 }
@@ -428,8 +428,8 @@ int do_LLR_dist(int dW, params_t  * const p){
     mL = mzd_from_csr(NULL, p->mL);
     
   int minW = p->nvar+1;                         /** min `weight` */ 
-  double minE = minW * p->LLRmax;            /** min `energy` */
-  double maxE = p->LLRmin > 0 ? 0 : minW * p->LLRmin; /** todo: needed? */
+  qllr_t minE = minW * p->LLRmax;            /** min `energy` */
+  qllr_t maxE = p->LLRmin > 0 ? 0 : minW * p->LLRmin; /** todo: needed? */
   rci_t *ee = malloc(p->mH->cols*sizeof(rci_t)); /** actual `vector` */
   
   if((!mH) || (!ee))
@@ -506,14 +506,14 @@ int do_LLR_dist(int dW, params_t  * const p){
       if(nz){ /** we got non-trivial codeword! */
         /** todo: try local search to `lerr` */
         /** calculate the energy and compare */
-        double energ=0;
+        qllr_t energ=0;
         for(int i=0; i<cnt; i++) 
           energ += p->vLLR[ee[i]];
         /** at this point we have `cnt` codeword indices in `ee`, and its `energ` */
        
         if (energ < minE){  /** legacy code */
           if(p->debug&1)
-            printf("nz=%d cnt=%d energ=%g\n",nz,cnt,energ);
+            printf("nz=%d cnt=%d energ=%g\n",nz,cnt,dbl_from_llr(energ));
           minE=energ;
         }
         if (cnt < minW)
@@ -548,7 +548,7 @@ int do_LLR_dist(int dW, params_t  * const p){
     } /** end of the dual matrix rows loop */
     if(p->debug & 16)
       printf(" round=%d of %d minE=%g minW=%d maxE=%g num_cws=%ld ichanged=%d iwait=%d\n",
-             ii+1, p->steps, minE, minW, maxE, p->num_cws, ichanged, iwait);
+             ii+1, p->steps, dbl_from_llr(minE), minW, dbl_from_llr(maxE), p->num_cws, ichanged, iwait);
     
     mzp_free(skip_pivs);
     
@@ -574,7 +574,9 @@ int do_LLR_dist(int dW, params_t  * const p){
     if(prob>pmax)
       pmax=prob;
   }
-  /** todo: prefactor calculation */
+  /** TODO: prefactor calculation */
+  if(p->debug&1)
+    printf("# sumP(fail) maxP(fail) min_weight num_found\n");
   printf("%g %g %d %ld\n", pfail, pmax, minW, p->num_cws);
       
   /** clean up */
@@ -1181,10 +1183,10 @@ int var_init(int argc, char **argv, params_t *p){
   if(!p->vP)
     ERROR("probabilities missing, specify 'fdem', 'finP', or 'useP'");
     
+  LLR_table = init_LLR_tables(p->d1,p->d2,p->d3);
   
   switch(p->mode){
   case 1:  /** currently only needed for BP */
-    LLR_table = init_LLR_tables(p->d1,p->d2,p->d3);
     if(p->debug&1)
       out_LLR_params(LLR_table);
     /* fall through */
@@ -1403,7 +1405,7 @@ int main(int argc, char **argv){
       mE0=do_decode(mS, p); /** each row a decoded error vector */
       mzd_free(mS); mS=NULL;
 #else
-      mE0=do_decode(mHe, p); /** each row a decoded error vector */
+      mE0=do_decode(p->mHe, p); /** each row a decoded error vector */
 #endif /* NDEBUG */
       mzd_t *mE0t = mzd_transpose(NULL, mE0);
       mzd_free(mE0); mE0=NULL;
@@ -1550,8 +1552,13 @@ int main(int argc, char **argv){
       p->mG = do_G_matrix(p->mHt,p->mLt,p);
       comment[0]='G';
     }
-    else
+    else{
+      size_t size2 = snprintf(NULL, 0, "G matrix from file %s", p->finG);
+      if(size2>size)
+	comment = realloc(comment, size2 + 1);
+      assert(comment);
       sprintf(comment, "G matrix from file %s", p->finG);
+    }
     csr_mm_write(p->fout,"G.mmx",p->mG,comment);
     
     free(comment);
