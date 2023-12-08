@@ -153,7 +153,12 @@ static inline int twomat_gauss_one(mzd_t *M, mzd_t *S, const int idx, const int 
 }
 
 
-/** @brief create `generator` matrix orthogonal to rows of `mH` and `mL` */
+/** @brief create `generator` matrix orthogonal to rows of `mH` and
+ *  `mL`.
+ *
+ *  WARNING: Currently, only finds cycles of length 3 (this is OK to
+ *  construct `G` matrix for a DEM constructed by `stim`. 
+ */
 csr_t * do_G_matrix(const csr_t * const mHt, const csr_t * const mLt,
 		    const params_t * const p){
   /** sanity check */
@@ -398,7 +403,7 @@ mzp_t * do_skip_pivs(const size_t rank, const mzp_t * const pivs){
   return ans;
 }
 
-/** @brief Random window search for small-E logical operators.
+/** @brief Random Information Set search for small-E logical operators.
  *
  *  Uses hashing storage to identify unique vectors.  Only vectors of weight no
  *  more that `minW`+`dW` will be recorded, where `minW` is the current minimum
@@ -827,6 +832,8 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
   return mEt0;
 }
 
+/** @brief one more matrix initialization routine 
+ */
 void init_Ht(params_t *p){
   const int n = p->nvar;
   p->mHt = csr_transpose(p->mHt, p->mH);
@@ -883,19 +890,10 @@ void init_Ht(params_t *p){
   }
 #endif
 
-
 }
 
 
-void prob_init(params_t *p, double prob){
-  double pp = prob;
-  double LLR = pp > MINPROB ? log((1.0/pp -1.0)) : log(1/MINPROB - 1);
-  for(int i=0; i< p->nvar; i++){
-    p->vP[i] = pp;
-    p->vLLR[i] = LLR;
-  }
-}
-
+/** @brief initialize parameters set at command line */
 int var_init(int argc, char **argv, params_t *p){
 
   int dbg=0;
@@ -907,9 +905,9 @@ int var_init(int argc, char **argv, params_t *p){
   p->d1=12; p->d2=300; p->d3=7; /** recommended values */
 #endif   
 
-  for(int i=1; i<argc; i++){  /** `debug` */
+  for(int i=1; i<argc; i++){  
     int pos=0;
-    if(sscanf(argv[i],"debug=%d",& dbg)==1){
+    if(sscanf(argv[i],"debug=%d",& dbg)==1){/** `debug` */
       if(dbg==0)
 	p->debug = 0;
       else{
@@ -921,9 +919,8 @@ int var_init(int argc, char **argv, params_t *p){
 	  printf("# read %s, debug=%d octal=%o\n",argv[i],p->debug,p->debug);
       }
     }
-    else if(sscanf(argv[i],"mode=%d%n",& dbg, &pos)==1){
+    else if(sscanf(argv[i],"mode=%d%n",& dbg, &pos)==1){ /** `mode.submode` */
       p->mode = dbg;
-      //      printf("mode=... : len=%zu pos=%d\n",strlen(argv[i]),pos);
       if((int) strlen(argv[i]) > pos){
 	 if(sscanf(argv[i]+pos,".%d",& dbg)==1)
 	   p->submode = dbg;
@@ -989,7 +986,7 @@ int var_init(int argc, char **argv, params_t *p){
       if (p->debug&1)
 	printf("# read %s, useP=%g\n",argv[i],p-> useP);
     }
-    else if (0==strncmp(argv[i],"fout=",5)){
+    else if (0==strncmp(argv[i],"fout=",5)){ /** `fout` */
       if(strlen(argv[i])>5){
         p->fout = argv[i]+5;
 	if (p->debug&1)
@@ -1006,7 +1003,7 @@ int var_init(int argc, char **argv, params_t *p){
       if (p->debug&1)
 	printf("# read %s, (fdem) f=%s\n",argv[i],p->fdem);
     }
-    else if (0==strncmp(argv[i],"fdem=",5)){
+    else if (0==strncmp(argv[i],"fdem=",5)){ /** fdem */
       if(strlen(argv[i])>5)
         p->fdem = argv[i]+5;
       else
@@ -1014,7 +1011,7 @@ int var_init(int argc, char **argv, params_t *p){
       if (p->debug&1)
 	printf("# read %s, fdem=%s\n",argv[i],p->fdem);
     }
-    else if (0==strncmp(argv[i],"finH=",5)){
+    else if (0==strncmp(argv[i],"finH=",5)){ /** `finH` */
       if(strlen(argv[i])>5)
         p->finH = argv[i]+5;
       else
@@ -1022,7 +1019,7 @@ int var_init(int argc, char **argv, params_t *p){
       if (p->debug&1)
 	printf("# read %s, finH=%s\n",argv[i],p->finH);
     }
-    else if (0==strncmp(argv[i],"finP=",5)){
+    else if (0==strncmp(argv[i],"finP=",5)){ /** `finP` probabilities */
       if(strlen(argv[i])>5)
         p->finP = argv[i]+5;
       else
@@ -1030,7 +1027,7 @@ int var_init(int argc, char **argv, params_t *p){
       if (p->debug&1)
 	printf("# read %s, finP=%s\n",argv[i],p->finP);
     }
-    else if (0==strncmp(argv[i],"finL=",5)){
+    else if (0==strncmp(argv[i],"finL=",5)){ /** `finL` logical */
       if(strlen(argv[i])>5)
         p->finL = argv[i]+5;
       else
@@ -1038,7 +1035,7 @@ int var_init(int argc, char **argv, params_t *p){
       if (p->debug&1)
 	printf("# read %s, finL=%s\n",argv[i],p->finL);
     }
-    else if (0==strncmp(argv[i],"finG=",5)){
+    else if (0==strncmp(argv[i],"finG=",5)){/** `finG` degeneracy generator matrix */
       if(strlen(argv[i])>5)
         p->finG = argv[i]+5;
       else
@@ -1046,7 +1043,7 @@ int var_init(int argc, char **argv, params_t *p){
       if (p->debug&1)
 	printf("# read %s, finG=%s\n",argv[i],p->finG);
     }
-    else if (0==strncmp(argv[i],"fdet=",5)){
+    else if (0==strncmp(argv[i],"fdet=",5)){ /** detector events / 01 file */
       if(strlen(argv[i])>5)
         p->fdet = argv[i]+5;
       else
@@ -1054,7 +1051,7 @@ int var_init(int argc, char **argv, params_t *p){
       if (p->debug&1)
 	printf("# read %s, fdet=%s\n",argv[i],p->fdet);
     }
-    else if (0==strncmp(argv[i],"fobs=",5)){
+    else if (0==strncmp(argv[i],"fobs=",5)){/** observable events / 01 file */
       if(strlen(argv[i])>5)
         p->fobs = argv[i]+5;
       else
@@ -1062,7 +1059,7 @@ int var_init(int argc, char **argv, params_t *p){
       if (p->debug&1)
 	printf("# read %s, fobs=%s\n",argv[i],p->fobs);
     }
-    else if (0==strncmp(argv[i],"ferr=",5)){
+    else if (0==strncmp(argv[i],"ferr=",5)){ /** errors / 01 file */
       if(strlen(argv[i])>5)
         p->ferr = argv[i]+5;
       else
@@ -1092,7 +1089,7 @@ int var_init(int argc, char **argv, params_t *p){
 
   
   if (p->seed == 0){
-    p->seed=time(NULL)+1000000ul*getpid(); /* ensure a different seed */
+    p->seed=time(NULL)+1000000ul*getpid(); /* ensure a different seed even if started at the same time */
     if((p->debug)&&(p->mode!=3))
       printf("# initializing seed=%d from time(NULL)+1000000ul*getpid()\n",p->seed);
     /** use `tinymt64_generate_double(&pp.tinymt)` for double [0,1] */
@@ -1307,6 +1304,7 @@ int var_init(int argc, char **argv, params_t *p){
   return 0;
 };
 
+/** @brief clean up variables and open files */
 void var_kill(params_t *p){
   if(p->file_det)  fclose(p->file_det);
   if(p->file_obs)  fclose(p->file_obs);  
@@ -1452,8 +1450,9 @@ int main(int argc, char **argv){
       if((p->nfail > 0) && (synd_fail >= p->nfail))
 	break;
     }
-
-    printf(" %ld %ld # %s\n",synd_fail, synd_tot, p->fdem);
+    if(p->debug&1)
+      printf("# fail_fraction total_cnt sycces_cnt\n");
+    printf(" %g %ld %ld # %s\n",(double) synd_fail/synd_tot, synd_tot, synd_tot-synd_fail, p->fdem ? p->fdem : p->finH );
       
     break;
 
@@ -1544,12 +1543,15 @@ int main(int argc, char **argv){
     //    printf("%% %s\n", comment);
     dbl_mm_write(p->fout,"P.mmx",1,p->nvar,p->vP,comment);
 
-    if(p->debug&1)
-      printf("# creating G matrix and writing to\t%s%s\n",
-	     p->fout, p->use_stdout ? "\n" :"G.mmx");
-    p->mG = do_G_matrix(p->mHt,p->mLt,p);
-    comment[0]='G';
-    //    printf("%% %s\n", comment);
+    if(!p->mG){
+      if(p->debug&1)
+	printf("# creating G matrix and writing to\t%s%s\n",
+	       p->fout, p->use_stdout ? "\n" :"G.mmx");
+      p->mG = do_G_matrix(p->mHt,p->mLt,p);
+      comment[0]='G';
+    }
+    else
+      sprintf(comment, "G matrix from file %s", p->finG);
     csr_mm_write(p->fout,"G.mmx",p->mG,comment);
     
     free(comment);

@@ -45,18 +45,17 @@ extern "C"{
   typedef struct IPPAIR_T {int index; double prob; } ippair_t; 
 
 
-typedef enum EXTR_T { TOTAL, CONV_TRIVIAL, CONV_BP, CONV_BP_AVG,
-  SUCC_TRIVIAL, SUCC_BP, SUCC_OSD0, SUCC_OSD1, SUCC_OSD2,
-  SUCC_TOT, EXTR_MAX } extr_t;
-
-/** various success counters */
-extern long long int cnt[EXTR_MAX];
-extern long long int iter1[EXTR_MAX]; /** sums of BP iteration numbers */
-extern long long int iter2[EXTR_MAX]; /** sums of BP iteration numbers squared */
-
+  typedef enum EXTR_T { TOTAL, CONV_TRIVIAL, CONV_BP, CONV_BP_AVG,
+    SUCC_TRIVIAL, SUCC_BP, SUCC_OSD0, SUCC_OSD1, SUCC_OSD2,
+    SUCC_TOT, EXTR_MAX } extr_t;
+  
+  /** various success counters */
+  extern long long int cnt[EXTR_MAX];
+  extern long long int iter1[EXTR_MAX]; /** sums of BP iteration numbers */
+  extern long long int iter2[EXTR_MAX]; /** sums of BP iteration numbers squared */
+  
   
   /** structure to hold global variables */
-
   typedef struct PARAMS_T {
     int nchk; /** rows in `H` or `r` (set in the `input file`) */
     int ncws;  /** how many codewords `k` (set in the `input file`) */
@@ -142,7 +141,8 @@ extern long long int iter2[EXTR_MAX]; /** sums of BP iteration numbers squared *
     return 0;
 #endif
   }
-  
+
+  /** functions defined in `iter_dec.c` */
   void cnt_out(int print_banner);
   void cnt_update(extr_t which, int iteration);
   void out_llr(const char str[], const int num, const qllr_t llr[]);
@@ -150,7 +150,6 @@ extern long long int iter2[EXTR_MAX]; /** sums of BP iteration numbers squared *
   int syndrome_check(const qllr_t LLR[], const mzd_t * const syndrome,
 		     const csr_t * const H,
 		     [[maybe_unused]] const params_t * const p);
-  void cnt_update(extr_t which, int iteration);
   
   int do_parallel_BP(qllr_t * outLLR, const mzd_t * const srow,
 		   const csr_t * const H, const csr_t * const Ht,
@@ -168,30 +167,39 @@ extern long long int iter2[EXTR_MAX]; /** sums of BP iteration numbers squared *
   "\t Supported parameters:\n"						\
   "\t --help\t\t: give this help (also '-h' or just 'help')\n"		\
   "\t --morehelp\t: give more help\n"					\
-  "\t fout=[string]\t: header for output file names ('tmp', see 'mode=3')\n" \
-  "\t finP=[string]\t: input file for probabilities (mm or a column of doubles)\n" \
-  "\t finH=[string]\t: file with parity check matrix (mm or alist)\n"	\
-  "\t finG=[string]\t: file with dual check matrix (mm or alist)\n"	\
-  "\t finL=[string]\t: file with logical dual check matrix (mm or alist)\n" \
   "\t fdem=[string]\t: name of the input file with detector error model\n" \
-  "\t ferr=[string]\t: file with error vectors (01 format), or\n"	\
+  "\t finH=[string]\t: file with parity check matrix Hx (mm or alist)\n"	\
+  "\t finG=[string]\t: file with dual check matrix Hz (mm or alist)\n"	\
+  "\t finL=[string]\t: file with logical dual check matrix Lx (mm or alist)\n" \
+  "\t finP=[string]\t: input file for probabilities (mm or a column of doubles)\n" \
+  "\t useP=[double]\t: fixed probability value (override values in DEM file)\n"	\
+  "\t\t for a quantum code specify 'fdem' OR 'finH' and ( 'finL' OR 'finG' );\n" \
+  "\t\t for classical just 'finH' (and optionally the dual matrix 'finL')\n" \
+  "\t ferr=[string]\t: input file with error vectors (01 format)\n"	\
   "\t fdet=[string]\t: input file with detector events (01 format)\n"   \
-  "\t fobs=[string]\t: file with observables (01 matching lines in fdet)\n" \
-  "\t\t\t (space is OK in front of file name to enable shell completion)\n" \
-  "\t steps=[integer]\t: num of random window decoding steps (default: 1)\n" \
-  "\t lerr =[integer]\t: local search level after gauss (0, no search)\n" \
-  "\t swait=[integer]\t: steps w/o new errors to stop (0, do not stop)\n" \
-  "\t nvec =[integer]\t: max vector size for decoding (default: 16)\n"  \
-  "\t\t\t (list size in distance or energy calculations)\n"             \
+  "\t fobs=[string]\t: input file with observables (01 matching lines in fdet)\n" \
+  "\t\t specify either 'ferr' OR a pair of 'ferr' and 'fdet' (or none for internal)\n" \
+  "\t fout=[string]\t: header for output file names ('tmp', see 'mode=3')\n" \
+  "\t\t (space is OK in front of file names to enable shell completion)\n" \
+  "\t steps=[integer]\t: num of RIS or BP decoding steps (default: 50)\n" \
+  "\t lerr =[integer]\t: OSD search level (0, ***not implemented***)\n" \
+  "\t swait=[integer]\t: Gauss steps w/o new errors to stop (0, do not stop)\n" \
+  "\t nvec =[integer]\t: max vector size for decoding (default: 1024)\n" \
+  "\t\t\t (list size for distance or energy calculations)\n"		\
   "\t ntot =[integer]\t: total syndromes to generate (default: 1)\n"	\
   "\t nfail=[integer]\t: total fails to terminate (0, do not terminate)\n" \
   "\t seed= [integer]\t: RNG seed or use time(NULL) if 0 (default)\n"	\
+  "\t qllr1=[integer]\t: if 'USE_QLLR' is set, parameter 'd1' (12)\n"	\
+  "\t qllr2=[integer]\t: if 'USE_QLLR' is set, parameter 'd2' (300)\n"	\
+  "\t qllr3=[integer]\t: if 'USE_QLLR' is set, parameter 'd3' (7)\n"	\
+  "\t\t These are used to speed-up LLR calculations, see 'qllr.h'\n"	\
+  "\t\t Use 'qllr2=0' for min-sum.\n"					\
   "\t mode= [int.int]\t: operation mode.submode (default: 0.0)\n"	\
   "\t\t* 0: use basic vectorized (random information set) decoder\n"	\
   "\t\t\t read detector events from file 'fdet' if given, otherwise\n"  \
   "\t\t\t generate 'ntot' detector events and matching observable flips;\n" \
   "\t\t\t read observable flips from file 'fobs' if given\n"            \
-  "\t\t* 1: differrent BP versions\n"					\
+  "\t\t* 1: Belief Propagation decoder\n"				\
   "\t\t\t .0 basic parallel BP\n"					\
   "\t\t* 2: generate most likely fault vectors, estimate Prob(Fail)\n"  \
   "\t\t\t generate up to 'ntot' unique min-energy fault vectors\n"	\
@@ -214,15 +222,15 @@ extern long long int iter2[EXTR_MAX]; /** sums of BP iteration numbers squared *
 
 #define MORE_HELP							\
   "   Matrices used by %s:\n"						\
-  "\t Think about a CSS code with binary generator matrices Hx=H, Hz=G,\n" \
+  "\t We have a CSS code with binary generator matrices Hx=H, Hz=G,\n" \
   "\t and logical-operator generating matrices Lx=L and Lz=K.  These\n"	\
-  "\t matrices have n columns each and satisfy orthogonality properties\n" \
+  "\t matrices have 'n' columns each and satisfy orthogonality properties\n" \
   "\t\t Hx*Hz^T=0, Lx*Hz^T=0, Lx*Lz^T=0, and Lx*Lz^T=I (identity matrix).\n" \
   "\t We are trying to correct binary Z errors, whose probabilities\n"	\
-  "\t are given by the error vector P (or can be overridden with\n"	\
-  "\t the command-line parameter 'Perr').\n"				\
-  "   A detector error model (DEM) file, in the format produced by Stim,\n" \
-  "\t contains matrices H and Lx, and the error probability vector P.\n" \
+  "\t are given by the n-component double vector P\n"	\
+  "\t  (or can be overridden with the command-line parameter 'useP').\n" \
+  "\t\t   A detector error model (DEM) file, in the format produced by Stim,\n" \
+  "\t contains matrices Hx and Lx, and the error probability vector P.\n" \
   "\t The same code can be obtained by specifying the matrices \n"	\
   "\t independently, via separate files.\n"				\
   "   The dual CSS matrix Hz can be specified instead of Lx.\n"	\
@@ -231,7 +239,7 @@ extern long long int iter2[EXTR_MAX]; /** sums of BP iteration numbers squared *
   "   For a classical code, specify only the parity check matrix Hx=H.\n" \
   "\t In this case G matrix is trivial (has zero rank), and\n"		\
   "\t Lx is set to identity matrix.  \n"				\
-  "\t Only the internal error generator can be used for the classical code\n"
+  "\t Only the internal error generator can be used for classical codes\n"
   
   
 #ifdef __cplusplus
