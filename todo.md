@@ -160,7 +160,7 @@ stim sample_dem \
       [`uthash` library](https://github.com/troydhanson/uthash).
 - [ ] Implement BP decoding with OSD
   - [x] Actual BP steps 
-  - [ ] Add `BoxPlus()` from `it++` library
+  - [x] Add `BoxPlus()` from `it++` library
   - [ ] Add error estimation
   - [ ] BP with randomization
   - [ ] BP with Freezing / Stabilizer inactivation (Savin et al)
@@ -168,7 +168,7 @@ stim sample_dem \
   - [ ] Add OSD
   - [ ] Stopping sets analysis?
   - [ ] Initial BP acceleration ? 
-  - [ ] Narayanan; Kuo+Lai; Roffe; Valentin Savin
+  - [ ] Other tricks from papers by Narayanan; Kuo+Lai; Roffe; Valentin Savin
 - [ ] Come up with alternative simulation mechanisms, e.g., in the regime of
       small error probabilities $p$.
 - [ ] Hashimoto matrix implementation steps
@@ -178,4 +178,8 @@ stim sample_dem \
   - [ ] Calculate the corresponding logical fault-rates
   - [ ] Estimate the fudge-factor $\alpha$, given the statistics of error probabilities
   - [ ] Estimate the effect of correlations between the trajectories.
+- [ ] Code transformations reducing the degeneracy for `mode=3`
+  - [ ] Remove `w=3` degeneracies (rows of weight 3 in `G`)
+  - [ ] Remove `w=4` degeneracies (rows of weight 4 in `G`)
+  - [ ] Code for arbitrary row weight (exponentially large matrices may result)
 
