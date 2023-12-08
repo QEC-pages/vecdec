@@ -1184,7 +1184,12 @@ int var_init(int argc, char **argv, params_t *p){
     ERROR("probabilities missing, specify 'fdem', 'finP', or 'useP'");
     
   LLR_table = init_LLR_tables(p->d1,p->d2,p->d3);
-  
+
+  if(!p->mL){
+    p->mL=csr_identity(p->nvar, p->nvar);
+    p->ncws = p->nvar;
+  }
+
   switch(p->mode){
   case 1:  /** currently only needed for BP */
     if(p->debug&1)
@@ -1382,13 +1387,16 @@ int main(int argc, char **argv){
   
   /** initialize variables, read in the DEM file, initialize sparse matrices */
   var_init(argc,argv,  p);
+  assert(p->mL);
+    //    p->mL=csr_identity(p->nvar, p->nvar);
   init_Ht(p);
   //  mat_init(p);
+
+
   int ierr_tot=0, rounds=(int )ceil((double) p->ntot / (double) p->nvec);
 
   switch(p->mode){    
   case 0: /** internal `vecdec` decoder */
-
     /** at least one round always */
     long int synd_tot=0, synd_fail=0;
     for(int iround=0; iround < rounds; iround++){
