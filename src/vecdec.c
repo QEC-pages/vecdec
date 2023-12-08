@@ -22,15 +22,26 @@
 #include "utils.h"
 #include "util_m4ri.h"
 #include "vecdec.h"
+#include "qllr.h"
 
-params_t prm={ .nrows=0, .n=0, .ncws=0, .steps=1,
+params_t prm={ .nchk=0, .nvar=0, .ncws=0, .steps=50,
   .lerr=0, .swait=0,
-  .nvec=16, .ntot=1, .nfail=0, .seed=0, 
-  .debug=1, .fdem=NULL, .fdet=NULL, .fobs=NULL, .fout="tmp", 
-  .colw=10, .mode=0, .use_stdout=0, .maxJ=20,
+  .nvec=1024, .ntot=1, .nfail=0, .seed=0, 
+  .debug=1, .fdem=NULL, .fdet=NULL, .fobs=NULL, .fout="tmp", .ferr=NULL,
+  .mode=0, .submode=0, .use_stdout=0, 
   .LLRmin=0, .LLRmax=0, .codewords=NULL, .num_cws=0,
   .vP=NULL, .vLLR=NULL, .mH=NULL, .mHt=NULL,
-  .mL=NULL, .mLt=NULL };
+  .mL=NULL, .mLt=NULL, .internal=0, 
+  .file_det=NULL, .file_obs=NULL, .line_det=0, .line_obs=0,
+  .mE=NULL, .mHe=NULL, .mLe=NULL, .mHeT=NULL, .mLeT=NULL
+};
+
+/** various success counters */
+long long int cnt[EXTR_MAX];
+long long int iter1[EXTR_MAX]; /** sums of BP iteration numbers */
+long long int iter2[EXTR_MAX]; /** sums of BP iteration numbers squared */
+
+
 
 /** @brief compare two `one_vec_t` structures by energy */
 static inline int by_energy(void *a, void *b){
@@ -141,82 +152,13 @@ static inline int twomat_gauss_one(mzd_t *M, mzd_t *S, const int idx, const int 
   // if one, need to update the current pivot list
 }
 
-/** @brief create a sample of errors to play with.
- *  @param mHe matrix with `maxJ` columns to return the syndrome `H*e`
- *  @param mLe matrix with `maxJ` columns for logical error `L*e`
- *  @param p params_t structure with error model information
- * @return max number of generated errors of any one kind
- *  todo: perhaps allow for an independent error model (matrices `mHt`, `mLt` and vector `vP`) ?
+
+/** @brief create `generator` matrix orthogonal to rows of `mH` and
+ *  `mL`.
+ *
+ *  WARNING: Currently, only finds cycles of length 3 (this is OK to
+ *  construct `G` matrix for a DEM constructed by `stim`. 
  */
-int do_errors(mzd_t *mHe, mzd_t *mLe,
-	      const params_t * const p){
-
-  assert((mHe!=NULL) && (mLe!=NULL)); /** sanity check */
-
-  int max = p->maxJ;  /** current size of `vec` */
-  int * vec = malloc(p->maxJ * sizeof(int));
-
-  mzd_set_ui(mHe,0); /** zero matrix */
-  mzd_set_ui(mLe,0); /** zero matrix */
-  int nvec = mHe->ncols;
-  /** for each error type (column of `mH` = row of `mHt`) */
-  for(int i=0; i < p->mHt->rows; i++){
-    int ivec=0;
-    /** prepare the list of syndrome columns to deal with */
-    double onebyL = -1.0/log(1.0 - p->vP[i]);
-    int j =(int )floor(onebyL * rnd_exponential());
-#ifndef NDEBUG
-    if(p->debug & 256) /** details of error setup */
-      printf("p[%d]=%g onebyL=%g j=%d nvec=%d\n",i,p->vP[i],onebyL,j,nvec);
-#endif /* NDEBUG */
-    if(j < nvec){/** otherwise we are to skip this error altogether */
-      do{
-        if(ivec >= max){
-          max=2*max;
-          vec=realloc(vec,max * sizeof(int));
-        }
-        vec[ivec++]=j;
-        j += (int )ceil(onebyL * rnd_exponential());
-#ifndef NDEBUG
-        if(p->debug & 256) /** details of error setup */
-          printf("p[%d]=%g onebyL=%g j=%d nvec=%d\n",i,p->vP[i],onebyL,j,nvec);
-#endif /* NDEBUG */
-      }
-      while(j < nvec);
-
-#ifndef NDEBUG
-      if(p->debug & 256) /** details of error setup */
-	for (j=0; j<ivec; j++)
-	  printf("vec[%d]=%d%s",j,vec[j],j+1==ivec?" ###\n":" ");
-#endif /* NDEBUG */
-
-      /** flip the bits in `mHe` row by row to speed it up */
-      for(int ir = p->mHt->p[i]; ir < p->mHt->p[i+1]; ir++){
-        int irow = p->mHt->i[ir]; /** column index in `mH` = row in `mHt` */
-        for(j=0; j < ivec; j++)
-          mzd_flip_bit(mHe,irow,vec[j]);
-      }
-#ifndef NDEBUG
-      if(p->debug & 256){ /** details of error setup */
-        printf("i=%d j=%d\n",i,j);
-        printf("matrix mHe:\n");  mzd_print(mHe);
-      }
-#endif /* NDEBUG */
-
-      /** flip the bits in `mLe` row by row */
-      for(int ir = p->mLt->p[i]; ir < p->mLt->p[i+1]; ir++){
-        int irow = p->mLt->i[ir]; /** column index in `mL` */
-        for(j=0; j<ivec; j++)
-          mzd_flip_bit(mLe,irow,vec[j]);
-      }
-    }
-  }
-  //  p->maxJ = max; /** to reduce the number of `realloc`s next time */
-  free(vec);
-  return max;
-}
-
-/** @brief create `generator` matrix orthogonal to rows of `mH` and `mL` */
 csr_t * do_G_matrix(const csr_t * const mHt, const csr_t * const mLt,
 		    const params_t * const p){
   /** sanity check */
@@ -410,88 +352,23 @@ csr_t * do_G_matrix(const csr_t * const mHt, const csr_t * const mLt,
   return ans;
 }
 
-/** @brief read up to `lmax` lines from a file in `01` format
 
- * read up to `lmax` binary vectors of length `m` from a `01` file `fin` open
- * for reading.  Place the vectors as columns of matrix `M` of size `m` rows by
- * `lmax` colums.  Lines starting with `#` are silently ignored; a non-`01`
- * line, or a `01` line of an incorrect length will give an error.
- *
- * @param M initialized output matrix with `lmax` rows and `m` columns
- * @param fin file with 01 data open for reading
- * @param[input,output] lineno current line number in the file.
- * @param fnam file name (for debugging purposes)
- * @param p Other parameters (only `p->debug` is used).
- * @return the number of rows actually read.
- *
- */
-rci_t read_01(mzd_t *M, FILE *fin, rci_t *lineno, const char* fnam,
-	      const params_t * const p){
-  rci_t m   =M->nrows;
-  rci_t lmax=M->ncols, il=0;
-  if(!M)
-    ERROR("expected initialized matrix 'M'!\n");
-  else
-    mzd_set_ui(M,0);
-  if(!fin)
-    ERROR("file 'fin' named '%s' must be open for reading\n",fnam);
-  if(p->debug&8) /** file io */
-    printf("# about to read 01 data from line %d in file '%s'\n",
-           *lineno,fnam);
-
-  char *buf=NULL;
-  size_t bufsiz=0;
-
-  ssize_t linelen;
-  while((il<lmax) && (!feof(fin)) &&
-        ((linelen = getline(&buf, &bufsiz, fin))>=0)){
-    (*lineno)++;
-    switch(buf[0]){
-    case '0': case '1':
-      if(linelen<=m)
-	ERROR("line is too short, expected %d 01 characters\n"
-	      "%s:%d:1: '%s'\n", m,fnam,*lineno,buf);
-      else{
-	for(int i=0; i<m; i++){
-	  if (buf[i]=='1')
-	    mzd_write_bit(M,i,il,1); /** row `i`, col `il` */
-	  else if (buf[i]!='0')
-	    ERROR("invalid 01 line\n"
-		  "%s:%d:%d: '%s'\n", fnam,*lineno,i+1,buf);
-	}
-	(il)++; /** success */
-      }
-      break;
-    case '#': /** do nothing - skip this line */
-      break;
-    default:
-      ERROR("invalid 01 line\n"
-	    "%s:%d:1: '%s'\n", fnam,*lineno,buf);
-    }
-  }
-  if(p->debug&8) /** file io */
-    printf("# read %d 01 rows from file '%s'\n",il,fnam);
-  if(buf)
-    free(buf);
-  buf=NULL;
-  return il;
-}
  
 /** @brief return permutation = decreasing probabilities */
 mzp_t * sort_by_prob(mzp_t *perm, params_t const * const p){
   /** prepare array of ippairs */
-  ippair_t * pairs = malloc(p->n * sizeof(ippair_t));
+  ippair_t * pairs = malloc(p->nvar * sizeof(ippair_t));
   if (!pairs)
     ERROR("memory allocation failed\n");
-  for(int i=0; i<p->n; i++){
+  for(int i=0; i<p->nvar; i++){
     pairs[i].index = i;
     pairs[i].prob = p->vP[i];
   }
-  qsort(pairs, p->n, sizeof(ippair_t), cmp_ippairs);
-  for(int i=0; i<p->n; i++)
+  qsort(pairs, p->nvar, sizeof(ippair_t), cmp_ippairs);
+  for(int i=0; i<p->nvar; i++)
     perm->values[i] = pairs[i].index;
 
-  //  for(int i=0; i<p->n; i++) printf("i=%d p[perm[i]]=%g\n",i,p->vP[perm->values[i]]);
+  //  for(int i=0; i<p->nvar; i++) printf("i=%d p[perm[i]]=%g\n",i,p->vP[perm->values[i]]);
   free(pairs);
   return perm;
 }
@@ -526,7 +403,7 @@ mzp_t * do_skip_pivs(const size_t rank, const mzp_t * const pivs){
   return ans;
 }
 
-/** @brief Random window search for small-E logical operators.
+/** @brief Random Information Set search for small-E logical operators.
  *
  *  Uses hashing storage to identify unique vectors.  Only vectors of weight no
  *  more that `minW`+`dW` will be recorded, where `minW` is the current minimum
@@ -550,7 +427,7 @@ int do_LLR_dist(int dW, params_t  * const p){
   else /** just one logical op */
     mL = mzd_from_csr(NULL, p->mL);
     
-  int minW = p->n+1;                         /** min `weight` */ 
+  int minW = p->nvar+1;                         /** min `weight` */ 
   double minE = minW * p->LLRmax;            /** min `energy` */
   double maxE = p->LLRmin > 0 ? 0 : minW * p->LLRmin; /** todo: needed? */
   rci_t *ee = malloc(p->mH->cols*sizeof(rci_t)); /** actual `vector` */
@@ -560,8 +437,8 @@ int do_LLR_dist(int dW, params_t  * const p){
   //  if(p->debug & 16)  mzd_print(mH);
   /** 1. Construct random column permutation P */
 
-  mzp_t * perm=mzp_init(p->n); /** identity column permutation */
-  mzp_t * pivs=mzp_init(p->n); /** list of pivot columns */
+  mzp_t * perm=mzp_init(p->nvar); /** identity column permutation */
+  mzp_t * pivs=mzp_init(p->nvar); /** list of pivot columns */
   if((!pivs) || (!perm))
     ERROR("memory allocation failed!\n");
 
@@ -576,7 +453,7 @@ int do_LLR_dist(int dW, params_t  * const p){
     }
     /** full row echelon form of `H` (gauss) using the order in `perm` */
     int rank=0;
-    for(int i=0; i< p->n; i++){
+    for(int i=0; i< p->nvar; i++){
       int col=perm->values[i];
       int ret=gauss_one(mH, col, rank);
       if(ret)
@@ -591,7 +468,7 @@ int do_LLR_dist(int dW, params_t  * const p){
      *  [   a2  1     b2 ]     [b1  0  b2 b3 1 ]
      *  [   a3     1  b3 ]
      */
-    int k = p->n - rank;
+    int k = p->nvar - rank;
     for (int ir=0; ir< k; ir++){ /** each row in the dual matrix */
       int cnt=0; /** how many non-zero elements */
       const int col = ee[cnt++] = skip_pivs->values[ir];
@@ -744,7 +621,7 @@ int do_local_search(double *vE0, mzd_t * mE0, const rci_t jstart, const int lev,
     printf("entering lev=%d of recursion jstart=%d\n",lev,jstart);
   int ich_here=0, ich_below=0;
   rci_t knum = skip_pivs->length; /** number of non-pivot cols in `mH` to go over */
-  rci_t rank = p->n - knum; /** number of valid pivot cols */
+  rci_t rank = p->nvar - knum; /** number of valid pivot cols */
   rci_t rnum; /** number of non-zero entries in rlis (for each `j`) */
   int * rlis = malloc(rank * sizeof(int));
   if(!rlis) ERROR("memory allocation failed!");
@@ -834,8 +711,8 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
   if((!mE) || (!vE))
     ERROR("memory allocation failed!\n");
 
-  mzp_t * perm=mzp_init(p->n); /** identity column permutation */
-  mzp_t * pivs=mzp_init(p->n); /** list of pivot columns */
+  mzp_t * perm=mzp_init(p->nvar); /** identity column permutation */
+  mzp_t * pivs=mzp_init(p->nvar); /** list of pivot columns */
   if((!pivs) || (!perm))
     ERROR("memory allocation failed!\n");
 
@@ -845,7 +722,7 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
    * on the block matrix `[H|S]` (in fact, two matrices).
    */
   int rank=0;
-  for(int i=0; i< p->n; i++){
+  for(int i=0; i< p->nvar; i++){
     int col=perm->values[i];
     int ret=twomat_gauss_one(mH,mS, col, rank);
     if(ret)
@@ -893,7 +770,7 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
     mzp_set_ui(perm,1); perm=perm_p_trans(perm,pivs,0); /**< corresponding permutation */
     /** todo: make it probability-dependent */
     rank=0;
-    for(int i=0; i< p->n; i++){
+    for(int i=0; i< p->nvar; i++){
       int col=perm->values[i];
       int ret=twomat_gauss_one(mH,mS, col, rank);
       if(ret)
@@ -955,200 +832,48 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
   return mEt0;
 }
 
-/** @brief read detector error model (DEM) created by `stim`.
- * Immediately create CSR matrices `p->mL` and `p->mH` and vector `p->vP`.
- * @param fnam file name for reading DEM from
- * @param p structure to store produced matrices
+/** @brief one more matrix initialization routine 
  */
-void read_dem_file(char *fnam, params_t * const p){
-  ssize_t linelen, col=0;
-  size_t lineno=0, bufsiz=0; /**< buffer size for `readline` */
-  char *buf = NULL;          /** actual buffer for `readline` */
-  p->nzH = p->nzL = 0;  /** count non-zero entries in `H` and `L` */
-  int maxH=100, maxL=100, maxN=100; 
-  double *inP = malloc(maxN*sizeof(double));
-  int_pair * inH = malloc(maxH*sizeof(int_pair));
-  int_pair * inL = malloc(maxL*sizeof(int_pair));
-  if ((!inP)||(!inH)||(!inL))
-    ERROR("memory allocation failed\n");
-
-  if(p->debug & 1)
-    printf("# opening DEM file %s\n",fnam);
-  FILE *f = fopen(fnam, "r");
-  if(f==NULL)
-    ERROR("can't open the (DEM) file %s for reading\n",fnam);
-
-  int r=-1, k=-1, n=0;
-  int iD=0, iL=0; /** numbers of `D` and `L` entries */
-  do{ /** read lines one-by-one until end of file is found *************/
-    lineno++; col=0; linelen = getline(&buf, &bufsiz, f);
-    if(linelen<0)
-      break;
-    if(p->debug & 32) printf("# %s",buf);
-    char *c=buf;
-    double prob;
-    int num=0, val;
-    while(isspace(*c)){ c++; col++; } /** `skip` white space */
-    if((*c != '\0')&& (*c != '#') &&(col < linelen)){
-      if(sscanf(c,"error( %lg ) %n",&prob,&num)){
-        if((prob<=0)||(prob>=1))
-          ERROR("probability should be in (0,1) exclusive p=%g\n"
-                "%s:%zu:%zu: '%s'\n", prob,fnam,lineno,col+1,buf);
-        c+=num; col+=num;
-        if(n>=maxN){
-          maxN=2*maxN;
-          inP=realloc(inP,maxN*sizeof(*inP));
-        }
-        inP[n]=prob;
-        do{/** deal with the rest of the line */
-          num=0;
-          if(sscanf(c," D%d %n",&val, &num)){/** `D` entry */
-            c+=num; col+=num;
-            assert(val>=0);
-            if(val>=r)
-              r=val+1;  /** update the number of `D` pairs */
-            if(iD>=maxH){
-              maxH=2*maxH;
-              inH=realloc(inH,maxH*sizeof(*inH));
-            }
-            inH[iD].a   = val;   /** add a pair */
-            inH[iD++].b = n;
-            if(p->debug & 32) printf("n=%d iD=%d val=%d r=%d\n",n,iD,val, r);
-          }
-          else if(sscanf(c," L%d %n",&val, &num)){/** `L` entry */
-            c+=num; col+=num;
-            assert(val>=0);
-            if(val>=k)
-              k=val+1;  /** update the number of `L` pairs */
-            if(iL>=maxL){
-              maxL=2*maxL;
-              inL=realloc(inL,maxL*sizeof(*inL));
-            }
-            inL[iL].a   = val;   /** add a pair */
-            inL[iL++].b = n;
-            if(p->debug & 32) printf("n=%d iL=%d val=%d k=%d\n",n,iD,val,k);
-          }
-          else
-            ERROR("unrecognized entry %s"
-		  "%s:%zu:%zu: '%s'\n",c,fnam,lineno,col+1,buf);
-        }
-        while((c[0]!='#')&&(c[0]!='\n')&&(c[0]!='\0')&&(col<linelen));
-        n++;
-      }
-      else if (sscanf(c,"detector( %d %n",&val,&num)){
-        /** do nothing */
-        //        printf("# ignoring row[%zu]=%s\n",lineno,c);
-      }
-      else if (sscanf(c,"shift_detectors( %d %n",&val,&num)){
-        /** do nothing */
-        //        printf("# ignoring row[%zu]=%s\n",lineno,c);
-      }
-      else
-        ERROR("unrecognized DEM entry %s"
-              "%s:%zu:%zu: '%s'\n",c,fnam,lineno,col+1,buf);
-
-    }
-    /** otherwise just go to next row */
-  }
-  while(!feof(f));
-  p->nrows = r;
-  p->ncws = k;
-  p->n = n;
-  if(p->debug &1)
-    printf("# read DEM: r=%d k=%d n=%d\n",r,k,n);
-
-  p->mH = csr_from_pairs(p->mH, iD, inH, r, n);
-  p->mL = csr_from_pairs(p->mL, iL, inL, k, n);
-  
+void init_Ht(params_t *p){
+  const int n = p->nvar;
   p->mHt = csr_transpose(p->mHt, p->mH);
   p->mLt = csr_transpose(p->mLt,p->mL);
   /** todo: fix reallocation logic to be able to reuse the pointers model */
-  if(p->vP)
-    free(p->vP);
-  p->vP=inP;
-  p->vLLR = malloc(n*sizeof(double));
+  //  if(p->vP)    free(p->vP);
+  //  p->vP=inP;
+  p->vLLR = malloc(n*sizeof(qllr_t));
   assert(p->vLLR !=0);
   p->LLRmin=1e9;
   p->LLRmax=-1e9;
+
   for(int i=0;  i < n; i++){
-    double val=p->vP[i] > MINPROB ? log((1.0/p->vP[i] -1.0)) : log(1/MINPROB - 1);
+    qllr_t val=llr_from_P(p->vP[i]);
     p->vLLR[i] = val;
-    if(val<p->LLRmin)
-      p->LLRmin=val;
-    if(val>p->LLRmax)
-      p->LLRmax=val;
+    if(val < p->LLRmin)
+      p->LLRmin = val;
+    if(val > p->LLRmax)
+      p->LLRmax = val;
   }
   if(p->LLRmin<=0)
-    ERROR("LLR values should be positive!  LLRmin=%g LLRmax=%g", p->LLRmin,p->LLRmax);
+    ERROR("LLR values should be positive!  LLRmin=%g LLRmax=%g",
+	  dbl_from_llr(p->LLRmin),dbl_from_llr(p->LLRmax));
   if(p->debug & 2){/** `print` out the entire error model ******************** */
     printf("# error model read: r=%d k=%d n=%d LLR min=%g max=%g\n",
-           p->nrows, p->ncws, p->n, p->LLRmin,p->LLRmax);
+	   p->nchk, p->ncws, p->nvar, dbl_from_llr(p->LLRmin),dbl_from_llr(p->LLRmax));  
   }
-  if (buf)
-    free(buf);
-  free(inH);
-  free(inL);
-
-  if(p->debug & 64){ /** print matrices */
-    mzd_t *mH0 = mzd_from_csr(NULL,p->mH);
-    printf("matrix mH0:\n");  mzd_print(mH0);
-    mzd_free(mH0);
-
-    mzd_t *mL0 = mzd_from_csr(NULL,p->mL);
-    printf("matrix mL0:\n");  mzd_print(mL0);
-    mzd_free(mL0);
-  }
-}
-
-/** @brief given the error model read, prepare for decoding
-    Create vectors `p->vP`, `p->LLR` and sparse matrices `p->mH` and `p->mL`
-    @param in the error model array in
-    @param p contains error model parameters and place to store vecs and matrices
-    @param prob if positive, alternative global probability to use
-    @output nothing (modified data in `p`)
-*/
-void mat_init(one_prob_t **in, params_t *p){
-  //  int init_mat = (p->vP == NULL ? 1 : 0 );
-  p->vP = malloc(p->n * sizeof(double));
-  p->vLLR = malloc(p->n * sizeof(double));
-  p->mH = csr_init(NULL, p->nrows, p->n, p->nzH);
-  p->mL = csr_init(NULL, p->ncws,  p->n, p->nzL); /** transposed */
-  if((!p->vP) || (!p->vLLR) || (!p->mH) || (!p->mL))
-    ERROR("memory allocation failed!\n");
-  int ipair1=0, ipair2=0;
-  for (int i=0; i< p->n; i++){
-    one_prob_t *row = in[i];
-
-    double pp = row->p;
-    p->vP[i] = pp;
-    p->vLLR[i] = pp > MINPROB ? log((1.0/pp -1.0)) : log(1/MINPROB - 1);
-
-    int j=0;
-    for( ; j< row->n1; j++){
-      p->mH->i[ipair1]   = i;           /** column */
-      p->mH->p[ipair1++] = row->idx[j]; /** row */
-    }
-    for( ; j< row->n2; j++){
-      p->mL->i[ipair2]   = i;            /** column */
-      p->mL->p[ipair2++] = row->idx[j]; /** row */
-    }
-  };
-  p->mH->nz  = p->nzH;
-  csr_compress(p->mH);
-
-  p->mHt = csr_transpose(p->mHt, p->mH);
-
-  p->mL->nz = p->nzL;
-  csr_compress(p->mL);
-
-  p->mLt = csr_transpose(p->mLt,p->mL);
 
 #ifndef NDEBUG
   if((p->debug & 2)&&(p->debug &512)){ /** print resulting vectors and matrices */
-    for(int i=0; i< p->n; i++)
-      printf("%g%s",p->vP[i],i+1<p->n?" ":"\n");
-    for(int i=0; i< p->n; i++)
-      printf("%g%s",p->vLLR[i],i+1<p->n?" ":"\n");
+    if(p->useP>0)
+      printf("# uniform error probability useP=%g LLR=%g\n",p->useP,dbl_from_llr(p->vLLR[0]));
+    else{
+      printf("# P=[");
+      for(int i=0; i< p->nvar; i++)
+	printf("%g%s",p->vP[i],i+1<p->nvar?" ":"]\n");    
+      printf("# LLR=[");
+      for(int i=0; i< p->nvar; i++)
+	printf("%g%s",dbl_from_llr(p->vLLR[i]),i+1<p->nvar?" ":"]\n");
+    }
     //    if(init_mat){
     mzd_t *mdH = mzd_from_csr(NULL,p->mH);
     printf("mH:\n");
@@ -1164,26 +889,25 @@ void mat_init(one_prob_t **in, params_t *p){
     //    }
   }
 #endif
+
 }
 
-void prob_init(params_t *p, double prob){
-  double pp = prob;
-  double LLR = pp > MINPROB ? log((1.0/pp -1.0)) : log(1/MINPROB - 1);
-  for(int i=0; i< p->n; i++){
-    p->vP[i] = pp;
-    p->vLLR[i] = LLR;
-  }
-}
 
+/** @brief initialize parameters set at command line */
 int var_init(int argc, char **argv, params_t *p){
 
   int dbg=0;
+  double val;
 
   if(argc<=1)
     ERROR("try \"%s -h\" for help",argv[0]);
+#ifdef USE_QLLR
+  p->d1=12; p->d2=300; p->d3=7; /** recommended values */
+#endif   
 
-  for(int i=1; i<argc; i++){  /** `debug` */
-    if(sscanf(argv[i],"debug=%d",& dbg)==1){
+  for(int i=1; i<argc; i++){  
+    int pos=0;
+    if(sscanf(argv[i],"debug=%d",& dbg)==1){/** `debug` */
       if(dbg==0)
 	p->debug = 0;
       else{
@@ -1195,14 +919,32 @@ int var_init(int argc, char **argv, params_t *p){
 	  printf("# read %s, debug=%d octal=%o\n",argv[i],p->debug,p->debug);
       }
     }
-    else if(sscanf(argv[i],"mode=%d",& dbg)==1){
-      if(dbg==0)
-	p->mode = 0;
-      else{
-	p->mode ^= dbg;
-        if(p->debug&1)
-          printf("# read %s, mode=%d octal=%o\n",argv[i],p->mode,p->mode);
+    else if(sscanf(argv[i],"mode=%d%n",& dbg, &pos)==1){ /** `mode.submode` */
+      p->mode = dbg;
+      if((int) strlen(argv[i]) > pos){
+	 if(sscanf(argv[i]+pos,".%d",& dbg)==1)
+	   p->submode = dbg;
+	 else
+	   ERROR("invalid format argv[%d]: %s\n",i,argv[i]);
       }
+      if(p->debug&1)
+	printf("# read %s, mode=%d submode=%d [octal=%o]\n",argv[i],
+	       p->mode,p->submode,p->submode);      
+    }
+    else if (sscanf(argv[i],"qllr1=%d",&dbg)==1){ /** QLLR `d1` param */
+      p -> d1 = dbg;
+      if (p->debug&1)
+	printf("# read %s, QLLR parameter d1=%d\n",argv[i],p-> d1);
+    }
+    else if (sscanf(argv[i],"qllr2=%d",&dbg)==1){ /** QLLR `d2` param */
+      p -> d2 = dbg;
+      if (p->debug&1)
+	printf("# read %s, QLLR parameter d2=%d\n",argv[i],p-> d2);
+    }
+    else if (sscanf(argv[i],"qllr3=%d",&dbg)==1){ /** QLLD `d3` param */
+      p -> d3 = dbg;
+      if (p->debug&1)
+	printf("# read %s, QLLR parameter d3=%d\n",argv[i],p-> d3);
     }
     else if (sscanf(argv[i],"nvec=%d",&dbg)==1){ /** `nvec` */
       p -> nvec = dbg;
@@ -1239,7 +981,12 @@ int var_init(int argc, char **argv, params_t *p){
       if (p->debug&1)
 	printf("# read %s, seed=%d\n",argv[i],p->seed);
     }
-    else if (0==strncmp(argv[i],"fout=",5)){
+    else if (sscanf(argv[i],"useP=%lg",&val)==1){ /** `useP` */
+      p -> useP = val;
+      if (p->debug&1)
+	printf("# read %s, useP=%g\n",argv[i],p-> useP);
+    }
+    else if (0==strncmp(argv[i],"fout=",5)){ /** `fout` */
       if(strlen(argv[i])>5){
         p->fout = argv[i]+5;
 	if (p->debug&1)
@@ -1256,7 +1003,7 @@ int var_init(int argc, char **argv, params_t *p){
       if (p->debug&1)
 	printf("# read %s, (fdem) f=%s\n",argv[i],p->fdem);
     }
-    else if (0==strncmp(argv[i],"fdem=",5)){
+    else if (0==strncmp(argv[i],"fdem=",5)){ /** fdem */
       if(strlen(argv[i])>5)
         p->fdem = argv[i]+5;
       else
@@ -1264,7 +1011,39 @@ int var_init(int argc, char **argv, params_t *p){
       if (p->debug&1)
 	printf("# read %s, fdem=%s\n",argv[i],p->fdem);
     }
-    else if (0==strncmp(argv[i],"fdet=",5)){
+    else if (0==strncmp(argv[i],"finH=",5)){ /** `finH` */
+      if(strlen(argv[i])>5)
+        p->finH = argv[i]+5;
+      else
+        p->finH = argv[++i]; /**< allow space before file name */
+      if (p->debug&1)
+	printf("# read %s, finH=%s\n",argv[i],p->finH);
+    }
+    else if (0==strncmp(argv[i],"finP=",5)){ /** `finP` probabilities */
+      if(strlen(argv[i])>5)
+        p->finP = argv[i]+5;
+      else
+        p->finP = argv[++i]; /**< allow space before file name */
+      if (p->debug&1)
+	printf("# read %s, finP=%s\n",argv[i],p->finP);
+    }
+    else if (0==strncmp(argv[i],"finL=",5)){ /** `finL` logical */
+      if(strlen(argv[i])>5)
+        p->finL = argv[i]+5;
+      else
+        p->finL = argv[++i]; /**< allow space before file name */
+      if (p->debug&1)
+	printf("# read %s, finL=%s\n",argv[i],p->finL);
+    }
+    else if (0==strncmp(argv[i],"finG=",5)){/** `finG` degeneracy generator matrix */
+      if(strlen(argv[i])>5)
+        p->finG = argv[i]+5;
+      else
+        p->finG = argv[++i]; /**< allow space before file name */
+      if (p->debug&1)
+	printf("# read %s, finG=%s\n",argv[i],p->finG);
+    }
+    else if (0==strncmp(argv[i],"fdet=",5)){ /** detector events / 01 file */
       if(strlen(argv[i])>5)
         p->fdet = argv[i]+5;
       else
@@ -1272,7 +1051,7 @@ int var_init(int argc, char **argv, params_t *p){
       if (p->debug&1)
 	printf("# read %s, fdet=%s\n",argv[i],p->fdet);
     }
-    else if (0==strncmp(argv[i],"fobs=",5)){
+    else if (0==strncmp(argv[i],"fobs=",5)){/** observable events / 01 file */
       if(strlen(argv[i])>5)
         p->fobs = argv[i]+5;
       else
@@ -1280,12 +1059,27 @@ int var_init(int argc, char **argv, params_t *p){
       if (p->debug&1)
 	printf("# read %s, fobs=%s\n",argv[i],p->fobs);
     }
+    else if (0==strncmp(argv[i],"ferr=",5)){ /** errors / 01 file */
+      if(strlen(argv[i])>5)
+        p->ferr = argv[i]+5;
+      else
+        p->ferr = argv[++i]; /**< allow space before file name */
+      if (p->debug&1)
+	printf("# read %s, ferr=%s\n",argv[i],p->ferr);
+    }
     else if((strcmp(argv[i],"--help")==0)
             ||(strcmp(argv[i],"-h")==0)
             ||(strcmp(argv[i],"help")==0)){
       printf( USAGE , argv[0],argv[0]);
       exit (-1);
     }
+    else if((strcmp(argv[i],"--morehelp")==0)
+            ||(strcmp(argv[i],"-mh")==0)
+            ||(strcmp(argv[i],"morehelp")==0)){
+      printf( USAGE "\n", argv[0],argv[0]);
+      printf( MORE_HELP,argv[0]);
+      exit (-1);
+    }    
     else{ /* unrecognized option */
       printf("# unrecognized parameter \"%s\" at position %d\n",argv[i],i);
       ERROR("try \"%s -h\" for help",argv[0]);
@@ -1293,110 +1087,319 @@ int var_init(int argc, char **argv, params_t *p){
 
   }
 
+  
   if (p->seed == 0){
-    p->seed=time(NULL)+1000000ul*getpid(); /* ensure a different seed */
+    p->seed=time(NULL)+1000000ul*getpid(); /* ensure a different seed even if started at the same time */
     if((p->debug)&&(p->mode!=3))
       printf("# initializing seed=%d from time(NULL)+1000000ul*getpid()\n",p->seed);
     /** use `tinymt64_generate_double(&pp.tinymt)` for double [0,1] */
   }
-  // srand(time(p->seed));
+  
   tinymt64_init(&tinymt,p->seed);
-  if(! p->fdem)
-    ERROR("mode=%d, please specify the DEM file\n",p->mode);
+
+  if((! p->fdem) && (! p->finH))
+    ERROR("Please specify the DEM file 'fdem' or check matrix file 'finH'\n");
+  if((p->fdem) && (p->finH))
+    ERROR("Please specify fdem=%s OR finH=%s but not both\n",p->fdem, p->finH);
+
+  if(p->fdem){
+    if((p->finL)||(p->finP)||(p->finG)||(p->finH))
+      ERROR("DEM file fdem=%s can not be specified together with \n"
+	    " finH=%s or finL=%s or finP=%s\n", p->fdem,  
+	    p->finH ? p->finH : "",  p->finL ? p->finL : "",  p->finP ? p->finP : "");
+
+    /** read in the DEM file, initialize sparse matrices */
+    void * ptrs[]= {p->mH,p->mL,p->vP};
+    read_dem_file(p->fdem, ptrs, p->debug);
+    p->mH=ptrs[0];
+    p->mL=ptrs[1];
+    p->vP=ptrs[2];
+    //    csr_out(p->mH);
+    p->nvar = p->mH->cols;
+    p->nchk = p->mH->rows;
+    p->ncws = p->mL->rows;
+  }
+
+  if(p->finH){
+    if(! p->finL){
+      if((p->fobs) || (p->fdet))
+	ERROR("Without L matrix, cannot specify fdet=%s or fobs=%s\n",
+	      p->fdet ? p->fdet : "",  p->fobs ? p->fobs : "");      
+    }
+    if((! p->finL) && (! p->finG)){ /** only `H` matrix specified */
+      p->classical=1;
+      p->internal=1;
+    }
+    p->mH=csr_mm_read(p->finH, p->mH, 0, p->debug);
+    p->nvar = p->mH->cols;
+    p->nchk = p->mH->rows;
+  }
+  /** at this point we should have `H` matrix for sure */
+  assert(p->mH);
+
+  if(p->finL){
+    p->mL=csr_mm_read(p->finL, p->mL, 0, p->debug);
+    p->ncws = p->mL->rows;
+    if(p->mL->cols != p->nvar)
+      ERROR("column number mismatch L[%d,%d] and H[%d,%d]\n",
+	    p->mL->rows, p->mL->cols, p->mH->rows, p->mH->cols);
+  }  
+
+  if(p->finG){
+    p->mG=csr_mm_read(p->finG, p->mG, 0, p->debug);
+    if(p->mG->cols != p->nvar)
+      ERROR("column number mismatch G[%d,%d] and H[%d,%d]\n",
+	    p->mG->rows, p->mG->cols, p->mH->rows, p->mH->cols);
+
+    /** verify row orthogonality of `G` and `H` */
+    csr_t *Gt = csr_transpose(NULL, p->mG);
+    mzd_t *MGt = mzd_from_csr(NULL,Gt); /* convert to dense matrix */
+    csr_free(Gt);
+    if((p->mH)&&(product_weight_csr_mzd(p->mH,MGt,0)))
+      ERROR("rows of H=Hx and G=Hz should be orthogonal \n");
+
+    if(!p->mL) /** create `Lx` */
+      p->mL=Lx_for_CSS_code(p->mH,p->mG);
+    p->ncws = p->mL->rows;
+
+    /** verify row orthogonality of `G` and `L` */
+    if((p->mL)&&(product_weight_csr_mzd(p->mL,MGt,0)))
+      ERROR("rows of L=Lx and G=Hz should be orthogonal \n");
+    mzd_free(MGt);        
+  }
+
+  if(p->useP > 0){/** override probability values */
+    if(!p->vP){
+      p->vP=malloc(p->nvar * sizeof(double));
+      if(!p->vP)
+	ERROR("memory allocation failed");
+    }
+    double *ptr=p->vP;
+    for(int i=0;i<p->nvar;i++, ptr++)
+      *ptr = p->useP;    
+  }
+  if(!p->vP)
+    ERROR("probabilities missing, specify 'fdem', 'finP', or 'useP'");
+    
+  
   switch(p->mode){
-  case 0: /** internal decoder */
+  case 1:  /** currently only needed for BP */
+    LLR_table = init_LLR_tables(p->d1,p->d2,p->d3);
+    if(p->debug&1)
+      out_LLR_params(LLR_table);
+    /* fall through */
+  case 0:
+    if((p->ferr) && (p->fobs))
+      ERROR("With ferr=%s cannot specify fobs=%s (will calculate)\n",p->fdem, p->fobs);
+    if((p->ferr) && (p->fdet))
+      ERROR("With ferr=%s cannot specify fdet=%s (will calculate)\n",p->fdem, p->fdet);    
     if((p->fdet==NULL)&&(p->fobs!=NULL))
       ERROR(" mode=%d fobs='%s' need detection events file 'fdet'\n",
 	    p->mode, p->fobs);
-    else if ((p->fdet!=NULL)&&(p->fobs==NULL))
+    if ((p->fdet!=NULL)&&(p->fobs==NULL))
       ERROR(" mode=%d fdet='%s' need observables file 'fobs'\n",
 	    p->mode, p->fdet);
-    break;
+
+    if(p->fdet){/** expect both `fdet` and `fobs` to be defined */
+      p->file_det=fopen(p->fdet, "r");
+      if(p->file_det==NULL)
+	ERROR("can't open the (det) file %s for reading\n",p->fdet);
+      p->file_obs=fopen(p->fobs, "r");
+      if(p->file_obs==NULL)
+	ERROR("can't open the (obs) file %s for reading\n",p->fobs);
+    }
+    else if (p->ferr){
+      p->file_err=fopen(p->ferr, "r");
+      if(p->file_err==NULL)
+	ERROR("can't open the (err) file %s for reading\n",p->ferr);
+      p->internal=2;
+    }
+    else{
+      p->internal=1;
+    }
+    if(p->ferr)
+      p->internal=2; /* generate observables and detector events from errors provided */
+    else if ((! p->fobs) && (! p->fdet))
+      p->internal=1; /* generate observables and detector events internally */
+
+    if ((p->submode!=0))
+      ERROR(" mode=%d : non-zero submode='%d' unsupported\n",
+	    p->mode, p->submode);
     
+    break;
   case 2: /** estimate success probability */
-    if((p->fdet!=NULL)||(p->fobs!=NULL))
-      ERROR(" mode=%d, do not specify 'fobs' or 'fdet' files\n",
+    if((p->fdet!=NULL)||(p->fobs!=NULL) ||(p->ferr!=NULL))
+      ERROR(" mode=%d, must not specify 'ferr' or 'fobs' or 'fdet' files\n",
 	    p->mode);
+    if (p->submode!=0)
+      ERROR(" mode=%d : non-zero submode='%d' unsupported\n",
+	    p->mode, p->submode);
     break;
     
   case 3: /** read in DEM file and output the H, L, G matrices and P vector */
     if(strcmp(p->fout,"stdout")==0)
       p->use_stdout=1;
+    if (p->submode!=0)
+      ERROR(" mode=%d : non-zero submode='%d' unsupported\n",
+	    p->mode, p->submode);    
     break;
     
-  case 1: default:
+  default:
     ERROR(" mode=%d is currently not supported\n",p->mode);
     break;
   }
- 
+
+  if(p->debug & 64){ /** print matrices */
+    assert(p->nvar != 0);
+    mzd_t *mH0 = mzd_from_csr(NULL,p->mH);
+    printf("matrix mH0:\n");  mzd_print(mH0);
+    mzd_free(mH0);
+    
+    mzd_t *mL0 = mzd_from_csr(NULL,p->mL);
+    printf("matrix mL0:\n");  mzd_print(mL0);
+    mzd_free(mL0);
+
+    //    for(int i=0; i < p->nvar; i++)
+    //      printf(" P[%d]=%g \n",i,p->vP[i]);
+  }
+  
+  
+  if(p->fdet){/** expect both `fdet` and `fobs` to be defined */
+    p->internal=0;
+    p->file_det=fopen(p->fdet, "r");
+    if(p->file_det==NULL)
+      ERROR("can't open the (det) file %s for reading\n",p->fdet);
+    p->file_obs=fopen(p->fobs, "r");
+    if(p->file_obs==NULL)
+      ERROR("can't open the (obs) file %s for reading\n",p->fobs);
+  }
+  else 
+    p->internal=1;
+
+  if(p->mode<=1){ /* vecdec RIS or BP decoder */
+    p->mHe = mzd_init(p->nchk, p->nvec); /** each column a syndrome vector `H*e` */
+    p->mLe = mzd_init(p->ncws,  p->nvec); /** each column `L*e` vector */
+    if(p->ferr)
+      p->mE = mzd_init(p->nvar, p->nvec);
+    if(p->debug &1){
+      printf("# mode=%d, running %s decoder ",  p->mode, p->mode==0 ? "vecdec RIS" : "BP");
+      switch(p->internal){
+      case 0: printf("use DET and OBS files\n"); break;
+      case 1: printf("internal error generator\n"); break;
+      case 2: printf("reading error vectors from ERR file\n"); break;
+      default: ERROR("this should not happen");
+	break;
+      }
+    }
+
+    /** initialize the counters */
+    for(extr_t i=0; i< EXTR_MAX; i++){
+      cnt[i]=0;
+      iter1[i]=0;
+      iter2[i]=0;
+    }
+
+  }
+
   return 0;
 };
 
+/** @brief clean up variables and open files */
 void var_kill(params_t *p){
-  free(p->vP);
-  free(p->vLLR);
-  p->vP = p->vLLR = NULL;
+  if(p->file_det)  fclose(p->file_det);
+  if(p->file_obs)  fclose(p->file_obs);  
+  if(p->file_err)  fclose(p->file_err);  
+  if(p->vP){        free(p->vP);    p->vP = NULL;  }
+  if(p->vLLR){      free(p->vLLR);  p->vLLR = NULL;}
+  if(LLR_table){ free(LLR_table);  LLR_table = NULL;}
+
   p->mH =  csr_free(p->mH);
   p->mHt = csr_free(p->mHt);
   p->mL =  csr_free(p->mL);
   p->mLt = csr_free(p->mLt);
   p->mG = csr_free(p->mG);
+  if(p->mE) mzd_free(p->mE);
+  if(p->mHe) mzd_free(p->mHe);
+  if(p->mLe) mzd_free(p->mLe);
+  if(p->mHeT) mzd_free(p->mHeT);
+  if(p->mLeT) mzd_free(p->mLeT);
+
 }
+
+int do_err_vecs(params_t * const p){
+
+  int il1=p->nvec, il2;
+  /** prepare error vectors ************************************************************/
+  switch(p->internal){
+  case 0: /** read `det` and `obs` files */
+    il1=read_01(p->mHe,p->file_det, &p->line_det, p->fdet, p->debug);
+    /** TODO: enable external processing of observables */
+    il2=read_01(p->mLe,p->file_obs, &p->line_obs, p->fobs, p->debug);
+    if(il1!=il2)
+      ERROR("mismatched DET %s (line %d) and OBS %s (line %d) files!",
+	    p->fdet,p->line_det,p->fobs,p->line_obs);
+    if(p->debug&1)
+      printf("read %d det/obs pairs\n",il1);		 
+    break;
+  case 1: /** generate errors internally */
+    do_errors(p->mHe,p->mLe,p->mHt, p->mLt, p->vP);
+    if(p->debug&1)
+      printf("# generated %d det/obs pairs\n",p->mHe->ncols);
+    if((p->debug&128)&&(p->nvar <= 128)&&(p->nvec <= 128)){
+      printf("He:\n");
+      mzd_print(p->mHe);
+      printf("Le:\n");
+      mzd_print(p->mLe);
+    }
+
+    break;
+  case 2: /** read errors from file and generate corresponding `obs` and `det` matrices */
+    il1=read_01(p->mE,p->file_err, &p->line_err, p->ferr, p->debug);
+    if(p->debug&1)
+      printf("# read %d errors from file %s\n",il1,p->ferr);
+    csr_mzd_mul(p->mHe,p->mH,p->mE,1);
+    csr_mzd_mul(p->mLe,p->mL,p->mE,1);
+    if((p->debug&128)&&(p->nvar <= 128)&&(p->nvec <= 128)){
+      printf("error columns read:\n");
+      mzd_print(p->mE);
+      //      printf("He:\n");
+      //      mzd_print(mHe);
+      //      printf("Le:\n");
+      //      mzd_print(mLe);
+    }
+    break;
+  default:
+    ERROR("internal=%d, this should not happen",p->internal);
+  }
+  return il1;
+}
+
 
 int main(int argc, char **argv){
   params_t * const p=&prm;
-  var_init(argc,argv, & prm); /* initialize variables */
+  
+  /** initialize variables, read in the DEM file, initialize sparse matrices */
+  var_init(argc,argv,  p);
+  init_Ht(p);
+  //  mat_init(p);
+  int ierr_tot=0, rounds=(int )ceil((double) p->ntot / (double) p->nvec);
 
-  /** read in the DEM file, initialize sparse matrices */
-  read_dem_file(p->fdem,p); 
-
-  switch(p->mode){
+  switch(p->mode){    
   case 0: /** internal `vecdec` decoder */
-    if(p->debug &1)
-      printf("# mode=%d, running internal decoder\n",p->mode);
-    FILE *fdet=NULL, *fobs=NULL;
-    rci_t linedet=0, lineobs=0;
-    if(p->fdet){/** expect both `fdet` and `fobs` to be defined */
-      fdet=fopen(p->fdet, "r");
-      if(fdet==NULL)
-	ERROR("can't open the (det) file %s for reading\n",p->fdet);
-      fobs=fopen(p->fobs, "r");
-      if(fobs==NULL)
-	ERROR("can't open the (obs) file %s for reading\n",p->fobs);
-    }
-    
+
     /** at least one round always */
-    int rounds=(int )ceil((double) p->ntot / (double) p->nvec);
     long int synd_tot=0, synd_fail=0;
     for(int iround=0; iround < rounds; iround++){
       if(p->debug &1)
 	printf("# starting round %d of %d\n", iround, rounds);
-      
-      // decoder_init( & prm);
-      mzd_t *mHe = mzd_init(p->nrows, p->nvec); /** each column a syndrome vector `H*e` */
-      mzd_t *mLe = mzd_init(p->ncws,  p->nvec); /** each column `L*e` vector */
-      
-      if (p->mode&1){
-	rci_t il1=read_01(mHe,fdet,&linedet, p->fdet, p);
-	rci_t il2=read_01(mLe,fobs,&lineobs, p->fobs, p);
-	if(il1!=il2)
-	  ERROR("mismatched DET %s (line %d) and OBS %s (line %d) files!",
-		p->fdet,linedet,p->fobs,lineobs);
-	if(il1==0)
-	  break; /** no more rounds */
-      }
-      else
-	p->maxJ = do_errors(mHe,mLe,p);
-
-      if((p->debug & 512)&&(p->debug &4)){ /** print matrices */
-	printf("matrix mLe:\n");  mzd_print(mLe);
-	printf("matrix mHe:\n");  mzd_print(mHe);
-      }
+    
+      if( !(ierr_tot = do_err_vecs(p)))
+	break; /** no more rounds */
 
       // actually decode and generate error vectors
       mzd_t *mE0=NULL;
 #ifndef NDEBUG  /** need `mHe` later */
-      mzd_t *mS=mzd_copy(NULL,mHe);
+      mzd_t *mS=mzd_copy(NULL,p->mHe);
       mE0=do_decode(mS, p); /** each row a decoded error vector */
       mzd_free(mS); mS=NULL;
 #else
@@ -1407,7 +1410,7 @@ int main(int argc, char **argv){
         
 #ifndef NDEBUG
       mzd_t *prodHe = csr_mzd_mul(NULL,p->mH,mE0t,1);
-      mzd_add(prodHe, prodHe, mHe);
+      mzd_add(prodHe, prodHe, p->mHe);
       if(!mzd_is_zero(prodHe)){
 	if((p->debug&512)||(p->nvec <=64)){
 	  printf("syndromes difference:\n");
@@ -1416,7 +1419,7 @@ int main(int argc, char **argv){
 	ERROR("some syndromes are not matched!\n");
       }
       mzd_free(prodHe); prodHe = NULL;
-      mzd_free(mHe);    mHe    = NULL;
+      //      mzd_free(p->mHe);    mHe    = NULL;
 #endif
 
       mzd_t *prodLe = csr_mzd_mul(NULL,p->mL,mE0t,1);
@@ -1425,18 +1428,17 @@ int main(int argc, char **argv){
 	printf("prodLe:\n");
 	mzd_print(prodLe);
 	printf("mLe:\n");
-	mzd_print(mLe);
+	mzd_print(p->mLe);
       }
 
-      mzd_add(prodLe, prodLe, mLe);
-      mzd_free(mLe); mLe=NULL;
+      mzd_add(prodLe, prodLe, p->mLe);
+      //      mzd_free(mLe); mLe=NULL;
 
       int fails=0;
       for(rci_t ic=0; ic< prodLe->ncols; ic++){
 	rci_t ir=0;
 	if(mzd_find_pivot(prodLe, ir, ic, &ir, &ic)){
 	  fails++;
-	  //      printf("ir=%d ic=%d fails=%d\n",ir,ic,fails);
 	}
 	else /** no more pivots */
 	  break;
@@ -1448,16 +1450,72 @@ int main(int argc, char **argv){
       if((p->nfail > 0) && (synd_fail >= p->nfail))
 	break;
     }
-
-    printf(" %ld %ld # %s\n",synd_fail, synd_tot, p->fdem);
+    if(p->debug&1)
+      printf("# fail_fraction total_cnt sycces_cnt\n");
+    printf(" %g %ld %ld # %s\n",(double) synd_fail/synd_tot, synd_tot, synd_tot-synd_fail, p->fdem ? p->fdem : p->finH );
       
-    // clean up
-    if(fdet)
-      fclose(fdet);
-    if(fobs)
-      fclose(fobs);
     break;
+
+  case 1: /** various BP flavors */
     
+    qllr_t *ans = calloc(p->nvar, sizeof(qllr_t));
+      if(!ans) ERROR("memory allocation failed!"); 
+
+    for(int iround=0; iround < rounds; iround++){
+      if(p->debug &1)
+	printf("# starting round %d of %d\n", iround, rounds);
+    
+      if( !(ierr_tot = do_err_vecs(p)))
+	break; /** no more rounds */
+      p->mHeT = mzd_transpose(p->mHeT,p->mHe);
+      p->mLeT = mzd_transpose(p->mLeT,p->mLe);
+      for(int ierr = 0; ierr < ierr_tot; ierr++){ /** cycle over errors */
+	cnt[TOTAL]++;
+	int succ_BP = 0;
+	if(mzd_row_is_zero(p->mHeT,ierr)){
+	  //	  printf("ierr=%d of tot=%d\n",ierr,ierr_tot);
+
+	  cnt_update(CONV_TRIVIAL,0); /** trivial convergence after `0` steps */
+	  if(mzd_row_is_zero(p->mLeT,ierr)){
+	    cnt[SUCC_TRIVIAL]++;
+	    cnt[SUCC_TOT]++;
+	  }
+	  if(p->debug & 128)
+	    printf("error %d of %d is trivial\n",ierr+1,ierr_tot);
+	  continue ; /** next error / syndrome vector pair */     
+	}
+	else{ /** non-trivial syndrome */
+	  if((p->debug&8)&&(p->nvar <= 128)){
+	    printf("non-trivial error %d of %d:\n",ierr+1,ierr_tot);
+	    if(p->mE)
+	      for(int i=0; i<p->nvar; i++)
+		printf("%s%d%s",i==0?"[":" ",mzd_read_bit(p->mE,i,ierr),i+1<p->nvar?"":"]\n");
+	    mzd_print_row(p->mHeT,ierr);
+	    mzd_print_row(p->mLeT,ierr);
+	    out_llr("i",p->nvar,p->vLLR);
+	  }
+	  mzd_t * const srow = mzd_init_window(p->mHeT, ierr,0, ierr+1,p->nchk); /* syndrome row */
+	  succ_BP = do_parallel_BP(ans, srow, p->mH, p->mHt, p->vLLR, p);    
+	  mzd_free(srow);
+
+	  if(succ_BP){/* convergence success  */
+	    mzd_t * const obsrow = mzd_init_window(p->mLeT, ierr,0, ierr+1,p->mLeT->ncols);
+	    if(syndrome_check(ans, obsrow, p->mL, p)){
+	      cnt[SUCC_BP]++;
+	      cnt[SUCC_TOT]++;
+	    }
+	    mzd_free(obsrow);
+	  }
+	  if(p->debug&16)
+	    printf("i=%d of %d succ=%d\n",ierr,ierr_tot,succ_BP);
+	}
+	if((p->nfail) && cnt[TOTAL]-cnt[SUCC_TOT] >= p->nfail)
+	  break;
+      }
+    }
+    cnt_out(p->debug&1);
+    free(ans);
+    break;
   case 2:
     if(p->debug&1)
       printf("# mode=%d, estimating fail probability in %d steps\n",p->mode, p->steps);
@@ -1480,17 +1538,20 @@ int main(int argc, char **argv){
 
     if(p->debug&1)
       printf("# writing P vector [ %d ] to      \t%s%s\n",
-	     p->n, p->fout, p->use_stdout ? "\n" :"P.mmx");
+	     p->nvar, p->fout, p->use_stdout ? "\n" :"P.mmx");
     comment[0]='P';
     //    printf("%% %s\n", comment);
-    dbl_mm_write(p->fout,"P.mmx",1,p->n,p->vP,comment);
+    dbl_mm_write(p->fout,"P.mmx",1,p->nvar,p->vP,comment);
 
-    if(p->debug&1)
-      printf("# creating G matrix and writing to\t%s%s\n",
-	     p->fout, p->use_stdout ? "\n" :"G.mmx");
-    p->mG = do_G_matrix(p->mHt,p->mLt,p);
-    comment[0]='G';
-    //    printf("%% %s\n", comment);
+    if(!p->mG){
+      if(p->debug&1)
+	printf("# creating G matrix and writing to\t%s%s\n",
+	       p->fout, p->use_stdout ? "\n" :"G.mmx");
+      p->mG = do_G_matrix(p->mHt,p->mLt,p);
+      comment[0]='G';
+    }
+    else
+      sprintf(comment, "G matrix from file %s", p->finG);
     csr_mm_write(p->fout,"G.mmx",p->mG,comment);
     
     free(comment);

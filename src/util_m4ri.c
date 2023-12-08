@@ -8,6 +8,7 @@
 #include <stdio.h>
 // #include <"copy_m4ri.h"
 #include "mmio.h"
+#include <ctype.h>
 
 #include "utils.h"
 #include "util_m4ri.h"
@@ -42,6 +43,16 @@ size_t mzd_weight(const mzd_t *A){
   }
 
   return count ;
+}
+
+int mzd_row_is_zero(const mzd_t  * const A, const int i) {
+  const word mask_end = A->high_bitmask;
+  for (wi_t j = 0; j < A->width - 1; ++j)
+    if(A->rows[i][j])
+      return 0;
+  if(A->rows[i][A->width - 1] & mask_end)
+    return 0;
+  return 1;
 }
 
 
@@ -159,7 +170,7 @@ mzd_t *mzd_from_csr(mzd_t *dst, const csr_t *p) {
  * [ CT I ], and permute the cols back.  
  * (re)allocate G if needed.
  */
-mzd_t *mzd_generator_from_csr(mzd_t *G, csr_t *H){  
+mzd_t *mzd_generator_from_csr(mzd_t *G, const csr_t * const H){  
   rci_t n=H->cols;
   mzd_t *mat=mzd_from_csr(NULL,H); /* convert to dense matrix */
   mzp_t * pivots = mzp_init(n);    /* initialize the permutation */
@@ -207,10 +218,10 @@ mzd_t * csr_mzd_mul(mzd_t *C, const csr_t *S, const mzd_t *B, int clear){
     C = mzd_init(S->rows, B->ncols);
   else {
     if (C->nrows != S->rows || C->ncols != B->ncols) 
-      ERROR("Provided return matrix has wrong dimensions.\n");    
+      ERROR("Provided return matrix has wrong dimensions.\n");
+    if(clear)
+      mzd_set_ui(C,0); 
   }
-  if(clear)
-    mzd_set_ui(C,0); 
   rci_t const m = S->rows;
   
   for(rci_t i = 0; i < m; ++i)
@@ -218,6 +229,13 @@ mzd_t * csr_mzd_mul(mzd_t *C, const csr_t *S, const mzd_t *B, int clear){
       mzd_combine(C,i,0, C,i,0, B,S->i[j],0); /* combine the two rows */
   return C;
 }
+
+#if 0
+/** @brief calculate `C = C + A*B`, optimized to the case where `A` is a single row */
+mzd_t * mzd_csr_mul(mzd_t *C, const mzd_t *A, const csr_t *B, int clear){
+  return NULL;  
+}
+#endif 
 
 
 /** 
@@ -383,6 +401,23 @@ csr_t *csr_init(csr_t *mat, int rows, int cols, int nzmax){
   return mat;
 }
 
+/** 
+ * @brief return sparse identity matrix 
+ */
+csr_t *csr_identity(int rows, int cols){
+  const int nzmax= rows < cols ? rows : cols ;
+  csr_t * mat = csr_init(NULL, rows, cols, nzmax);
+  int i;
+  for(i=0; i < nzmax; i++){
+    mat->p[i]=i;
+    mat->i[i]=i;    
+  }
+  for(int j=i ; j<=rows; j++) /** including the final value */
+    mat->p[j]=i; 
+  mat->nz=-1; /* indicate compressed form */
+  return mat;
+}
+
 /* helper function */
 static int cmp_int_pairs(const void *p1, const void *p2){
   if ((((int_pair *) p1)->a)!=(((int_pair *) p2)->a))
@@ -413,6 +448,91 @@ csr_t * csr_from_pairs(csr_t *mat, int nz, int_pair *prs, int nrows, int ncols){
   mat->nz=-1; /* indicate compressed form */
   return mat;
 }
+
+
+/** 
+ * @brief convert `m4ri` dense matrix to `csr`
+ * 
+ * Optimized for sparse matrices.  
+ * 
+ * @param mat pointer to existing matrix or NULL 
+ *
+ */
+csr_t * csr_from_mzd(csr_t *mat, const mzd_t * const orig){
+  int nz=mzd_weight(orig);
+  mat = csr_init(mat, orig->nrows, orig->ncols, nz);/** will reallocate if needed */
+  int i, j=0;
+  for(i=0;i < mat->rows; i++){
+    mat->p[i]=j;
+#if 1 /** optimized version */
+    int idx=0;
+    const word * const rawrow = orig->rows[i];
+    while(((idx=nextelement(rawrow,orig->width,idx))!=-1)&&(idx<orig->ncols)){
+      mat->i[j++]=idx++;
+    }
+#else /** naive version */
+    for(int idx=0; idx< orig->ncols; idx++)
+      if(mzd_read_bit(orig,i,idx)){
+	mat->i[j++]=idx;
+	//	printf("i=%d j=%d idx=%d\n",i,j,idx);
+      }
+#endif /* 0 */    
+  }      
+  mat->p[i]=j; /* final value */
+  assert(j==nz);
+  mat->nz=-1; /* indicate compressed form */
+  return mat;
+}
+
+/**
+ * @brief Compute logical generator matrix Lx for a CSS code
+ *
+ * Given a pair of binary CSS generator matrices in CSR format,
+ * `Hx*Hz^T=0`, compute a sparse matrix `Lx` s.t. `Lx*Hz^T=0`
+ * and rows of `Lx` be linearly independent from those of `Hx`.
+ * TODO: see if sparsity of Lx can be improved.
+ */
+
+csr_t * Lx_for_CSS_code(const csr_t * const Hx, const csr_t *const Hz){
+  rci_t n=Hx->cols;
+  if(n!=Hz->cols)
+    ERROR("unequal number of columns in matrices Hx[%d,%d] and Hz[%d,%d]",
+	  Hx->rows, Hx->cols, Hz->rows, Hz->cols);  
+  mzd_t *Mx = mzd_from_csr(NULL,Hx); /* convert to dense matrix */
+  mzp_t *pivots = mzp_init(n);     /* initialize the permutation */
+  rci_t rank = mzd_gauss_naive(Mx, pivots, 1);
+  mzd_apply_p_right_trans(Mx,pivots); /** permute columns to make std form [ I C ] */
+  mzp_t *perm  = perm_p(      NULL, pivots,0);
+  mzp_t *permT = perm_p_trans(NULL, pivots,0);
+  mzp_free(pivots);
+  csr_t* HzPerm=csr_apply_perm(NULL,Hz,permT);
+  mzp_free(permT);
+#ifndef NDEBUG /** `verify` orthogonality */
+  mzd_t *MxT = mzd_transpose(NULL,Mx); 
+  if(product_weight_csr_mzd(HzPerm,MxT,0))
+    ERROR("rows of Hx and Hz should be orthogonal \n");
+  mzd_free(MxT);
+#endif
+  mzd_t *MzStar = mzd_generator_from_csr(NULL, HzPerm);
+  csr_free(HzPerm);
+
+  mzd_t *mat = mzd_stack(NULL,Mx,MzStar);
+  mzd_free(MzStar);
+  //  printf("stacked:\n");  mzd_print(mat);
+  int rank1=mzd_echelonize(mat,0);
+  //  printf("after gauss %d -> %d:\n", rank, rank1); mzd_print(mat);
+
+  mzd_t *window = mzd_init_window(mat,rank,0,rank1,n);
+  csr_t *Lx=csr_from_mzd(NULL, window);
+  csr_t *ans = csr_apply_perm(NULL,Lx,perm);
+  csr_free(Lx);  
+  mzd_free(window);
+  mzp_free(perm);
+
+  return ans;
+}
+  
+
 
 /**
  *  compress a CSR matrix  
@@ -473,7 +593,7 @@ void csr_out(const csr_t *mat){
 
  * @param comment if not `NULL`, insert the comment line(s) with an 
  *   extra `#` at the start of each row 
- */
+ */ 
 void csr_mm_write( char * const fout, const char fext[], const csr_t * const mat,
 		  const char comment[]){
   if(mat->nz>0) /** ensure this is CSR matrix */
@@ -495,7 +615,7 @@ void csr_mm_write( char * const fout, const char fext[], const csr_t * const mat
   
   if(!f)
     ERROR("can't open file '%s' for writing",str);
-  if(fprintf(f,"%%MatrixMarket coordinate integer general\n")<0)
+  if(fprintf(f,"%%%%MatrixMarket matrix coordinate integer general\n")<0)
     result++;
   if(comment!=NULL){
     if(fprintf(f,"%% %s\n",comment)<0)
@@ -517,34 +637,137 @@ void csr_mm_write( char * const fout, const char fext[], const csr_t * const mat
   }
 }
 
+/** @brief read sparse binary matrix in `alist` format.
+ * This is the format created by David MacKay, see 
+ * (https://www.inference.org.uk/mackay/CodesFiles.html)
+ * 
+ * @Returns the corresponding CSR matrix `mH` (first in the file)
+ */
+csr_t *csr_alist_read(const char fnam[], csr_t * mat, int transpose, int debug){
+  int N, M; /** rows, columns */
+  int *num_mlist; /** num of non-zero entries per row */
+  int biggest_n, biggest_m; /** max nz entries per col, row */ 
+  int num_pairs=0;
+  long int linenum=0;
+  FILE *f = fopen(fnam, "r");
+  if(f==NULL)
+    ERROR("can't open the (alist) file %s for reading\n",fnam);
+  
+  linenum++;
+  if(2!=fscanf(f," %d %d \n",&N,&M))
+    ERROR("\n%s:%ld: invalid alist file",fnam, linenum);
+  
+  linenum++;
+  if(2!=fscanf(f," %d %d \n",&biggest_m,&biggest_n))
+    ERROR("\n%s:%ld: invalid alist file",fnam, linenum);
+
+  linenum++;
+  num_mlist = malloc(N*sizeof(int));
+  if(!num_mlist) ERROR("memory allocation fail");
+  for(int i=0; i<N; i++){
+    int val=0;
+    if((1!=fscanf(f," %d ",&val))||(val>biggest_m))
+      ERROR("\n%s:%ld: invalid alist file",fnam, linenum);
+    else{
+      num_pairs += val;
+      num_mlist[i] = val;
+    }
+  }
+
+  linenum++;
+  int nz=0;
+  for(int i=0; i<M; i++){
+    int val=0;
+    if((1!=fscanf(f," %d ",&val))||(val>biggest_n))
+      {
+	printf("val=%d i=%d N=%d M=%d biggest_n=%d\n",val,i,N,M, biggest_n);	
+	ERROR("\n%s:%ld: invalid alist file",fnam, linenum);
+      }
+    
+    else
+      nz+=val;
+    /** otherwise `ignore` column weight entries */
+  }
+  assert(nz==num_pairs);
+  
+  int_pair * inH = malloc(nz*sizeof(int_pair));
+  if (!inH)
+    ERROR("memory allocation fail");
+  
+  int idx=0;
+  for(int ir=0; ir<N; ir++){
+    linenum++;
+    for(int j=0; j<biggest_m; j++){
+      int val=0;
+      if((1!=fscanf(f," %d ",&val))||(val>M))
+	ERROR("\n%s:%ld: invalid alist file",fnam, linenum);
+      if(j<num_mlist[ir])
+	{
+	  if(!transpose)
+	    inH[idx++] = (int_pair) {val, ir};
+	  else 
+	    inH[idx++] = (int_pair) {ir, val};
+	}
+      else{
+	if(val!=0)
+	  ERROR("\n%s:%ld: invalid alist file",fnam, linenum);
+      }
+    }      
+  }
+  if(!transpose)
+    mat = csr_from_pairs(mat, idx, inH, M, N);
+  else
+    mat = csr_from_pairs(mat, idx, inH, N, M);
+    
+  free(inH);
+  free(num_mlist);
+
+  if(debug &1)
+    printf("# read alist file %s %s: rows=%d cols=%d nz=%d\n",
+	   fnam,!transpose?"(transposed)":"",mat->rows,mat->cols,mat->nz);
+
+  return mat;    
+}
+
+
 /**
  * read sparse matrix into a (binary) CSR (all entries default to 1)
  * (re)allocate mat if needed
+ * will also try to read matrix in `alist` format 
  * use transpose=1 to transpose.
  */
-csr_t *csr_mm_read(char *fin, csr_t *mat, int transpose){
+csr_t *csr_mm_read(char *fnam, csr_t *mat, int transpose, int debug){
   int ret_code;
   MM_typecode matcode;
   FILE *f;
   int M, N, nz;   
  
-  if ((f = fopen(fin, "r")) == NULL) 
-    ERROR("can't open file %s",fin);
+  if ((f = fopen(fnam, "r")) == NULL) 
+    ERROR("can't open file %s",fnam);
 
-  if (mm_read_banner(f, &matcode) != 0)
-    ERROR("Could not process Matrix Market banner.");
-
+  if (mm_read_banner(f, &matcode) != 0){
+    /** try to read in `alist` format */
+    if(debug&1)
+      printf("# Could not process Matrix Market banner; try 'alist' format\n");
+    fclose(f);
+    mat = csr_alist_read(fnam,mat,transpose,debug);    
+    if(!mat)
+      ERROR("Could not process Matrix Market banner or load 'alist' file.");
+    else
+      return mat;    
+  }
+  
   if (!(mm_is_matrix(matcode) && mm_is_sparse(matcode) && 
 	mm_is_integer(matcode) && mm_is_general(matcode) )){
     printf("Sorry, this application does not support ");
     printf("Market Market type: [%s]\n", mm_typecode_to_str(matcode));
-    ERROR("input file %s",fin);
+    ERROR("input file %s",fnam);
     exit(1);
   }
 
   /* find out size of sparse matrix .... */
   if ((ret_code = mm_read_mtx_crd_size(f, &M, &N, &nz)) !=0)
-    ERROR("Cannot read size in input file %s",fin);
+    ERROR("Cannot read size in input file %s",fnam);
 
   if(transpose) {int tmp=M;M=N;N=tmp;} /* swap M and N */
   mat=csr_init(mat,M,N,nz); /* at this point mat will fit the data */  
@@ -573,10 +796,87 @@ csr_t *csr_mm_read(char *fin, csr_t *mat, int transpose){
   return mat;
 }
 
+/** verify that line has only space */
+int all_space(const char * str) {
+  while (*str) 
+    if (!isspace(*str++)) 
+      return 0;    
+  return 1;
+}
+
+/** @brief read up to `lmax` lines from a file in `01` format
+
+ * read up to `lmax` binary vectors of length `m` from a `01` file `fin` open
+ * for reading.  Place the vectors as columns of matrix `M` of size `m` rows by
+ * `lmax` colums.  Lines starting with `#` are silently ignored; a non-`01`
+ * line, or a `01` line of an incorrect length will give an error.
+ *
+ * @param M initialized output matrix with `lmax` rows and `m` columns
+ * @param fin file with 01 data open for reading
+ * @param[input,output] lineno current line number in the file.
+ * @param fnam file name (for debugging purposes)
+ * @param p Other parameters (only `p->debug` is used).
+ * @return the number of rows actually read.
+ *
+ */
+int read_01(mzd_t *M, FILE *fin, int *lineno, const char* fnam,
+	      const int debug){
+  if(!M)
+    ERROR("expected initialized matrix 'M'!\n");
+  else
+    mzd_set_ui(M,0);
+  int m   =M->nrows;
+  int lmax=M->ncols, il=0;
+  if(!fin)
+    ERROR("file 'fin' named '%s' must be open for reading\n",fnam);
+  if(debug&8) /** file io */
+    printf("# about to read 01 data from line %d in file '%s'\n",
+           *lineno,fnam);
+
+  char *buf=NULL;
+  size_t bufsiz=0;
+
+  ssize_t linelen;
+  while((il<lmax) && (!feof(fin)) &&
+        ((linelen = getline(&buf, &bufsiz, fin))>=0)){
+    (*lineno)++;
+    switch(buf[0]){
+    case '0': case '1':
+      if(linelen<=m)
+	ERROR("line is too short, expected %d 01 characters\n"
+	      "%s:%d:1: '%s'\n", m,fnam,*lineno,buf);
+      else{
+	for(int i=0; i<m; i++){
+	  if (buf[i]=='1')
+	    mzd_write_bit(M,i,il,1); /** row `i`, col `il` */
+	  else if (buf[i]!='0')
+	    ERROR("invalid 01 line\n"
+		  "%s:%d:%d: '%s'\n", fnam,*lineno,i+1,buf);
+	}
+	(il)++; /** success */
+      }
+      break;
+    case '#':       /** do nothing - skip this line */
+      break;
+    default:
+      if (!all_space(buf))
+	ERROR("invalid 01 line\n"
+	      "%s:%d:1: '%s'\n", fnam,*lineno,buf);
+      break;
+    }
+  }
+  if(debug&8) /** file io */
+    printf("# read %d 01 rows from file '%s'\n",il,fnam);
+  if(buf)
+    free(buf);
+  return il;
+}
+
+
 /** 
  * Permute columns of a CSR matrix with permutation perm.
  */
-csr_t *csr_apply_perm(csr_t *dst, csr_t *src, mzp_t *perm){
+csr_t *csr_apply_perm(csr_t *dst, const csr_t * const src, const mzp_t * const perm){
   int m=src->rows, n=src->cols;
   if (src->nz!=-1)
     ERROR("pair format unsupported, nz=%d; expected \"-1\"",src->nz);
@@ -603,16 +903,18 @@ csr_t *csr_apply_perm(csr_t *dst, csr_t *src, mzp_t *perm){
 
 
 /** 
- * Check if row is linearly dependent with the rows of matP0
+ * Check if row is linearly dependent with the rows of `matP0`
  * which is assumed to be in standard form.
- * rankP0 is the number of non-zero rows in rankP0.
- * return: -1 if empty line after simplification
- * 	otherwise position of the first non-zero bit in the simplified vector 
+ * `rankP0` is the number of non-zero rows in `matP0`.
+ *
+ * @return -1 if empty line after simplification otherwise position of
+ * 	the first non-zero bit in the simplified vector
+ * TODO: verify that it works as claimed 
  */
 
 int do_reduce(mzd_t *row, const mzd_t *matP0, const rci_t rankP0){
   word * rawrow = row->rows[0];  
-  rci_t j=-1;
+  rci_t j=0;
   rci_t n=row->ncols;
   do{
     j=nextelement(rawrow,row->width,j);
@@ -620,14 +922,16 @@ int do_reduce(mzd_t *row, const mzd_t *matP0, const rci_t rankP0){
       return j; 
     else if (j<rankP0)
       mzd_combine_even_in_place(row,0,0,matP0,j,0);
+    j++;
   } while (j < rankP0);
   if (j<n)
     return j;
   return -1;
 }
 
-/*
+/**
  * generate binary error vector with error probability p 
+ * TODO: use a different generator; also double in `[0,1)`.
  */
 void make_err(mzd_t *row, double p){
   const int max=1000000;
@@ -644,3 +948,85 @@ void make_err(mzd_t *row, double p){
   }
 }
 
+/** @create column error vector(s) */
+void make_err_vec(mzd_t *errors, double *vP){
+  assert(errors!=NULL);
+  const rci_t n=errors->nrows;
+  const rci_t m=errors->ncols;
+  for(rci_t i=0; i<n; i++){
+    mzd_row_clear_offset(errors,i,0);
+    const double prob=vP[i];
+    for(rci_t j=0; j<m; j++){
+      if (drandom()<prob)
+	mzd_write_bit(errors,i,j,1);
+    }
+  }  
+}
+
+/** @brief create a sparse error vector (indices of set bits) 
+ * @param siz pointer to the initial allocated size of `vec`
+ * @param num on return, pointer to the number of entries in vec
+ * @param vec vector of indices to create (content destroyed)
+ * @param nvec the length of the error vector 
+ * @param prob the probability of set bit 
+ * @return the pointer to the created vector 
+ */
+int *do_sparse_rnd_vec(int *siz, int *num, int *vec, const int nvec, const double prob){
+    int ivec=0;
+    const double onebyL = -1.0/log(1.0 - prob);
+    assert(onebyL>0);
+    int j =  (int )floor(onebyL * rnd_exponential());
+    while(j < nvec){
+      if(ivec >= *siz){
+	*siz *= 2;
+	vec=realloc(vec,(*siz) * sizeof(int));
+      }
+      vec[ivec++]=j;
+      j += (int )ceil(onebyL * rnd_exponential());
+    }
+    *num=ivec;
+    return vec;
+}
+
+/** @brief create a sample of errors to play with.
+ *  @param mHe matrix with `nvec` columns to return the syndrome `H*e`
+ *  @param mLe matrix with `nvec` columns for logical error `L*e`
+ *  @param Ht, Lt the initial matrices (transposed)
+ * @return 0
+ */
+int do_errors(mzd_t *mHe, mzd_t *mLe, const csr_t * const Ht, const csr_t * const Lt,
+	      const double vP[]){
+  
+  assert((mHe!=NULL) && (mLe!=NULL)); /** sanity check */
+  assert(mHe->ncols == mLe->ncols);   /** how many errors to produce */
+  assert(Lt->cols == mLe->nrows);     /** rows `L` */
+  assert(Ht->cols == mHe->nrows);     /** rows `H` */
+  
+  int max = 100;  /** initial size of `vec` */
+  int * vec = malloc(max * sizeof(int));
+
+  mzd_set_ui(mHe,0); /** zero matrix */
+  mzd_set_ui(mLe,0); /** zero matrix */
+  int nvec = mHe->ncols;
+  /** for each error type (column of `H` = row of `Ht`) */
+  for(int i=0; i < Ht->rows; i++){
+    int ivec=0;
+    vec = do_sparse_rnd_vec(&max, &ivec, vec, nvec, vP[i]);
+
+    /** flip the bits in `mHe` row by row to speed it up */
+    for(int ir = Ht->p[i]; ir < Ht->p[i+1]; ir++){
+      const int irow = Ht->i[ir]; /** column index in `H` = row in `Ht` */
+      for(int j=0; j < ivec; j++)
+	mzd_flip_bit(mHe,irow,vec[j]);
+    }
+
+    /** flip the bits in `mLe` row by row */
+    for(int ir = Lt->p[i]; ir < Lt->p[i+1]; ir++){
+      int irow = Lt->i[ir]; /** column index in `mL` */
+      for(int j=0; j<ivec; j++)
+	mzd_flip_bit(mLe,irow,vec[j]);
+    }
+  }
+  free(vec);
+  return 0;
+}

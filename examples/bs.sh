@@ -26,7 +26,7 @@ EOF
 # program variables to use 
 vecdec=../src/vecdec
 stim=../../Stim/out/stim
-python=python3.11
+python=python3
 
 # place to put the data in
 outfile=bs.dat

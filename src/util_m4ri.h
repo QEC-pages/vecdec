@@ -91,6 +91,12 @@ typedef struct{    /*  */
 
 typedef struct { int a; int b; } int_pair;
 
+
+#if defined(__cplusplus) && !defined (_MSC_VER)
+extern "C" {
+#endif
+
+
 /**
  * @brief initialize a CSR matrix from list of pairs (row,col)
  * @param mat use existing handle if sufficient size (allocate if NULL)
@@ -102,15 +108,37 @@ typedef struct { int a; int b; } int_pair;
  */
 csr_t * csr_from_pairs(csr_t *mat, int nz, int_pair * const prs, int nrows, int ncols);
 
-#if defined(__cplusplus) && !defined (_MSC_VER)
-extern "C" {
-#endif
+/** 
+ * @brief convert `m4ri` dense matrix to `csr`
+ * 
+ * Optimized for sparse matrices.  
+ * 
+ * @param mat use existing handle if sufficient size (allocate if NULL)
+ * @param orig the existing matrix to be converted
+ * @return the constructed matrix 
+ *
+ */
+csr_t * csr_from_mzd(csr_t *mat, const mzd_t * const orig);
+
+/**
+ * @brief Compute logical generator matrix Lx for a CSS code
+ *
+ * Given a pair of binary CSS generator matrices in CSR format,
+ * Hx*Hz^T=0, compute a sparse matrix Lx s.t. Lx*Hz^T=0
+ * and rows of Lx be linearly independent from those of Hx.
+ * TODO: see if sparsity of Lx can be improved.
+ */
+
+  csr_t * Lx_for_CSS_code(const csr_t * const Hx, const csr_t *const Hz);
 
 /** 
  * number of set bits in a matrix.  
  * TODO: what is the problem with built-in version?  
  */
 size_t mzd_weight(const mzd_t *A);
+
+/** @brief return 1 if row `i` of `A` is zero */
+int mzd_row_is_zero(const mzd_t * const A, const int i);
 
 /**
 * nextelement(set1,m,pos) = the position of the first element in set set1   
@@ -127,21 +155,11 @@ size_t mzd_weight(const mzd_t *A);
  * of length m, starting with position pos.
  * with all zero bits, return -1 or number outside the range
  */
-static inline int nextelement(word *set1, int m, int pos){
+static inline int nextelement(const word * const set1, const int m, const int pos){
   word setwd;
   int w;
-#if 0
-  if (pos < 0){
-    w = 0;
-    setwd = set1[0];
-  }
-  else
-#endif 
-    //    {
-    w = SETWD(pos);
-    setwd = set1[w] & (m4ri_ffff<< SETBT(pos));
-    //  }
-
+  w = SETWD(pos);
+  setwd = set1[w] & (m4ri_ffff<< SETBT(pos));
   for (;;){
     if (setwd != 0) return  TIMESWORDSIZE(w) + FIRSTBIT(setwd);
     if (++w == m) return -1;
@@ -183,7 +201,7 @@ mzd_t *mzd_from_csr(mzd_t *dst, const csr_t *p);
  * [ CT I ], and permute the cols back.  
  * (re)allocate G if needed.
  */
-mzd_t *mzd_generator_from_csr(mzd_t *G, csr_t *H);
+mzd_t *mzd_generator_from_csr(mzd_t *G, const csr_t * const H);
 
 /**
  * sparse-S by dense B multiplication
@@ -206,9 +224,11 @@ size_t product_weight_csr_mzd(const csr_t *A, const mzd_t *B, int transpose);
 int rand_uniform(const int max);
 
 /**
- * replace pivot q with a random pivot of same length, 
- * *** note: LAPACK style pivot permutations! ***
- * return pointer to q.
+ * @brief replace pivot q with a random pivot of same length, 
+ * *** WARNING: LAPACK style pivot permutations! ***
+ * `pivots=[p0,p1,p2,...]` with `p0<p1<p2...`
+ * requires pair permutations `(0,p0),(1,p1),(2,p2), ...`
+ * @return pointer to q.
  * input: perm -- existing permutation
  */ 
 mzp_t * mzp_rand(mzp_t *q);
@@ -244,6 +264,11 @@ csr_t *csr_free(csr_t *p);
  */
 csr_t *csr_init(csr_t *mat, int rows, int cols, int nzmax);
 
+/** 
+ * @brief return sparse identity matrix 
+ */
+  csr_t *csr_identity(int rows, int cols);
+  
 /**
  *  compress a CSR matrix  
  */ 
@@ -259,17 +284,19 @@ void csr_compress(csr_t *mat);
  * (re)allocate mat if needed
  * use transpose=1 to transpose.
  */
-  csr_t *csr_mm_read(char *fin, csr_t *mat, int transpose);
+csr_t *csr_mm_read(char *fnam, csr_t *mat, int transpose, int debug);
 
   /** write out CSR matrix.  Use fout="stdout" for `stdout` output */
 void csr_mm_write( char * const fout, const char fext[], const csr_t * const mat,
 		  const char comment[]);
+
+int read_01(mzd_t *M, FILE *fin, int *lineno, const char* fnam,
+	      const int debug);  
   
 /** 
  * Permute columns of a CSR matrix with permutation perm.
  */
-csr_t *csr_apply_perm(csr_t *dst, csr_t *src, mzp_t *perm);
-
+csr_t *csr_apply_perm(csr_t *dst, const csr_t * const src, const mzp_t * const perm);
 
 /**
  * \brief Flip the bit at position M[row,col].
@@ -304,6 +331,16 @@ int do_reduce(mzd_t *row, const mzd_t *matP0, const rci_t rankP0);
  * generate binary error vector with error probability p 
  */
 void make_err(mzd_t *row, double p);
+
+
+  /** @brief create a sample of errors to play with.
+   *  @param mHe matrix with `nvec` columns to return the syndrome `H*e`
+   *  @param mLe matrix with `nvec` columns for logical error `L*e`
+   *  @param Ht, Lt the initial matrices (transposed)
+   * @return 0
+   */
+  int do_errors(mzd_t *mHe, mzd_t *mLe, const csr_t * const Ht, const csr_t * const Lt,
+		const double vP[]);
 
 #if defined(__cplusplus) && !defined (_MSC_VER)
 }

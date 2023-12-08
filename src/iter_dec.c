@@ -16,138 +16,192 @@
 #include <strings.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <limits.h>
 #include <time.h>
 #include <unistd.h>
 #include <m4ri/m4ri.h>
 #include "utils.h"
 #include "util_m4ri.h"
-#include "iter_dec.h"
+#include "qllr.h"
+#include "vecdec.h"
 
-params_t prm={ .nrows=0, .n=0, .ncws=0, .steps=50,
-  .lerr=0, //.swait=0, //  .nvec=16,
-  .ntot=1, .nfail=0, .seed=0, 
-  .debug=1, .fdem=NULL, .fdet=NULL, .fobs=NULL, .finH=NULL, .finP=NULL, 
-  .mode=0, 
-  .LLRmin=0, .LLRmax=0, 
-  .vP=NULL, .vLLR=NULL, .mH=NULL, .mHt=NULL,
-  .mL=NULL, .mLt=NULL };
 
-int var_init(int argc, char **argv, params_t *p){
+void cnt_out(int print_banner){
+  if(print_banner)
+    printf("# FAIL_FRAC TOTAL CONV_TRIVIAL CONV_BP CONV_BP_AVG SUCC_TRIVIAL SUCC_BP SUCC_TOT\n");
+  printf(" %g %lld %lld %lld %lld %lld %lld %lld\n",
+	 (double ) (cnt[TOTAL]-cnt[SUCC_TOT])/cnt[TOTAL],
+	 cnt[TOTAL], cnt[CONV_TRIVIAL],cnt[CONV_BP], cnt[CONV_BP_AVG],
+	 cnt[SUCC_TRIVIAL], cnt[SUCC_BP], cnt[SUCC_TOT]);
+}
 
-  int dbg=0;
+void cnt_update(extr_t which, int iteration){
+  const long long int max = (LLONG_MAX >> 3);
+  cnt[which]++;
+  iter1[which]+=iteration;
+  iter2[which]+=iteration*iteration;
+  if((cnt[which] > max) ||(iter1[which] > max) || (iter2[which]>max)){
+    cnt_out(1);
+    ERROR("too many iterations\n"); 
+  }
+}
 
-  if(argc<=1)
-    ERROR("try \"%s -h\" for help",argv[0]);
 
-  for(int i=1; i<argc; i++){  /** `debug` */
-    if(sscanf(argv[i],"debug=%d",& dbg)==1){
-      if(dbg==0)
-	p->debug = 0;
-      else{
-        if(i==1)
-          p->debug = dbg; /** just assign if in the `1st position` */
-        else
-          p->debug ^= dbg; /** otherwise `XOR` */
-        if(p->debug &1)
-	  printf("# read %s, debug=%d octal=%o\n",argv[i],p->debug,p->debug);
+void out_llr(const char str[], const int num, const qllr_t llr[]){
+  const int max= num > 20 ? 20 : num-1 ;
+  printf("%s[",str);
+  for(int iv = 0; iv <= max; iv++)
+    printf("%+6.1g%s", dbl_from_llr(llr[iv]), iv< max ? " " : "]\n");
+}
+
+/** @brief Check the syndrome for the LLR vector given (`0`th row of `syndrome`).
+ * @return 1 if codeword is valid, 0 otherwise */
+int syndrome_check(const qllr_t LLR[], const mzd_t * const syndrome,
+		   const csr_t * const H,
+		   [[maybe_unused]] const params_t * const p){
+  const int nchk = H->rows;
+  //  const csr_t * const H = p->mH;
+  for(int ic=0; ic<nchk; ic++){ /** target `check` node */
+    int synd = mzd_read_bit(syndrome,0,ic);
+    for(int j = H->p[ic]; j < H->p[ic+1] ; j++){
+      const int iv = H->i[j]; /** origin `variable` node index */
+      if(LLR[iv] < 0)
+	synd ^= 1;
+    }
+    if(synd)
+      return 0; /** invalid codeword */
+  }
+  return 1; /** valid codeword */
+}
+
+/** @brief baseline parallel BP algorithm (sum-product or max-product depending on LLRs used).  
+ * 
+ * Decode `e` vector using syndrome bits in `srow = e*Ht` and apriori
+ * bit LLR values in `LLR`.  Assume `srow` non-zero (no check for a
+ * trivial solution).
+ * 
+ * @param[out] outLLR the resulting LLR (whether converged or not)
+ * @return 0 if failed to converge or (the number of steps) if converged successfully
+ */
+int do_parallel_BP(qllr_t * outLLR, const mzd_t * const srow,
+		   const csr_t * const H, const csr_t * const Ht,
+		   const qllr_t LLR[], const params_t * const p){
+  assert(outLLR != NULL);
+  const int nchk = p->nchk; /** number of check nodes */
+  const int nvar = p->nvar;     /** number of variable nodes */
+  const int nz = p->mH->p[p->nchk]; /** number of messages */
+  qllr_t *mesVtoC = malloc(nz*sizeof(qllr_t));
+  qllr_t *mesCtoV = malloc(nz*sizeof(qllr_t));
+  //  double * xLLR = malloc(nvar*sizeof(double));
+  qllr_t * const xLLR = outLLR; /** return soft vector of LLR here */
+  qllr_t * aLLR = calloc(nvar,sizeof(qllr_t)); /** averaged LLR */
+  if((!aLLR)||(!mesVtoC)||(!mesCtoV))
+    ERROR("memory allocation failed");
+  int succ_BP=0;
+  
+    /** init V->C messages to bare LLR */
+  for(int ic=0; ic<nchk; ic++){ /** target `check` node index */
+    for(int j = H->p[ic]; j < H->p[ic+1] ; j++){
+      const int iv = H->i[j]; /** `variable` node index */
+      mesVtoC[j]= LLR[iv];   /** `j` is the edge (message) index */
+    }
+  }
+  
+  for (int istep=1; istep <= p->steps  ; istep++){ /** main decoding cycle */
+    //    cnt[TOTAL]++;
+    /** C -> V messages */
+    for(int iv=0; iv<nvar; iv++){ /** target `variable` node index */
+      for(int j = Ht->p[iv]; j < Ht->p[iv+1] ; j++){
+	/** TODO: optimize this loop as in `LDPC_Code::bp_decode()` of `itpp` package */
+	const int ic = Ht->i[j];/** origin `check` node index */
+	int sbit = mzd_read_bit(srow,0,ic); /** syndrome bit */
+	qllr_t msg=0; 
+	int new=1;
+	for(int j1 = H->p[ic]; j1 < H->p[ic+1] ; j1++){
+	  const int iv1 = H->i[j1]; /** aux `variable` node index */
+	  if(iv1!=iv){
+	    if(new){
+	      msg = mesVtoC[j1];
+	      new=0;
+	    }
+	    else
+	      msg = boxplus(msg, mesVtoC[j1]);
+	  }
+	}
+	mesCtoV[j] = (sbit ? -msg : msg);
       }
     }
-    else if(sscanf(argv[i],"mode=%d",& dbg)==1){
-      if(dbg==0)
-	p->mode = 0;
-      else{
-	p->mode ^= dbg;
-        if(p->debug&1)
-          printf("# read %s, mode=%d octal=%o\n",argv[i],p->mode,p->mode);
+
+        
+    for(int iv = 0; iv< nvar; iv++){
+      qllr_t val= LLR[iv]; /** HERE! (WARNING: do we need this?) */
+      for(int j1 = Ht->p[iv]; j1 < Ht->p[iv+1] ; j1++){
+	// const int ic1 = Ht->i[j1];/** aux `check` node index */
+	val += mesCtoV[j1];
       }
+      xLLR[iv] = val;
+      /** TODO: play with the decay value `0.5` */
+      aLLR[iv] = llr_from_dbl(0.5 * dbl_from_llr(aLLR[iv]) + dbl_from_llr(val)); 
     }
-    else if (sscanf(argv[i],"steps=%d",&dbg)==1){ /** `steps` */
-      p -> steps = dbg;
-      if (p->debug&1)
-	printf("# read %s, steps=%d\n",argv[i],p-> steps);
+    if(p->debug & 8){
+      out_llr("x",p->nvar, xLLR);
+      out_llr("a",p->nvar, aLLR);
+      
+      //      for(int iv = 0; iv < max; iv++)
+      //	printf(" %5.1g%s", dbl_from_llr(aLLR[iv]), iv< max ? "" : "\n");
     }
-    else if (sscanf(argv[i],"lerr=%d",&dbg)==1){ /** `lerr` */
-      p -> lerr = dbg;
-      if (p->debug&1)
-	printf("# read %s, lerr=%d\n",argv[i],p-> lerr);
+
+
+    if(syndrome_check(xLLR,srow,p->mH, p)){
+      //      outLLR = xLLR; 
+      cnt_update(CONV_BP, istep);
+      succ_BP=istep;
+      break;
     }
-    else if (sscanf(argv[i],"ntot=%d",&dbg)==1){ /** `ntot` */
-      p -> ntot = dbg;
-      if (p->debug&1)
-	printf("# read %s, ntot=%d\n",argv[i],p-> ntot);
+    else if(syndrome_check(aLLR,srow,p->mH, p)){
+      for(int iv=0; iv< p->nvar; iv++)
+	outLLR[iv] = aLLR[iv];
+      cnt_update(CONV_BP_AVG, istep);
+      succ_BP=-istep;
+      break;
     }
-    else if (sscanf(argv[i],"nfail=%d",&dbg)==1){ /** `nfail` */
-      p -> nfail = dbg;
-      if (p->debug&1)
-	printf("# read %s, nfail=%d\n",argv[i],p-> nfail);
-    }
-    else if (sscanf(argv[i],"seed=%d",&dbg)==1){ /** `seed` */
-      p->seed=dbg;
-      if (p->debug&1)
-	printf("# read %s, seed=%d\n",argv[i],p->seed);
-    }
-    else if (0==strncmp(argv[i],"f=",2)){/** back compatibility */
-      if(strlen(argv[i])>2)
-        p->fdem = argv[i]+2;
-      else
-        p->fdem = argv[++i]; /**< allow space before file name */
-      if (p->debug&1)
-	printf("# read %s, (fdem) f=%s\n",argv[i],p->fdem);
-    }
-    else if (0==strncmp(argv[i],"fdem=",5)){
-      if(strlen(argv[i])>5)
-        p->fdem = argv[i]+5;
-      else
-        p->fdem = argv[++i]; /**< allow space before file name */
-      if (p->debug&1)
-	printf("# read %s, fdem=%s\n",argv[i],p->fdem);
-    }
-    else if (0==strncmp(argv[i],"fdet=",5)){
-      if(strlen(argv[i])>5)
-        p->fdet = argv[i]+5;
-      else
-        p->fdet = argv[++i]; /**< allow space before file name */
-      if (p->debug&1)
-	printf("# read %s, fdet=%s\n",argv[i],p->fdet);
-    }
-    else if (0==strncmp(argv[i],"fobs=",5)){
-      if(strlen(argv[i])>5)
-        p->fobs = argv[i]+5;
-      else
-        p->fobs = argv[++i]; /**< allow space before file name */
-      if (p->debug&1)
-	printf("# read %s, fobs=%s\n",argv[i],p->fobs);
-    }
-    else if((strcmp(argv[i],"--help")==0)
-            ||(strcmp(argv[i],"-h")==0)
-            ||(strcmp(argv[i],"help")==0)){
-      printf( USAGE , argv[0],argv[0]);
-      exit (-1);
-    }
-    else{ /* unrecognized option */
-      printf("# unrecognized parameter \"%s\" at position %d\n",argv[i],i);
-      ERROR("try \"%s -h\" for help",argv[0]);
+
+    
+    /* V -> C messages */ 
+    for(int ic=0; ic<nchk; ic++){ /** target `check` node */
+      for(int j = H->p[ic]; j < H->p[ic+1] ; j++){
+	const int iv = H->i[j]; /** origin `variable` node index */
+#if 0 /** TODO: verify these give identical results! */
+	qllr_t msg = LLR[iv];
+	for(int j1 = Ht->p[iv]; j1 < Ht->p[iv+1] ; j1++){
+	  const int ic1 = Ht->i[j1];/** aux `check` node index */
+	  if(ic1 != ic)
+	    msg += mesCtoV[j1];
+	}
+	mesVtoC[j] = msg;
+#else /* simplified calculation */
+	//	assert(ic == Ht->i[j]);
+	for(int j1 = Ht->p[iv]; j1 < Ht->p[iv+1] ; j1++){
+	  const int ic1 = Ht->i[j1];/** aux `check` node index */
+	  if(ic1 == ic)
+	    mesVtoC[j] = xLLR[iv] - mesCtoV[j1];
+	  /** TODO: use binary search here instead */
+	}
+#endif /* 0 */	
+      }
     }
 
   }
-  return 0;
-}
+  if(!succ_BP)
+    outLLR = xLLR; /** TODO: make an option to change this to aLLR */
+  /** clean up ********************/
+  //  free(xLLR);
+  if(aLLR){
+    free(aLLR);
+    aLLR=NULL;
+  }
+  free(mesVtoC);
+  free(mesCtoV);
 
-void var_kill(params_t *p){
-  if(p->vP)
-    free(p->vP);
-  if(p->vLLR)
-    free(p->vLLR);
-  p->vP = p->vLLR = NULL;
-  p->mH =  csr_free(p->mH); /** OK if `NULL` */
-  p->mHt = csr_free(p->mHt);
-  p->mL =  csr_free(p->mL);
-  p->mLt = csr_free(p->mLt);
-  p->mG = csr_free(p->mG);
-}
-  
-int main(int argc, char **argv){
-  params_t * const p=&prm;
-  var_init(argc,argv, p); /* initialize variables */
-  var_kill(p);
+  return succ_BP;
 }

@@ -11,6 +11,10 @@
  * All rights reserved.
  *
  */
+#include <strings.h>
+#include <ctype.h>
+#include <m4ri/m4ri.h>
+#include "util_m4ri.h"
 #include "utils.h"
 #include "mmio.h"
 
@@ -60,7 +64,7 @@ double * dbl_mm_read(const char * const fin, int *nrows, int *ncols, int *siz, d
     if(*siz != 0)
       ERROR("invalid input value siz=%d, arr==NULL",*siz);
     *siz = (*nrows) * (*ncols);
-    arr = realloc(arr,sizeof(double)*(*siz));
+    arr = malloc(sizeof(double)*(*siz));
     if(!arr)
       ERROR("memory allocation failed");
   }
@@ -93,7 +97,7 @@ void dbl_mm_write( char * const fout, const char fext[],
   
   if(!f)
     ERROR("can't open file '%s' for writing",str);
-  if(fprintf(f,"%%MatrixMarket matrix array real general\n")<0)
+  if(fprintf(f,"%%%%MatrixMarket matrix array real general\n")<0)
     result++;
   if(comment!=NULL){
     if(fprintf(f,"%% %s\n",comment)<0)
@@ -113,6 +117,120 @@ void dbl_mm_write( char * const fout, const char fext[],
     free(str);
   }
 }
+
+/** @brief read detector error model (DEM) created by `stim`.
+ * Immediately create CSR matrices `mH` and `mL` and vector `vP`; 
+ * return the corresponding pointers via `ptrs` (in this order).
+ * TODO: make it test for file type 
+ * @param fnam file name for reading DEM from
+ * @param p structure to store produced matrices
+ */
+void read_dem_file(char *fnam, void * ptrs[3], int debug){
+  ssize_t linelen, col=0;
+  size_t lineno=0, bufsiz=0; /**< buffer size for `readline` */
+  char *buf = NULL;          /** actual buffer for `readline` */
+  //  int nzH=0, nzL=0;  /** count non-zero entries in `H` and `L` */
+  int maxH=100, maxL=100, maxN=100; 
+  double *inP = malloc(maxN*sizeof(double));
+  int_pair * inH = malloc(maxH*sizeof(int_pair));
+  int_pair * inL = malloc(maxL*sizeof(int_pair));
+  if ((!inP)||(!inH)||(!inL))
+    ERROR("memory allocation failed\n");
+
+  if(debug & 1)
+    printf("# opening DEM file %s\n",fnam);
+  FILE *f = fopen(fnam, "r");
+  if(f==NULL)
+    ERROR("can't open the (DEM) file %s for reading\n",fnam);
+
+  int r=-1, k=-1, n=0;
+  int iD=0, iL=0; /** numbers of `D` and `L` entries */
+  do{ /** read lines one-by-one until end of file is found *************/
+    lineno++; col=0; linelen = getline(&buf, &bufsiz, f);
+    if(linelen<0)
+      break;
+    if(debug & 32) printf("# %s",buf);
+    char *c=buf;
+    double prob;
+    int num=0, val;
+    while(isspace(*c)){ c++; col++; } /** `skip` white space */
+    if((*c != '\0')&& (*c != '#') &&(col < linelen)){
+      if(sscanf(c,"error( %lg ) %n",&prob,&num)){
+        if((prob<=0)||(prob>=1))
+          ERROR("probability should be in (0,1) exclusive p=%g\n"
+                "%s:%zu:%zu: '%s'\n", prob,fnam,lineno,col+1,buf);
+        c+=num; col+=num;
+        if(n>=maxN){
+          maxN=2*maxN;
+          inP=realloc(inP,maxN*sizeof(*inP));
+        }
+        inP[n]=prob;
+        do{/** deal with the rest of the line */
+          num=0;
+          if(sscanf(c," D%d %n",&val, &num)){/** `D` entry */
+            c+=num; col+=num;
+            assert(val>=0);
+            if(val>=r)
+              r=val+1;  /** update the number of `D` pairs */
+            if(iD>=maxH){
+              maxH=2*maxH;
+              inH=realloc(inH,maxH*sizeof(*inH));
+            }
+            inH[iD].a   = val;   /** add a pair */
+            inH[iD++].b = n;
+            if(debug & 32) printf("n=%d iD=%d val=%d r=%d\n",n,iD,val, r);
+          }
+          else if(sscanf(c," L%d %n",&val, &num)){/** `L` entry */
+            c+=num; col+=num;
+            assert(val>=0);
+            if(val>=k)
+              k=val+1;  /** update the number of `L` pairs */
+            if(iL>=maxL){
+              maxL=2*maxL;
+              inL=realloc(inL,maxL*sizeof(*inL));
+            }
+            inL[iL].a   = val;   /** add a pair */
+            inL[iL++].b = n;
+            if(debug & 32) printf("n=%d iL=%d val=%d k=%d\n",n,iD,val,k);
+          }
+          else
+            ERROR("unrecognized entry %s"
+		  "%s:%zu:%zu: '%s'\n",c,fnam,lineno,col+1,buf);
+        }
+        while((c[0]!='#')&&(c[0]!='\n')&&(c[0]!='\0')&&(col<linelen));
+        n++;
+      }
+      else if (sscanf(c,"detector( %d %n",&val,&num)){
+        /** do nothing */
+        //        printf("# ignoring row[%zu]=%s\n",lineno,c);
+      }
+      else if (sscanf(c,"shift_detectors( %d %n",&val,&num)){
+        /** do nothing */
+        //        printf("# ignoring row[%zu]=%s\n",lineno,c);
+      }
+      else
+        ERROR("unrecognized DEM entry %s"
+              "%s:%zu:%zu: '%s'\n",c,fnam,lineno,col+1,buf);
+
+    }
+    /** otherwise just go to next row */
+  }
+  while(!feof(f));
+
+  if(debug &1)
+    printf("# read DEM: r=%d k=%d n=%d\n",r,k,n);
+
+  ptrs[0] = csr_from_pairs(ptrs[0], iD, inH, r, n);
+  ptrs[1] = csr_from_pairs(ptrs[1], iL, inL, k, n);
+  ptrs[2] = inP;
+  if (buf)
+    free(buf);
+  free(inH);
+  free(inL);
+  fclose(f);
+
+}
+
 
 #ifdef __MINGW32__ /** windows compiler */
 int getline(char **line, size_t *n, FILE *fp){
@@ -158,3 +276,5 @@ int getline(char **line, size_t *n, FILE *fp){
 }
 
 #endif /* __MINGW32__ */
+
+
