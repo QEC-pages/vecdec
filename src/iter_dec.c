@@ -141,11 +141,13 @@ int do_parallel_BP(qllr_t * outLLR, const mzd_t * const srow,
       }
       xLLR[iv] = val;
       /** TODO: play with the decay value `0.5` */
-      aLLR[iv] = llr_from_dbl(0.5 * dbl_from_llr(aLLR[iv]) + dbl_from_llr(val)); 
+      if(!(p->submode&1))
+	aLLR[iv] = llr_from_dbl(0.5 * dbl_from_llr(aLLR[iv]) + dbl_from_llr(val)); 
     }
     if(p->debug & 8){
       out_llr("x",p->nvar, xLLR);
-      out_llr("a",p->nvar, aLLR);
+      if(!(p->submode&1))
+	out_llr("a",p->nvar, aLLR);
       
       //      for(int iv = 0; iv < max; iv++)
       //	printf(" %5.1g%s", dbl_from_llr(aLLR[iv]), iv< max ? "" : "\n");
@@ -158,7 +160,7 @@ int do_parallel_BP(qllr_t * outLLR, const mzd_t * const srow,
       succ_BP=istep;
       break;
     }
-    else if(syndrome_check(aLLR,srow,p->mH, p)){
+    else if((!(p->submode&1)) && (syndrome_check(aLLR,srow,p->mH, p))){
       for(int iv=0; iv< p->nvar; iv++)
 	outLLR[iv] = aLLR[iv];
       cnt_update(CONV_BP_AVG, istep);

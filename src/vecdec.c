@@ -1192,8 +1192,22 @@ int var_init(int argc, char **argv, params_t *p){
 
   switch(p->mode){
   case 1:  /** currently only needed for BP */
-    if(p->debug&1)
+    if(p->debug&1){
       out_LLR_params(LLR_table);
+      switch(p->submode){
+      case 0: 
+	printf("# submode=%d, parallel BP using LLR and average LLR\n",p->submode);
+	break;
+      case 1:
+	printf("# submode=%d, parallel BP using LLR only\n",p->submode);
+	break;
+      default:
+	break;
+      }
+    }
+    if ((p->submode>1))
+      ERROR(" mode=%d : non-zero submode='%d' unsupported\n",
+	    p->mode, p->submode);    
     /* fall through */
   case 0:
     if((p->ferr) && (p->fobs))
@@ -1229,7 +1243,7 @@ int var_init(int argc, char **argv, params_t *p){
     else if ((! p->fobs) && (! p->fdet))
       p->internal=1; /* generate observables and detector events internally */
 
-    if ((p->submode!=0))
+    if ((p->mode==0)&&(p->submode!=0))
       ERROR(" mode=%d : non-zero submode='%d' unsupported\n",
 	    p->mode, p->submode);
     
