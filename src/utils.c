@@ -17,8 +17,21 @@
 #include "util_m4ri.h"
 #include "utils.h"
 #include "mmio.h"
+#include "qllr.h"
 
 tinymt64_t tinymt;
+
+/** hashing storage helper functions ***** use `uthash.h` ***************************/
+
+
+/** @brief print entire `one_vec_t` structure by pointer */
+void print_one_vec(const one_vec_t * const pvec){
+  printf(" w=%d E=%g cnt=%d [",pvec->weight, dbl_from_llr(pvec->energ),pvec->cnt);
+  for(int i=0; i < pvec->weight; i++)
+    printf("%d%s",pvec->arr[i], i+1 < pvec->weight ? " " :"]\n");
+}
+
+/** some extra io functions *******************************************************/
 
 /** @brief read an `MMX` array of doubles
  * With a column of doubles, `nrows` and `ncols` point to zeros on return.

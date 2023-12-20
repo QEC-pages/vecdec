@@ -20,29 +20,7 @@ extern "C"{
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include "uthash.h" /** hashing storage macros */
 #include  "qllr.h" 
-
-  /**< @brief structure to hold sparse vectors in a hash */
-  typedef struct ONE_VEC_T {
-    UT_hash_handle hh;
-    double energ; /**< sum of LLRs */
-    int weight; /**< number of integers in the list */
-    int cnt; /** how many times this vector was encountered */
-    //  size_t len; /** `weight*sizeof(int)` (is this really needed?) */
-    int arr[0]; /** array of `weight` integers, the actual key  */
-  } one_vec_t;
-
-  /** @brief structure to read in one line of data */
-  typedef struct ONE_PROB_T {
-    double p; /**< probability */
-    int n1;   /**< number of entries in H column */
-    int n2;   /**< number of entries in L column */
-    int idx[]; /**< flexible array to store `n1+n2` entries */
-  } one_prob_t;
-
-  /** @bried helper structure to sort by probabilities */
-  typedef struct IPPAIR_T {int index; double prob; } ippair_t; 
 
 
   typedef enum EXTR_T { TOTAL, CONV_TRIVIAL, CONV_BP, CONV_BP_AVG,
@@ -126,23 +104,8 @@ extern "C"{
     return 0;
   }
 
-  /** @brief helper function to sort `int`
-   *  use `qsort(array, len, sizeof(rci_t), cmp_rci_t);`
-   */
-  static inline int cmp_rci_t(const void *a, const void *b){
-    const rci_t va= *((rci_t *) a);
-    const rci_t vb= *((rci_t *) b);
-    return va-vb;
-#if 0
-    if (va<vb)
-      return +1;
-    else if (va>vb)
-      return -1;
-    return 0;
-#endif
-  }
 
-  /** functions defined in `iter_dec.c` */
+  /** functions defined in `iter_dec.c` ******************************************** */
   void cnt_out(int print_banner);
   void cnt_update(extr_t which, int iteration);
   void out_llr(const char str[], const int num, const qllr_t llr[]);
@@ -154,6 +117,11 @@ extern "C"{
   int do_parallel_BP(qllr_t * outLLR, const mzd_t * const srow,
 		   const csr_t * const H, const csr_t * const Ht,
 		     const qllr_t LLR[], const params_t * const p);
+
+  /** function defined in `star_poly.c` ********************************************* */
+
+  csr_t * do_G_matrix(const csr_t * const mHt, const csr_t * const mLt, const qllr_t LLR[], 
+		      const int debug);
 
   /** 
    * @brief The help message. 

@@ -1030,3 +1030,12 @@ int do_errors(mzd_t *mHe, mzd_t *mLe, const csr_t * const Ht, const csr_t * cons
   free(vec);
   return 0;
 }
+
+/** @brief calculate the rank of the csr matrix `M` */
+int rank_csr(const csr_t * const M){
+  assert(mat);
+  mzd_t *mzd_M = mzd_from_csr(NULL, M);
+  int rank=mzd_gauss_delayed(mzd_M,0,0);
+  mzd_free(mzd_M);
+  return rank;
+}

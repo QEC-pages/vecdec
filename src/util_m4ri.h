@@ -342,6 +342,9 @@ void make_err(mzd_t *row, double p);
   int do_errors(mzd_t *mHe, mzd_t *mLe, const csr_t * const Ht, const csr_t * const Lt,
 		const double vP[]);
 
+/** @brief calculate the rank of the csr matrix `M` */
+  int rank_csr(const csr_t * const M);  
+
 #if defined(__cplusplus) && !defined (_MSC_VER)
 }
 #endif

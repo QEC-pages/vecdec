@@ -14,14 +14,28 @@ for((dd2=-1; dd2<=2; dd2++)); do
 	d2=$((300*dd2))
     fi
     echo "# use qllr2=$d2 $program" >> $outfile
-    echo "# $dd2 $ii $pp d2=$d2 $program"
+    echo "# $dd2 qllr2=$d2 $program"
     for ((ii=0; ii <= 11; ii++)); do
 	pp=`awk "BEGIN { print ${p0}*exp(-${ii}*log(2)*0.25) }"`
-	$program debug=0 mode=1.1 finH=$code ntot=10000 nvec=$((100*10)) nfail=1000 useP=$pp qllr2=$d2 > tmp.tmp
+	$program debug=0 mode=1.1 finH=$code ntot=1000000 nvec=$((100*1000)) nfail=1000 useP=$pp qllr2=$d2 > tmp.tmp
 	echo $pp `cat tmp.tmp`
 	echo $pp `cat tmp.tmp` >> $outfile
 	debug=0;
     done
+    echo
     echo >> $outfile
     echo >> $outfile
 done
+
+echo '#' qllr2=300 mode=1.0 $program 
+echo '#' qllr2=300 mode=1.0 $program >> $outfile
+for ((ii=0; ii <= 11; ii++)); do
+    pp=`awk "BEGIN { print ${p0}*exp(-${ii}*log(2)*0.25) }"`
+    $program debug=0 mode=1.0 finH=$code ntot=1000000 nvec=$((100*1000)) nfail=1000 useP=$pp qllr2=300 > tmp.tmp
+    echo $pp `cat tmp.tmp`
+    echo $pp `cat tmp.tmp` >> $outfile
+    debug=0;
+done
+echo >> $outfile
+echo >> $outfile
+

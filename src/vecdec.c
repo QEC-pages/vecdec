@@ -43,17 +43,6 @@ long long int iter2[EXTR_MAX]; /** sums of BP iteration numbers squared */
 
 
 
-/** @brief compare two `one_vec_t` structures by energy */
-static inline int by_energy(void *a, void *b){
-  const one_vec_t *pa = (one_vec_t *) a;
-  const one_vec_t *pb = (one_vec_t *) b;
-  if (pa->energ < pb->energ)
-    return -1;
-  else if (pa->energ > pb->energ)
-    return +1;
-  else /** Ea == Eb */
-    return 0;
-}
 
 /** @brief calculate the energy of the row `i` in `A` */
 qllr_t mzd_row_energ(qllr_t *coeff, const mzd_t *A, const int i){
@@ -65,12 +54,6 @@ qllr_t mzd_row_energ(qllr_t *coeff, const mzd_t *A, const int i){
   /** todo: rewrite in terms of `__builtin_clzll` */
 }
 
-/** @brief print entire `one_vec_t` structure by pointer */
-void print_one_vec(const one_vec_t * const pvec){
-  printf(" w=%d E=%g cnt=%d [",pvec->weight, dbl_from_llr(pvec->energ),pvec->cnt);
-  for(int i=0; i < pvec->weight; i++)
-    printf("%d%s",pvec->arr[i], i+1 < pvec->weight ? " " :"]\n");
-}
 
 /** @brief calculate the probability of codeword in `one_vec_t` */
 static inline double do_prob_one_vec(const one_vec_t * const pvec, const params_t * const p){
@@ -150,206 +133,6 @@ static inline int twomat_gauss_one(mzd_t *M, mzd_t *S, const int idx, const int 
   //  }
   return pivots; /** 0 or 1 only */
   // if one, need to update the current pivot list
-}
-
-
-/** @brief create `generator` matrix orthogonal to rows of `mH` and
- *  `mL`.
- *
- *  WARNING: Currently, only finds cycles of length 3 (this is OK to
- *  construct `G` matrix for a DEM constructed by `stim`. 
- */
-csr_t * do_G_matrix(const csr_t * const mHt, const csr_t * const mLt,
-		    const params_t * const p){
-  /** sanity check */
-  assert(mHt->rows == mLt->rows);
-  
-  /** init hash for combined columns of `mH` and `mL` */
-  one_vec_t *hash=NULL;
-  int buflen = mLt->rows * sizeof(one_vec_t) +
-    mHt->p[mHt->rows]*sizeof(int) + mLt->p[mLt->rows]*sizeof(int);
-  // printf("buflen=%zu nzH=%d nzL=%d\n",buflen,mHt->p[mHt->rows], mLt->p[mLt->rows]);
-  char *pos, *buf;
-  pos = buf = calloc(buflen, sizeof(char));
-  if(!buf)
-    ERROR("memory allocation failed");
-  unsigned int max=0; /** max column weight */
-  one_vec_t **HL=malloc(sizeof(one_vec_t *) * mLt->rows); /**array for combined cols */
-  if (!HL)
-    ERROR("memory allocation failed");
-  for(int i=0; i< mLt->rows; i++){
-    one_vec_t *pvec = HL[i] = (one_vec_t *) pos;
-    int *vec = pvec->arr;     
-    unsigned int len=0, need_sorting=0;
-    for(int ir=mHt->p[i]; ir< mHt->p[i+1]; ir++){ /** row `i` of `Ht` */
-      vec[len]=mHt->i[ir];
-      if((len>0)&&(vec[len-1]>vec[len]))
-	need_sorting=1;
-      len++;
-    }
-    for(int ir=mLt->p[i]; ir< mLt->p[i+1]; ir++){/** row `i` of `Lt` */
-      vec[len]=mLt->i[ir] + mHt->cols;      
-      if((len>0)&&(vec[len-1]>vec[len]))
-	need_sorting=1;
-      len++;
-    }
-    if(need_sorting)
-      qsort(vec, len, sizeof(rci_t), cmp_rci_t);
-    assert(sizeof(rci_t) == sizeof(int));
-      
-    //for(int ir=0; ir< len; ir++)  printf("%d%s",vec[ir],ir+1<len ? " " : "\n");
-    pos += sizeof(one_vec_t) + len * sizeof(int);
-    //    printf("i=%d len=%d pos=%ld of %zu\n",i,len,pos-buf,buflen);
-    assert(pos-buf <=buflen);
-    pvec->weight = len;
-    pvec->energ = p->vLLR[i];
-    pvec->cnt = i; /* use it to record the column number */
-    HASH_ADD(hh, hash, arr, (len*sizeof(int)), pvec);
-    if(max<len)
-      max=len;
-  }
-
-#if 0  
-  for(int i=0; i < mLt->rows; i++){
-    const one_vec_t *cw1 = HL[i];
-    const int *vec1=cw1->arr;
-    printf("i=%d: [",i);
-    for(int ir=0; ir < cw1->weight; ir++)
-      printf("%d%s",vec1[ir],ir+1 < cw1->weight ? " " : "]\n");
-  }
-  printf("max=%d\n\n",max);
-#endif
-
-  /** init the pairs to construct the matrix */
-  int nz=0, nzmax= 3*(mLt->rows - mLt->cols), rowsG=0;
-  assert(nzmax>0);
-  int_pair *prs = malloc(sizeof(int_pair)*nzmax);
-  if(!prs)
-    ERROR("memory allocation fail");
-
-  /** combine columns `i` and `j` and search in hash */
-  int *cvec = malloc(2*max*sizeof(int)); /* temp storage */
-  if(!cvec)
-    ERROR("memory allocation fail!");
-  
-  for(int i=0; i < mLt->rows; i++){
-    const one_vec_t *cw1 = HL[i];
-    const int *vec1=cw1->arr;
-    assert(cw1->weight>0); /** Just in case. An all-zero columns
-			       should be removed from DEM (and are
-			       never there in practice for DEM files
-			       produced by Stim). */
-#if 0
-    printf("\ni=%d: [",i);
-    for(int ir=0; ir < cw1->weight; ir++)
-      printf("%d%s",vec1[ir],ir+1 < cw1->weight ? " " : "]\n");
-#endif
-    
-    for(int j=i+1; j<mLt->rows; j++){     
-      const one_vec_t *cw2 = HL[j];
-      const int *vec2=cw2->arr;
-#if 0
-      printf("j=%d: [",j);
-      for(int ir=0; ir < cw2->weight; ir++)
-	printf("%d%s",vec2[ir],ir+1 < cw2->weight ? " " : "]\n");
-#endif
-      
-      int ir2=0;
-      size_t cnum=0;
-      for(int ir1=0; ir1 < cw1->weight; ir1++){
-	while((ir2 < cw2->weight) && (vec2[ir2] < vec1[ir1]))
-	  cvec[cnum++]=vec2[ir2++]; /** insert coords of the second vector */
-	if ((ir2 < cw2->weight) && (vec2[ir2] == vec1[ir1])){        
-	  ir2++; /** just skip equal bits */
-	  continue;
-	}
-	else 
-	  cvec[cnum++]=vec1[ir1]; /** insert coord of the 1st vector */
-      }
-      while((ir2 < cw2->weight))
-	cvec[cnum++]=vec2[ir2++]; /** insert coords of the second vector */
-      assert(cnum <= 2*max);
-      assert(cnum>0); /** Just in case.  Would have `cnum=0` if two
-			  identical columns were present in DEM file
-			  ---does not happen with Stim */
-      one_vec_t *cwn = NULL;
-      HASH_FIND(hh, hash, cvec, (cnum*sizeof(int)), cwn);
-      if((cwn)&&(j < cwn->cnt)){ /** new triplet */
-	if(nz>=nzmax){
-	  nzmax=2*nzmax;
-	  prs=realloc(prs,nzmax*sizeof(int_pair));
-	  assert(prs!=NULL);
-	}
-	prs[nz++]=(int_pair ){ rowsG, i };
-	prs[nz++]=(int_pair ){ rowsG, j };
-	prs[nz++]=(int_pair ){ rowsG, cwn->cnt };
-	rowsG++;
-#if 0
-      for(int ir=0; ir < cw1->weight; ir++)
-	printf("%d%s",vec1[ir],ir+1 < cw1->weight ? " " : "  ");
-      for(int ir=0; ir < cw2->weight; ir++)
-	printf("%d%s",vec2[ir],ir+1 < cw2->weight ? " " : "\n");
-      printf("%d %d cnum=%zu: ",i,j,cnum);
-      for(size_t ir=0; ir < cnum; ir++)
-	printf("%d%s",cvec[ir],ir+1 < cnum ? " " : "\n");
-#endif
-      if(p->debug & 32)
-	printf("found %d (%d %d %d): ", rowsG, i, j, cwn->cnt);
-      //      for(int ir=0; ir < cwn->weight; ir++)
-      //	printf("%d%s",cwn->arr[ir],ir+1 < cwn->weight ? " " : "\n");
-      }
-
-    }    
-  }
-  free(cvec);
-  /** init `G` matrix */
-  csr_t *ans=csr_from_pairs(NULL, nz, prs, rowsG, mHt->rows);
-  if(p->debug&64)
-    csr_out(ans);
-  free(prs); /** not needed anymore */
-
-  /** free the hash */  
-  one_vec_t *cw, *tmp;
-  HASH_ITER(hh, hash, cw, tmp) {
-#if 0    
-    int *vec=cw->arr;
-    printf("LLR=%g w=%d ",cw->energ,cw->weight);
-    for(int ir=0; ir < cw->weight; ir++)
-      printf("%d%s",vec[ir],ir+1 < cw->weight ? " " : "\n");
-#endif 
-    HASH_DEL(hash, cw);
-  }
-  free(buf);
-  free(HL);
-  
-  /** verify the rank (should be `n`-`k`) ???? */
-  mzd_t *mmG = mzd_from_csr(NULL, ans);
-  int rankG=mzd_gauss_delayed(mmG,0,0);
-  mzd_free(mmG);
-  mzd_t *mmLt = mzd_from_csr(NULL, mLt);
-  int rankL=mzd_gauss_delayed(mmLt,0,0); /** `k` of the code */
-  mzd_free(mmLt);
-  mzd_t *mmHt = mzd_from_csr(NULL, mHt);
-  int rankH=mzd_gauss_delayed(mmHt,0,0); 
-  mzd_free(mmHt);
-  if(p->debug&1){
-    printf("# n=%d k=%d rankG=%d rankH=%d\n"
-	   "# Created matrix G of size %d x %d (all weight-3 rows)\n",
-	   mLt->rows, rankL, rankG, rankH, ans->rows, ans->cols);
-  }
-
-  if(rankH+rankL + rankG != mLt->rows )    
-    ERROR("FIXME: some longer cycles are missing from G\n"
-	  "n=%d != (k=%d) + (rankG=%d) + (rankH=%d)",
-	  mLt->rows, rankL, rankG, rankH );
-  /** This would require some extensive changes to the code.  DEMs
-      from Stim with depolarizing noise enabled have the shortest
-      cycles of length 3, and these are sufficient to generate the
-      full G matrix (may not be the case with some error models). */ 
-
-  
-  /** construct the actual matrix and clean-up */
-  return ans;
 }
 
 
@@ -1571,7 +1354,7 @@ int main(int argc, char **argv){
       if(p->debug&1)
 	printf("# creating G matrix and writing to\t%s%s\n",
 	       p->fout, p->use_stdout ? "\n" :"G.mmx");
-      p->mG = do_G_matrix(p->mHt,p->mLt,p);
+      p->mG = do_G_matrix(p->mHt,p->mLt,p->vLLR, p->debug);
       comment[0]='G';
     }
     else{
