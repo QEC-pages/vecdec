@@ -1077,8 +1077,7 @@ int var_init(int argc, char **argv, params_t *p){
     if(p->file_obs==NULL)
       ERROR("can't open the (obs) file %s for reading\n",p->fobs);
   }
-  else 
-    p->internal=1;
+  // else p->internal=1;
 
   if(p->mode<=1){ /* vecdec RIS or BP decoder */
     p->mHe = mzd_init(p->nchk, p->nvec); /** each column a syndrome vector `H*e` */
@@ -1242,7 +1241,7 @@ int main(int argc, char **argv){
       //      mzd_free(mLe); mLe=NULL;
 
       int fails=0;
-      for(rci_t ic=0; ic< prodLe->ncols; ic++){
+      for(rci_t ic=0; ic< ierr_tot; ic++){
 	rci_t ir=0;
 	if(mzd_find_pivot(prodLe, ir, ic, &ir, &ic)){
 	  fails++;
@@ -1251,7 +1250,7 @@ int main(int argc, char **argv){
 	  break;
       }
       /** update the global counts */
-      synd_tot  += prodLe->ncols;/** todo: fix this */
+      synd_tot  += ierr_tot; /** was: prodLe->ncols */
       synd_fail += fails;
       mzd_free(prodLe); prodLe=NULL;
       if((p->nfail > 0) && (synd_fail >= p->nfail))
