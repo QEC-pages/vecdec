@@ -1458,7 +1458,7 @@ int main(int argc, char **argv){
       //      mzd_free(mLe); mLe=NULL;
 
       int fails=0;
-      for(rci_t ic=0; ic< prodLe->ncols; ic++){
+      for(rci_t ic=0; ic< ierr_tot; ic++){ //! was: `prodLe->ncols`
 	rci_t ir=0;
 	if(mzd_find_pivot(prodLe, ir, ic, &ir, &ic)){
 	  fails++;
@@ -1467,7 +1467,7 @@ int main(int argc, char **argv){
 	  break;
       }
       /** update the global counts */
-      synd_tot  += prodLe->ncols;/** todo: fix this */
+      synd_tot  += ierr_tot; /** was: prodLe->ncols; */
       synd_fail += fails;
       mzd_free(prodLe); prodLe=NULL;
       if((p->nfail > 0) && (synd_fail >= p->nfail))
