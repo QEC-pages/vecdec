@@ -1294,8 +1294,7 @@ int var_init(int argc, char **argv, params_t *p){
     if(p->file_obs==NULL)
       ERROR("can't open the (obs) file %s for reading\n",p->fobs);
   }
-  else 
-    p->internal=1;
+  //  else     p->internal=1;
 
   if(p->mode<=1){ /* vecdec RIS or BP decoder */
     p->mHe = mzd_init(p->nchk, p->nvec); /** each column a syndrome vector `H*e` */
