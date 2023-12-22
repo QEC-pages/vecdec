@@ -161,6 +161,10 @@ stim sample_dem \
 - [ ] Implement BP decoding with OSD
   - [x] Actual BP steps 
   - [x] Add `BoxPlus()` from `it++` library
+  - [x] serial BP (c-based): given the order of check nodes, select `c`, 
+    * update messages to `c`, 
+	* update messages from `c`.
+  - [ ] serial BP (v-based)   
   - [ ] Add error estimation
   - [ ] BP with randomization
   - [ ] BP with Freezing / Stabilizer inactivation (Savin et al)
@@ -179,7 +183,23 @@ stim sample_dem \
   - [ ] Estimate the fudge-factor $\alpha$, given the statistics of error probabilities
   - [ ] Estimate the effect of correlations between the trajectories.
 - [ ] Code transformations reducing the degeneracy for `mode=3`
+  - [ ] Check for `w=1` and `w=2` degeneracies (submode `w`: remove
+        degeneracies up to `w` if non-zero, otherwise do no
+        transformations)
   - [ ] Remove `w=3` degeneracies (rows of weight 3 in `G`)
   - [ ] Remove `w=4` degeneracies (rows of weight 4 in `G`)
   - [ ] Code for arbitrary row weight (exponentially large matrices may result)
-
+- [ ] List-based decoding 
+  - [ ] Write a list of codewords to a file; read it from a file.
+        Format: given $L$, each CW $c$ (column) has associated
+        syndrome vector $L c$ (a binary vector) and a list of non-zero
+        positions.  **We just store non-zero positions**.  Format: 
+		 ```
+		 %% NZLIST
+		 % end-of-line comments followed by rows formed by of column indices (ordered), `1`-based.
+		 % i1 i2 ... iw
+		 1 3 7 17
+		 2 4 8 23 61
+		 ```
+	
+  - [ ] Given the found error vector (syndrome OK), try to add the codewords one-by-one.
