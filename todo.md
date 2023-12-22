@@ -196,10 +196,11 @@ stim sample_dem \
         positions.  **We just store non-zero positions**.  Format: 
 		 ```
 		 %% NZLIST
-		 % end-of-line comments followed by rows formed by of column indices (ordered), `1`-based.
-		 % i1 i2 ... iw
-		 1 3 7 17
-		 2 4 8 23 61
+		 % end-of-line comments followed by rows formed by of column indices (ordered), 
+		 % starting with weight `w`, `1`-based and separated by spaces.
+		 % w  i1 i2 ... iw
+		 4  1 3 7 17
+		 5  2 4 8 23 61
 		 ```
 	
   - [ ] Given the found error vector (syndrome OK), try to add the codewords one-by-one.

@@ -33,6 +33,28 @@ void print_one_vec(const one_vec_t * const pvec){
 
 /** some extra io functions *******************************************************/
 
+/** @brief open a new `NZLIST` file */
+FILE * nzlist_open(const char fnam[], const char comment[]){
+  FILE *f=fopen(fnam,"w");
+  if(!f)
+    ERROR("can't open file %s for writing",fnam);
+  fprintf(f,"%%%% NZLIST\n%% %s\n",comment);
+  return f;
+}
+
+/** @brief write a `one_vec_t` to an open `NZLIST` file */
+int nzlist_append(FILE *f, const one_vec_t * const vec){
+  const int w=vec->weight;
+  fprintf(f,"%d ",w);
+  for(int i=0; i < w; i++)
+    fprintf(f," %d%s", 1 + vec->arr[i], i+1 < w ? "" :"\n");  
+  return 0;
+}
+
+/** @brief read list of `one_vec_t` from an `NZLIST` file */
+ 
+
+
 /** @brief read an `MMX` array of doubles
  * With a column of doubles, `nrows` and `ncols` point to zeros on return.
  * @param[in] siz number of entries in the pre-allocated array 
