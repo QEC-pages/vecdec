@@ -34,26 +34,79 @@ void print_one_vec(const one_vec_t * const pvec){
 /** some extra io functions *******************************************************/
 
 /** @brief open a new `NZLIST` file */
-FILE * nzlist_open(const char fnam[], const char comment[]){
+FILE * nzlist_w_new(const char fnam[], const char comment[]){
   FILE *f=fopen(fnam,"w");
   if(!f)
     ERROR("can't open file %s for writing",fnam);
-  fprintf(f,"%%%% NZLIST\n%% %s\n",comment);
+  fprintf(f,"%%%% NZLIST\n");
+  if(comment)
+    fprintf(f,"%% %s\n",comment);
   return f;
 }
 
 /** @brief write a `one_vec_t` to an open `NZLIST` file */
-int nzlist_append(FILE *f, const one_vec_t * const vec){
+int nzlist_w_append(FILE *f, const one_vec_t * const vec){
+  assert(vec && vec-> weight >0 );
+  assert(f!=NULL);
   const int w=vec->weight;
-  fprintf(f,"%d ",w);
+  if(fprintf(f,"%d ",w)<=0)
+    ERROR("can't write to `NZLIST` file");
   for(int i=0; i < w; i++)
-    fprintf(f," %d%s", 1 + vec->arr[i], i+1 < w ? "" :"\n");  
+    if(fprintf(f," %d%s", 1 + vec->arr[i], i+1 < w ? "" :"\n")<=0)
+      ERROR("can't write to `NZLIST` file");
   return 0;
 }
 
-/** @brief read list of `one_vec_t` from an `NZLIST` file */
- 
+/** @brief prepare to read from an `NZLIST` file */
+FILE * nzlist_r_open(const char fnam[]){
+  int cnt;
+  FILE *f=fopen(fnam,"r");
+  if(!f)
+    ERROR("can't open file %s for writing",fnam);
+  if((EOF == fscanf(f,"%%%% NZLIST %n",&cnt)) || (cnt<9))
+    ERROR("invalid signature line, expected '%%%% NZLIST'");
+  return f;
+}
 
+/** @brief read one item from an `NZLIST` file */
+one_vec_t * nzlist_r_one(FILE *f, one_vec_t * vec){
+  assert(f!=NULL);
+  if (ferror (f))
+    return NULL;
+  if (feof(f))
+    return NULL;
+  char c=fgetc(f);
+  while(c=='%'){ /** skip to the end of the comment line */
+    do{
+      c=fgetc(f);
+      if(feof(f))
+	return NULL;
+    }
+    while(c!='\n');
+    c=fgetc(f);
+  }
+  /** actually read the entry */
+  int w;
+  if(!fscanf(f," %d ",&w))
+    ERROR("expected an integer");
+  if ((vec!=NULL) && (vec->weight<w)){
+    free(vec);
+    vec=NULL;
+  }
+  if(vec==NULL){
+    vec = calloc(sizeof(one_vec_t)+w*sizeof(int), sizeof(char));
+    if(!vec)
+      ERROR("memory allocation");
+  }
+  vec->weight = w;
+  vec->cnt = 1;
+  for(int i=0; i<w; i++){
+    if(!fscanf(f," %d ",vec->arr + i))
+      ERROR("expected an integer i=%d ",i);
+    vec->arr[i]--; /** store as zero-based index */
+  }
+  return vec;
+}
 
 /** @brief read an `MMX` array of doubles
  * With a column of doubles, `nrows` and `ncols` point to zeros on return.
