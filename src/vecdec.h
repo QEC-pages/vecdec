@@ -53,6 +53,7 @@ extern "C"{
     char *finL; /** `input file` name for Lx=L (if input separately or a classical code) */
     char *finG; /** `input file` name for Hz=G (must use separate input) */
     char *finP; /** `input file` name for P (if input separately or a classical code) */
+    char *finC; /** `input/output file` name for `C` (list of non-trivial CWs for decoding) */
     char *fout; /** `output file name`  header for files creaded with `mode=3` */
     char *fdem; /** `input file` name for detector error model (`DEM`) */
     char *fdet; /** `input file` name for detector events */
@@ -140,6 +141,7 @@ extern "C"{
   "\t finG=[string]\t: file with dual check matrix Hz (mm or alist)\n"	\
   "\t finL=[string]\t: file with logical dual check matrix Lx (mm or alist)\n" \
   "\t finP=[string]\t: input file for probabilities (mm or a column of doubles)\n" \
+  "\t finC=[string]\t: input/output file name for codewords in `nzlist` format\n" \
   "\t useP=[double]\t: fixed probability value (override values in DEM file)\n"	\
   "\t\t for a quantum code specify 'fdem' OR 'finH' and ( 'finL' OR 'finG' );\n" \
   "\t\t for classical just 'finH' (and optionally the dual matrix 'finL')\n" \
@@ -170,11 +172,13 @@ extern "C"{
   "\t\t* 1: Belief Propagation decoder\n"				\
   "\t\t\t .0 parallel BP using LLR and average LLR\n"			\
   "\t\t\t .1 parallel BP using only LLR\n"				\
-  "\t\t* 2: generate most likely fault vectors, estimate Prob(Fail)\n"  \
-  "\t\t\t generate up to 'ntot' unique min-energy fault vectors\n"	\
+  "\t\t* 2: generate most likely fault vectors, estimate Prob(Fail).\n"  \
+  "\t\t\t Generate up to 'ntot' unique min-energy fault vectors\n"	\
   "\t\t\t use up to 'steps' random window decoding steps unless no new\n" \
   "\t\t\t fault vectors have been found for 'swait' steps.\n"           \
   "\t\t\t Keep vectors of weight up to 'nfail' above min weight found\n" \
+  "\t\t\t If 'finC' is set, write fault vectors there if the file does\n" \
+  "\t\t\t not exist, otherwise read CWs from this file.\n"		\
   "\t\t* 3: Read in the DEM file and output the corresponding \n"	\
   "\t\t\t H, G, and L matrices and the probability vector P.\n"		\
   "\t\t\t Use 'fout=' command line argument to generate file names\n"	\

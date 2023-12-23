@@ -820,6 +820,14 @@ int var_init(int argc, char **argv, params_t *p){
       if (p->debug&1)
 	printf("# read %s, finL=%s\n",argv[i],p->finL);
     }
+    else if (0==strncmp(argv[i],"finC=",5)){ /** `finC` in/out low-weight codeword list */
+      if(strlen(argv[i])>5)
+        p->finC = argv[i]+5;
+      else
+        p->finC = argv[++i]; /**< allow space before file name */
+      if (p->debug&1)
+	printf("# read %s, finC=%s\n",argv[i],p->finC);
+    }
     else if (0==strncmp(argv[i],"finG=",5)){/** `finG` degeneracy generator matrix */
       if(strlen(argv[i])>5)
         p->finG = argv[i]+5;
