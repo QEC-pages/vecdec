@@ -1,5 +1,5 @@
 /**
- *  @file vecdec.h
+ *  @file vecdec.c
  *
  * @brief vecdec - a simple vectorized decoder
  *
