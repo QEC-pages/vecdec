@@ -33,7 +33,17 @@ void print_one_vec(const one_vec_t * const pvec){
 
 /** some extra io functions *******************************************************/
 
-/** @brief open a new `NZLIST` file */
+/** @brief open a new `NZLIST` file for writing. 
+ * 
+ *  `NZLIST file format:` 
+ * header '%% NZLIST\n' (just one space)
+ * zero or more comment lines starting with `%`
+ * zero or more `entry` lines: 
+ *   integer `w` (row weight) followed by exactly `w` strictly
+ *   increasing positive integers representing non-zero positions
+ *   of a binary vector starting with `1`.
+ * `comment lines are only allowed at the top of the file.`
+ */
 FILE * nzlist_w_new(const char fnam[], const char comment[]){
   FILE *f=fopen(fnam,"w");
   if(!f)
@@ -44,7 +54,7 @@ FILE * nzlist_w_new(const char fnam[], const char comment[]){
   return f;
 }
 
-/** @brief write a `one_vec_t` to an open `NZLIST` file */
+/** @brief write a `one_vec_t` entry to an open `NZLIST` file */
 int nzlist_w_append(FILE *f, const one_vec_t * const vec){
   assert(vec && vec-> weight >0 );
   assert(f!=NULL);
@@ -58,37 +68,48 @@ int nzlist_w_append(FILE *f, const one_vec_t * const vec){
 }
 
 /** @brief prepare to read from an `NZLIST` file */
-FILE * nzlist_r_open(const char fnam[]){
+FILE * nzlist_r_open(const char fnam[], long int *lineno){
   int cnt;
   FILE *f=fopen(fnam,"r");
   if(!f)
     ERROR("can't open file %s for writing",fnam);
   if((EOF == fscanf(f,"%%%% NZLIST %n",&cnt)) || (cnt<9))
     ERROR("invalid signature line, expected '%%%% NZLIST'");
-  return f;
-}
-
-/** @brief read one item from an `NZLIST` file */
-one_vec_t * nzlist_r_one(FILE *f, one_vec_t * vec){
-  assert(f!=NULL);
-  if (ferror (f))
-    return NULL;
-  if (feof(f))
-    return NULL;
-  char c=fgetc(f);
-  while(c=='%'){ /** skip to the end of the comment line */
+  *lineno=2;  
+  char c=fgetc(f); /** are there comments to skip? */  //  putchar(c);
+  while(c=='%'){ /** `comment line` starting with '%' */
     do{
-      c=fgetc(f);
+      c=fgetc(f);      //      putchar(c);
       if(feof(f))
 	return NULL;
     }
-    while(c!='\n');
+    while(c!='\n'); /** skip to the end of the comment line */
+    (*lineno)++;
     c=fgetc(f);
   }
-  /** actually read the entry */
+  ungetc(c,f); 
+  /** we are at the start of a non-trivial entry or EOF */
+  return f;
+}
+
+/** @brief read one item from an `NZLIST` file.
+ * The structure in `vec` will be reallocated if necessary.
+ * @param f an open file to read from.
+ * @param[in] vec structure to hold the vector or NULL to allocate
+ * @param fnam file name for debugging purposes
+ * @param[in,out] lineno pointer to current line number in the file
+ * @return the pointer to the structure containing the data or NULL. */
+one_vec_t * nzlist_r_one(FILE *f, one_vec_t * vec, const char fnam[], long int *lineno){
+  assert(f!=NULL);
+  if ( ferror (f)|| feof(f) )
+    return NULL; /** not an actuall error */
+  //  printf("%s:%ld: start nzlist_r_one() here\n", fnam, *lineno);
   int w;
-  if(!fscanf(f," %d ",&w))
+  if(!fscanf(f," %d",&w)){
+    printf("%s:%ld: invalid NZLIST entry\n", fnam, *lineno);
     ERROR("expected an integer");
+  }
+  //  printf("read w=%d from line %ld\n",w,*lineno);
   if ((vec!=NULL) && (vec->weight<w)){
     free(vec);
     vec=NULL;
@@ -101,10 +122,20 @@ one_vec_t * nzlist_r_one(FILE *f, one_vec_t * vec){
   vec->weight = w;
   vec->cnt = 1;
   for(int i=0; i<w; i++){
-    if(!fscanf(f," %d ",vec->arr + i))
-      ERROR("expected an integer i=%d ",i);
+    if(!fscanf(f," %d ",vec->arr + i)){
+      printf("%s:%ld: invalid entry of weight w=%d\n",fnam, *lineno, w);
+      ERROR("expected an integer i=%d of %d",i,w);
+    }    
     vec->arr[i]--; /** store as zero-based index */
   }
+
+  for(int i=1; i<w; i++){ /** verify entry just read */
+    if((vec->arr[i-1] < 0) || (vec->arr[i-1] >= vec->arr[i])){
+      printf("%s:%ld: invalid entry of weight w=%d\n",fnam, *lineno, w);
+      ERROR("expected strictly increasing positive entries");
+    }   
+  }
+  (*lineno)++; /** in agreement with `NSLIST` file format */
   return vec;
 }
 

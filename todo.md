@@ -187,6 +187,7 @@ stim sample_dem \
         degeneracies up to `w` if non-zero, otherwise do no
         transformations)
   - [ ] Remove `w=3` degeneracies (rows of weight 3 in `G`)
+        (see the unfinished function `int star_triangle()` in `star_poly.c` )
   - [ ] Remove `w=4` degeneracies (rows of weight 4 in `G`)
   - [ ] Code for arbitrary row weight (exponentially large matrices may result)
 - [ ] List-based decoding 

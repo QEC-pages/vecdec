@@ -107,7 +107,22 @@ static inline int by_energy(void *a, void *b){
     const int vb= *((int *) b);
     return va-vb;
   }
-  
+/** @brief open a new `NZLIST` file for writing */
+  FILE * nzlist_w_new(const char fnam[], const char comment[]);
+
+/** @brief write a `one_vec_t` to an open `NZLIST` file */
+  int nzlist_w_append(FILE *f, const one_vec_t * const vec);
+
+/** @brief prepare to read from an `NZLIST` file */
+  FILE * nzlist_r_open(const char fnam[], long int *lineno);
+
+/** @brief read one item from an `NZLIST` file.
+ * The structure in `vec` will be reallocated if necessary.
+ * @param f an open file to read from.
+ * @param[in] vec structure to hold the vector or NULL.            
+ * @param[in,out] lineno pointer to current line number in the file
+ * @return the pointer to the structure containing the data or NULL. */
+  one_vec_t * nzlist_r_one(FILE *f, one_vec_t * vec, const char fnam[], long int *lineno);  
 
   /** extra io functions ******************************************************************/
 void read_dem_file(char *fnam, void * ptrs[3], int debug);

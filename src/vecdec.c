@@ -26,14 +26,17 @@
 
 params_t prm={ .nchk=0, .nvar=0, .ncws=0, .steps=50,
   .lerr=0, .swait=0,
-  .nvec=1024, .ntot=1, .nfail=0, .seed=0, 
+  .nvec=1024, .ntot=1, .nfail=0, .seed=0, .useP=0, 
   .debug=1, .fdem=NULL, .fdet=NULL, .fobs=NULL, .fout="tmp", .ferr=NULL,
   .mode=0, .submode=0, .use_stdout=0, 
   .LLRmin=0, .LLRmax=0, .codewords=NULL, .num_cws=0,
+  .finH=NULL, .finL=NULL, .finG=NULL, .finP=NULL,
+  .finC=NULL, .outC=NULL, 
   .vP=NULL, .vLLR=NULL, .mH=NULL, .mHt=NULL,
   .mL=NULL, .mLt=NULL, .internal=0, 
   .file_det=NULL, .file_obs=NULL, .line_det=0, .line_obs=0,
-  .mE=NULL, .mHe=NULL, .mLe=NULL, .mHeT=NULL, .mLeT=NULL
+  .mE=NULL, .mHe=NULL, .mLe=NULL, .mHeT=NULL, .mLeT=NULL,
+  .nzH=0, .nzL=0
 };
 
 /** various success counters */
@@ -186,6 +189,24 @@ mzp_t * do_skip_pivs(const size_t rank, const mzp_t * const pivs){
   return ans;
 }
 
+/** @brief Read in vectors from `NZLIST` file `fnam` to hash.
+    @return number of entries read */
+long int nzlist_read(const char fnam[], params_t *p){
+  long int count=0, lineno;
+  assert(fnam);
+  FILE * f=nzlist_r_open(fnam, &lineno); /** no need to check if open */
+  one_vec_t *entry=NULL;
+  while((entry=nzlist_r_one(f,NULL, fnam, &lineno))){
+    /** `assume` unique vectors stored in the file */
+    const size_t keylen = entry->weight * sizeof(rci_t);
+    HASH_ADD(hh, p->codewords, arr, keylen, entry); /** store in the `hash` */
+    count ++;
+    //    printf("%s:%ld: read Xentry %ld w=%d\n",fnam,lineno,count,entry->weight);
+  }
+  fclose(f);
+  return count;
+}
+
 /** @brief Random Information Set search for small-E logical operators.
  *
  *  Uses hashing storage to identify unique vectors.  Only vectors of weight no
@@ -262,11 +283,6 @@ int do_LLR_dist(int dW, params_t  * const p){
       /** sort the column indices */
       qsort(ee, cnt, sizeof(rci_t), cmp_rci_t);
 #if 0      
-      if(p->debug & 16){
-        printf("vec=[");
-        for(int i=0;i<cnt; i++)
-          printf("%d%s",ee[i],i+1==cnt ? "]\n" : ", ");
-      }
 #endif
       /** verify logical operator */
       int nz;
@@ -311,6 +327,11 @@ int do_LLR_dist(int dW, params_t  * const p){
               printf("vector exists, cnt=%d\n",pvec->cnt);
           }
           else{ /** vector not found, inserting */
+	    if(p->debug & 16){
+	      printf("# new vec=[");
+	      for(int i=0;i<cnt; i++)
+		printf("%d%s",ee[i],i+1==cnt ? "]\n" : ", ");
+	    }
             ++ ichanged; /** increment counter how many vectors added */
             ++(p->num_cws);
             if(energ>maxE)
@@ -820,13 +841,21 @@ int var_init(int argc, char **argv, params_t *p){
       if (p->debug&1)
 	printf("# read %s, finL=%s\n",argv[i],p->finL);
     }
-    else if (0==strncmp(argv[i],"finC=",5)){ /** `finC` in/out low-weight codeword list */
+    else if (0==strncmp(argv[i],"finC=",5)){ /** `finC` in low-weight codeword list */
       if(strlen(argv[i])>5)
         p->finC = argv[i]+5;
       else
         p->finC = argv[++i]; /**< allow space before file name */
       if (p->debug&1)
 	printf("# read %s, finC=%s\n",argv[i],p->finC);
+    }
+    else if (0==strncmp(argv[i],"outC=",5)){ /** `outC` out low-weight codeword list */
+      if(strlen(argv[i])>5)
+        p->outC = argv[i]+5;
+      else
+        p->outC = argv[++i]; /**< allow space before file name */
+      if (p->debug&1)
+	printf("# read %s, outC=%s\n",argv[i],p->outC);
     }
     else if (0==strncmp(argv[i],"finG=",5)){/** `finG` degeneracy generator matrix */
       if(strlen(argv[i])>5)
@@ -1194,12 +1223,15 @@ int main(int argc, char **argv){
     //    p->mL=csr_identity(p->nvar, p->nvar);
   init_Ht(p);
   //  mat_init(p);
-
+  if(p->debug & 1)
+    printf("# mode=%d submode=%d debug=%d\n",p->mode,p->submode,p->debug);
 
   int ierr_tot=0, rounds=(int )ceil((double) p->ntot / (double) p->nvec);
+  if(((p->mode == 0) || (p->mode == 1)) && (p->debug & 2))
+    printf("# ntot=%d nvec=%d will do calculation in %d rounds\n",p->ntot,p->nvec,rounds);
 
   switch(p->mode){    
-  case 0: /** internal `vecdec` decoder */
+  case 0: /** `mode=0` internal `vecdec` decoder */
     /** at least one round always */
     long int synd_tot=0, synd_fail=0;
     for(int iround=0; iround < rounds; iround++){
@@ -1269,7 +1301,7 @@ int main(int argc, char **argv){
       
     break;
 
-  case 1: /** various BP flavors */
+  case 1: /** `mode=1` various BP flavors */
     
     qllr_t *ans = calloc(p->nvar, sizeof(qllr_t));
       if(!ans) ERROR("memory allocation failed!"); 
@@ -1329,10 +1361,18 @@ int main(int argc, char **argv){
     cnt_out(p->debug&1);
     free(ans);
     break;
-  case 2:
+  case 2: /** `mode=2` */
     if(p->debug&1)
       printf("# mode=%d, estimating fail probability in %d steps\n",p->mode, p->steps);
+    if(p->finC){
+      p->num_cws = nzlist_read(p->finC,p);
+      if(p->debug&1)
+	printf("# %ld codewords read from %s\n",p->num_cws, p->finC);
+    }
     do_LLR_dist(p->nfail, p);
+    if(p->outC){
+      /** write the codewords here */
+    }
     break;
     
   case 3: /** read in DEM file and output the H, L, G matrices and P vector */

@@ -35,6 +35,7 @@
  * @param debug bitmap for debugging info
  * @return the number of transformation steps done 
  */
+#if 0
 int star_triangle(csr_t * Ht, csr_t * Lt, qllr_t *LLR, const long int debug){
     /** sanity check */
   assert(Ht->nz == -1); 
@@ -42,7 +43,7 @@ int star_triangle(csr_t * Ht, csr_t * Lt, qllr_t *LLR, const long int debug){
   assert(Ht->rows == Lt->rows);
 
 }
-
+#endif 
 
 
 /** @brief create `generator` matrix orthogonal to rows of `mH` and
