@@ -73,6 +73,33 @@ secondary decoder.  Ordered-statistics decoder (OSD) has been suggested for this
 purpose, which is essentially an RW decoder using the list of *aposteriori*
 probabilities returned by BP.
 
+### osd implementation 
+
+**Currently,** there is a function `do_local_search()` which for some
+reason is extremely slow.  It attempts to construct all error vectors
+at once.  Specifically, for each non-pivot point `jj` it
+ - makes a copy of current error vectors, 
+ - calculates the list `rlis` of pivot positions to update,
+ - after which goes over each syndrome vector:
+   - calculates the current energy `(may be slow?)`
+   - flips the bit at `jj`
+   - updates the energy by flipping each position in `rlis`
+   - compares with the stored energy values
+   
+To speed up this version:
+ - [x] copy the energy values between recursion levels
+ - [x] do not copy current error vectors for last recursion level
+ - [ ] introduce the maximum number of columns to do OSD with
+ - [ ] perhaps introduce a cut-off by weight? 
+ - [ ] use `mzd_find_pivot()` ???
+
+**Instead,** implement a recursive function `do_local_search_one()` which
+deals with one syndrome vector and one error vector at a time.  Use it
+for both `mode=0` (information set decoder) and as OSD with BP
+(`mode=1`).
+
+
+
 # Logical fail rate predictors 
 
 ## Asymptotic minimum-weight fail rate 

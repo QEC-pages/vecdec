@@ -410,6 +410,7 @@ int do_LLR_dist(int dW, params_t  * const p){
  * @param mE0 best error vectors so far for each syndrome (rows)
  * @param jstart start local search from this column in `mH`
  * @param lev recusion level, must not exceed `p->lerr`
+ * @param vE current energy values for each `e` a row in `mE`
  * @param mE input error vectors (rows)
  * @param mH check matrix in row echelon form (pivots in `pivs`)
  * @param skip_pivs `sorted` list of `n-rank` non-pivot positions in `mH`
@@ -418,79 +419,107 @@ int do_LLR_dist(int dW, params_t  * const p){
  * @return number of updated error vectors
  * @todo: see if binary ops + transposition is faster
  */
-int do_local_search(double *vE0, mzd_t * mE0, const rci_t jstart, const int lev,
-		    const mzd_t * const mE, const mzd_t * const mH,
+int do_local_search(double *vE0, mzd_t * mE0, rci_t jstart, int lev,
+		    const double * const vE, const mzd_t * const mE, const mzd_t * const mH,
 		    const mzp_t * const skip_pivs, const mzp_t * const pivs,
 		    const params_t * const p){
   assert(lev<=p->lerr);
+  int last_lev = lev < p->lerr ? 0 : 1;
+  double *vE1 = NULL;
+  mzd_t *mE1 = NULL; //mzd_copy(NULL,mE); /** error vectors to update */
   if(p->debug&128)
-    printf("entering lev=%d of recursion jstart=%d\n",lev,jstart);
+    printf("entering %slev=%d / %d of recursion jstart=%d\n",last_lev? "last " :"",lev,p->lerr, jstart);
   int ich_here=0, ich_below=0;
   rci_t knum = skip_pivs->length; /** number of non-pivot cols in `mH` to go over */
   rci_t rank = p->nvar - knum; /** number of valid pivot cols */
   rci_t rnum; /** number of non-zero entries in rlis (for each `j`) */
   int * rlis = malloc(rank * sizeof(int));
   if(!rlis) ERROR("memory allocation failed!");
-  mzd_t *mE1 = NULL; //mzd_copy(NULL,mE); /** error vectors to update */
+  if(!last_lev){
+    vE1 = malloc(sizeof(vE));
+    if(!vE1) ERROR("memory allocation failed!");
+  }
 
   for(rci_t j=jstart; j<knum; j++){ /** `j`th `non-pivot` entry */
-    mE1 = mzd_copy(mE1,mE); /** fresh copy of error vectors to update */
-
+    if (!last_lev){
+      mE1 = mzd_copy(mE1,mE); /** fresh copy of error vectors to update */
+      memcpy(vE1,vE,sizeof(vE) );
+    }
     rci_t jj=skip_pivs->values[j]; /** actual `non-pivot` column we are looking at */
     rnum=0; /** prepare list of positions to update for `jj`th col of `mH` */
     for(rci_t ir=0; ir<rank; ir++)
       if(mzd_read_bit(mH,ir,jj)) /** non-zero bit */
         rlis[rnum++] = pivs->values[ir]; /** column of `mH` to update */
+#ifndef NDEBUG
     if (p->debug & 128){
       printf("jj=%d rlis: ",jj);
       for(int ir=0; ir< rnum; ir++)
         printf(" %d%s",rlis[ir],ir+1==rnum?"\n":"");
     }
+#endif
 
-    for(rci_t is=0; is < mE1->nrows; is++){ /** syndrome rows */
-      if(mzd_read_bit(mE1,is,jj)) /** sanity check */
+    for(rci_t is=0; is < mE->nrows; is++){ /** syndrome rows */
+#ifndef NDEBUG      
+      if(mzd_read_bit(mE,is,jj)) /** sanity check */
         ERROR("bit found at is=%d jj=%d\n",is,jj);
-
-      if(vE0[is] > p->LLRmin){
-        /** min possible for a non-zero vector */
-        double energ = mzd_row_energ(p->vLLR,mE1,is);
-        mzd_flip_bit(mE1,is,jj);
+#endif 
+      //      if(vE0[is] > p->LLRmin){/** min possible for a non-zero vector */
+        double energ = vE[is];
+	if(fabs(energ - mzd_row_energ(p->vLLR,mE,is))>1e-5){
+	  ERROR("mismatch lev=%d j=%d is=%d vE=%g row_energ=%g\n",lev,j,is,energ,mzd_row_energ(p->vLLR,mE,is));
+	}
+	/** calculate updated energy only */
         energ += p->vLLR[jj];
         for(rci_t ir = 0 ;  ir < rnum; ++ir){
-          const int ii = rlis[ir]; /** position to update */
-          if(mzd_read_bit(mE1,is,ii))
-            energ -= p->vLLR[ii]; /** `1->0` flip */
+	  //          const int ii = rlis[ir]; /** position to update */
+          if(mzd_read_bit(mE,is,rlis[ir]))
+            energ -= p->vLLR[rlis[ir]]; /** `1->0` flip */
           else
-            energ += p->vLLR[ii]; /** `0->1` flip */
-          mzd_flip_bit(mE1,is,ii);
+            energ += p->vLLR[rlis[ir]]; /** `0->1` flip */
         }
+	if(!last_lev){ /* calculate updated error vector */
+	  mzd_flip_bit(mE1,is,jj);
+	  for(rci_t ir = 0 ;  ir < rnum; ++ir)
+	    mzd_flip_bit(mE1, is, rlis[ir]);
+	}
         if(energ < vE0[is]-1e-10){
+#ifndef NDEBUG
           if(p->debug & 128){/** inf set decoding */
             printf("lev=%d j=%d jj=%d is=%d E0=%g E=%g success:\n",
                    lev,j,jj,is,vE0[is],energ);
-            assert(fabs(energ - mzd_row_energ(p->vLLR,mE1,is))<1e-8);
-            mzd_print_row(mE0,is);
-            mzd_print_row(mE1,is);
+	    //            assert(fabs(energ - mzd_row_energ(p->vLLR,mE1,is))<1e-8);
+	    //            mzd_print_row(mE0,is);
+	    //            mzd_print_row(mE1,is);
           }
+#endif
           vE0[is]=energ;
-          mzd_copy_row(mE0,is, mE1,is);
+	  if (!last_lev)
+	    mzd_copy_row(mE0,is, mE1,is);
+	  else{
+	    mzd_copy_row(mE0,is, mE,is);
+	    mzd_flip_bit(mE0,is,jj);
+	    for(rci_t ir = 0 ;  ir < rnum; ++ir)
+	      mzd_flip_bit(mE0, is, rlis[ir]);
+	  }
           ich_here++;
         }
+#if 0	
         else{
           if(p->debug & 128){/** inf set decoding */
             printf("lev=%d j=%d jj=%d is=%d E0=%g E=%g no change:\n",
                    lev,j,jj,is,vE0[is],energ);
-            assert(fabs(energ - mzd_row_energ(p->vLLR,mE1,is))<1e-8);
-            mzd_print_row(mE0,is);
-            mzd_print_row(mE1,is);
+	    //            assert(fabs(energ - mzd_row_energ(p->vLLR,mE1,is))<1e-8);
+	    //            mzd_print_row(mE0,is);
+	    //            mzd_print_row(mE1,is);
           }
         }
-      }
+#endif 	
+	//      }
     }
 
-    if(lev+1 < p->lerr){ /** go up one recursion level */
+    if(!last_lev){ /** go up one recursion level */
       if(j+1<knum){
-        ich_below+=do_local_search(vE0,mE0,j+1,lev+1,mE1, mH, skip_pivs, pivs,p);
+        ich_below+=do_local_search(vE0,mE0,j+1,lev+1,vE1,mE1, mH, skip_pivs, pivs,p);
       }
     }
   }
@@ -499,7 +528,10 @@ int do_local_search(double *vE0, mzd_t * mE0, const rci_t jstart, const int lev,
       printf("exiting lev=%d of recursion, here ch=%d below ch=%d\n",
              lev,ich_here, ich_below);
   free(rlis);
-  mzd_free(mE1);
+  if (mE1)
+    mzd_free(mE1);
+  if (vE1)
+    free(vE1);
   return ich_below+ich_here;
 }
 
@@ -559,14 +591,26 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
 
   if(p->lerr){  /** do information-set decoding `**********************` */
     mzp_t * skip_pivs = do_skip_pivs(rank, pivs);
-    mzd_t * mEt1 = mzd_copy(NULL, mEt0);
-    do_local_search(vE, mEt0, 0, 0, mEt1, mH, skip_pivs, pivs, p);
+    mzd_t * mEt1=NULL;
+    double *vE1=NULL;
+    if (p->lerr > 1){
+      mEt1 = mzd_copy(NULL, mEt0);
+      vE1 = malloc(sizeof(double) * mEt0->nrows);
+      if(!vE1) ERROR("memory allocation failed!");
+      memcpy(vE1,vE,sizeof(double) * mE->nrows);
+    }
+    do_local_search(vE, mEt0, 0, 1,
+		    p->lerr > 1 ? vE1 : vE,
+		    p->lerr > 1 ? mEt1 : mEt0, mH, skip_pivs, pivs, p);
     if(p->debug & 512){
       printf("mEt0 after local search:\n");
       mzd_print(mEt0);
     }
-    mzd_free(mEt1);
     free(skip_pivs);
+    if (p->lerr > 1){
+      mzd_free(mEt1);
+      free(vE1);
+    }
   }
 
   int iwait=0, ichanged=0;
@@ -613,12 +657,20 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
     }
     if(p->lerr){  /** do information-set decoding `**********************` */
       mzp_t * skip_pivs = do_skip_pivs(rank, pivs);
-      do_local_search(vE, mEt0, 0, 0, mEt, mH, skip_pivs, pivs, p);
+      double *vE1=NULL;
+      if (p->lerr > 1){
+	vE1 = malloc(sizeof(double) * mEt0->nrows);
+	if(!vE1) ERROR("memory allocation failed!");
+	memcpy(vE1,vE,sizeof(double) * mE->nrows);
+      }
+      do_local_search(vE, mEt0, 0, 1, p->lerr > 1 ? vE1 : vE, mEt, mH, skip_pivs, pivs, p);
       if(p->debug & 512){
         printf("mEt0 after local search:\n");
         mzd_print(mEt0);
       }
       free(skip_pivs);
+      if (p->lerr > 1)
+	free(vE1);
     }
 
     mzd_free(mEt);
