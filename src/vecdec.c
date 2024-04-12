@@ -498,23 +498,16 @@ int do_local_search(qllr_t *vE0, mzd_t * mE0, rci_t jstart, int lev,
       if(mzd_read_bit(mE,is,jj)) /** sanity check */
         ERROR("bit found at is=%d jj=%d\n",is,jj);
 #endif 
-      //      if(vE0[is] > p->LLRmin){/** min possible for a non-zero vector */
+      if(vE0[is] >= 2 * p->LLRmin){/** TODO: add more reasonable cutoff here */
         qllr_t energ = vE[is];
-#ifdef USE_QLLR
-	if(energ != mzd_row_energ(p->vLLR,mE,is))
-	  ERROR("mismatch lev=%d j=%d is=%d vE=%d row_energ=%d\n",lev,j,is,energ,mzd_row_energ(p->vLLR,mE,is));
-#else 	
-	if(fabs(energ - mzd_row_energ(p->vLLR,mE,is))>1e-5)
-	  ERROR("mismatch lev=%d j=%d is=%d vE=%g row_energ=%g\n",lev,j,is,energ,mzd_row_energ(p->vLLR,mE,is));
-#endif	
 	/** calculate updated energy only */
         energ += p->vLLR[jj];
         for(rci_t ir = 0 ;  ir < rnum; ++ir){
-	  //          const int ii = rlis[ir]; /** position to update */
-          if(mzd_read_bit(mE,is,rlis[ir]))
-            energ -= p->vLLR[rlis[ir]]; /** `1->0` flip */
+	  const int ii = rlis[ir]; /** position to update */
+          if(mzd_read_bit(mE,is,ii))
+            energ -= p->vLLR[ii]; /** `1->0` flip */
           else
-            energ += p->vLLR[rlis[ir]]; /** `0->1` flip */
+            energ += p->vLLR[ii]; /** `0->1` flip */
         }
 	if(!last_lev){ /* calculate updated error vector */
 	  vE1[is]=energ;
@@ -543,7 +536,7 @@ int do_local_search(qllr_t *vE0, mzd_t * mE0, rci_t jstart, int lev,
 	  }
           ich_here++;
         }
-	//      }
+      }
     }
 
     if(!last_lev){ /** go up one recursion level */
