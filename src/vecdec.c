@@ -26,14 +26,17 @@
 
 params_t prm={ .nchk=0, .nvar=0, .ncws=0, .steps=50,
   .lerr=0, .swait=0,
-  .nvec=1024, .ntot=1, .nfail=0, .seed=0, 
+  .nvec=1024, .ntot=1, .nfail=0, .seed=0, .useP=0, 
   .debug=1, .fdem=NULL, .fdet=NULL, .fobs=NULL, .fout="tmp", .ferr=NULL,
   .mode=0, .submode=0, .use_stdout=0, 
   .LLRmin=0, .LLRmax=0, .codewords=NULL, .num_cws=0,
+  .finH=NULL, .finL=NULL, .finG=NULL, .finP=NULL,
+  .finC=NULL, .outC=NULL, 
   .vP=NULL, .vLLR=NULL, .mH=NULL, .mHt=NULL,
   .mL=NULL, .mLt=NULL, .internal=0, 
   .file_det=NULL, .file_obs=NULL, .line_det=0, .line_obs=0,
-  .mE=NULL, .mHe=NULL, .mLe=NULL, .mHeT=NULL, .mLeT=NULL
+  .mE=NULL, .mHe=NULL, .mLe=NULL, .mHeT=NULL, .mLeT=NULL,
+  .nzH=0, .nzL=0
 };
 
 /** various success counters */
@@ -43,34 +46,20 @@ long long int iter2[EXTR_MAX]; /** sums of BP iteration numbers squared */
 
 
 
-/** @brief compare two `one_vec_t` structures by energy */
-static inline int by_energy(void *a, void *b){
-  const one_vec_t *pa = (one_vec_t *) a;
-  const one_vec_t *pb = (one_vec_t *) b;
-  if (pa->energ < pb->energ)
-    return -1;
-  else if (pa->energ > pb->energ)
-    return +1;
-  else /** Ea == Eb */
-    return 0;
-}
 
 /** @brief calculate the energy of the row `i` in `A` */
 qllr_t mzd_row_energ(qllr_t *coeff, const mzd_t *A, const int i){
   qllr_t ans=0;
+  //  mzd_print(A);
   for(rci_t j = 0; j < A->ncols; ++j)
-    if(mzd_read_bit(A, i, j))
+    if(mzd_read_bit(A, i, j)){
+      //      printf("non-zero i=%d j=%d coeff=%d\n",i,j,coeff[j]);
       ans += coeff[j];
+    }
   return (ans);
   /** todo: rewrite in terms of `__builtin_clzll` */
 }
 
-/** @brief print entire `one_vec_t` structure by pointer */
-void print_one_vec(const one_vec_t * const pvec){
-  printf(" w=%d E=%g cnt=%d [",pvec->weight, dbl_from_llr(pvec->energ),pvec->cnt);
-  for(int i=0; i < pvec->weight; i++)
-    printf("%d%s",pvec->arr[i], i+1 < pvec->weight ? " " :"]\n");
-}
 
 /** @brief calculate the probability of codeword in `one_vec_t` */
 static inline double do_prob_one_vec(const one_vec_t * const pvec, const params_t * const p){
@@ -153,206 +142,6 @@ static inline int twomat_gauss_one(mzd_t *M, mzd_t *S, const int idx, const int 
 }
 
 
-/** @brief create `generator` matrix orthogonal to rows of `mH` and
- *  `mL`.
- *
- *  WARNING: Currently, only finds cycles of length 3 (this is OK to
- *  construct `G` matrix for a DEM constructed by `stim`. 
- */
-csr_t * do_G_matrix(const csr_t * const mHt, const csr_t * const mLt,
-		    const params_t * const p){
-  /** sanity check */
-  assert(mHt->rows == mLt->rows);
-  
-  /** init hash for combined columns of `mH` and `mL` */
-  one_vec_t *hash=NULL;
-  int buflen = mLt->rows * sizeof(one_vec_t) +
-    mHt->p[mHt->rows]*sizeof(int) + mLt->p[mLt->rows]*sizeof(int);
-  // printf("buflen=%zu nzH=%d nzL=%d\n",buflen,mHt->p[mHt->rows], mLt->p[mLt->rows]);
-  char *pos, *buf;
-  pos = buf = calloc(buflen, sizeof(char));
-  if(!buf)
-    ERROR("memory allocation failed");
-  unsigned int max=0; /** max column weight */
-  one_vec_t **HL=malloc(sizeof(one_vec_t *) * mLt->rows); /**array for combined cols */
-  if (!HL)
-    ERROR("memory allocation failed");
-  for(int i=0; i< mLt->rows; i++){
-    one_vec_t *pvec = HL[i] = (one_vec_t *) pos;
-    int *vec = pvec->arr;     
-    unsigned int len=0, need_sorting=0;
-    for(int ir=mHt->p[i]; ir< mHt->p[i+1]; ir++){ /** row `i` of `Ht` */
-      vec[len]=mHt->i[ir];
-      if((len>0)&&(vec[len-1]>vec[len]))
-	need_sorting=1;
-      len++;
-    }
-    for(int ir=mLt->p[i]; ir< mLt->p[i+1]; ir++){/** row `i` of `Lt` */
-      vec[len]=mLt->i[ir] + mHt->cols;      
-      if((len>0)&&(vec[len-1]>vec[len]))
-	need_sorting=1;
-      len++;
-    }
-    if(need_sorting)
-      qsort(vec, len, sizeof(rci_t), cmp_rci_t);
-    assert(sizeof(rci_t) == sizeof(int));
-      
-    //for(int ir=0; ir< len; ir++)  printf("%d%s",vec[ir],ir+1<len ? " " : "\n");
-    pos += sizeof(one_vec_t) + len * sizeof(int);
-    //    printf("i=%d len=%d pos=%ld of %zu\n",i,len,pos-buf,buflen);
-    assert(pos-buf <=buflen);
-    pvec->weight = len;
-    pvec->energ = p->vLLR[i];
-    pvec->cnt = i; /* use it to record the column number */
-    HASH_ADD(hh, hash, arr, (len*sizeof(int)), pvec);
-    if(max<len)
-      max=len;
-  }
-
-#if 0  
-  for(int i=0; i < mLt->rows; i++){
-    const one_vec_t *cw1 = HL[i];
-    const int *vec1=cw1->arr;
-    printf("i=%d: [",i);
-    for(int ir=0; ir < cw1->weight; ir++)
-      printf("%d%s",vec1[ir],ir+1 < cw1->weight ? " " : "]\n");
-  }
-  printf("max=%d\n\n",max);
-#endif
-
-  /** init the pairs to construct the matrix */
-  int nz=0, nzmax= 3*(mLt->rows - mLt->cols), rowsG=0;
-  assert(nzmax>0);
-  int_pair *prs = malloc(sizeof(int_pair)*nzmax);
-  if(!prs)
-    ERROR("memory allocation fail");
-
-  /** combine columns `i` and `j` and search in hash */
-  int *cvec = malloc(2*max*sizeof(int)); /* temp storage */
-  if(!cvec)
-    ERROR("memory allocation fail!");
-  
-  for(int i=0; i < mLt->rows; i++){
-    const one_vec_t *cw1 = HL[i];
-    const int *vec1=cw1->arr;
-    assert(cw1->weight>0); /** Just in case. An all-zero columns
-			       should be removed from DEM (and are
-			       never there in practice for DEM files
-			       produced by Stim). */
-#if 0
-    printf("\ni=%d: [",i);
-    for(int ir=0; ir < cw1->weight; ir++)
-      printf("%d%s",vec1[ir],ir+1 < cw1->weight ? " " : "]\n");
-#endif
-    
-    for(int j=i+1; j<mLt->rows; j++){     
-      const one_vec_t *cw2 = HL[j];
-      const int *vec2=cw2->arr;
-#if 0
-      printf("j=%d: [",j);
-      for(int ir=0; ir < cw2->weight; ir++)
-	printf("%d%s",vec2[ir],ir+1 < cw2->weight ? " " : "]\n");
-#endif
-      
-      int ir2=0;
-      size_t cnum=0;
-      for(int ir1=0; ir1 < cw1->weight; ir1++){
-	while((ir2 < cw2->weight) && (vec2[ir2] < vec1[ir1]))
-	  cvec[cnum++]=vec2[ir2++]; /** insert coords of the second vector */
-	if ((ir2 < cw2->weight) && (vec2[ir2] == vec1[ir1])){        
-	  ir2++; /** just skip equal bits */
-	  continue;
-	}
-	else 
-	  cvec[cnum++]=vec1[ir1]; /** insert coord of the 1st vector */
-      }
-      while((ir2 < cw2->weight))
-	cvec[cnum++]=vec2[ir2++]; /** insert coords of the second vector */
-      assert(cnum <= 2*max);
-      assert(cnum>0); /** Just in case.  Would have `cnum=0` if two
-			  identical columns were present in DEM file
-			  ---does not happen with Stim */
-      one_vec_t *cwn = NULL;
-      HASH_FIND(hh, hash, cvec, (cnum*sizeof(int)), cwn);
-      if((cwn)&&(j < cwn->cnt)){ /** new triplet */
-	if(nz>=nzmax){
-	  nzmax=2*nzmax;
-	  prs=realloc(prs,nzmax*sizeof(int_pair));
-	  assert(prs!=NULL);
-	}
-	prs[nz++]=(int_pair ){ rowsG, i };
-	prs[nz++]=(int_pair ){ rowsG, j };
-	prs[nz++]=(int_pair ){ rowsG, cwn->cnt };
-	rowsG++;
-#if 0
-      for(int ir=0; ir < cw1->weight; ir++)
-	printf("%d%s",vec1[ir],ir+1 < cw1->weight ? " " : "  ");
-      for(int ir=0; ir < cw2->weight; ir++)
-	printf("%d%s",vec2[ir],ir+1 < cw2->weight ? " " : "\n");
-      printf("%d %d cnum=%zu: ",i,j,cnum);
-      for(size_t ir=0; ir < cnum; ir++)
-	printf("%d%s",cvec[ir],ir+1 < cnum ? " " : "\n");
-#endif
-      if(p->debug & 32)
-	printf("found %d (%d %d %d): ", rowsG, i, j, cwn->cnt);
-      //      for(int ir=0; ir < cwn->weight; ir++)
-      //	printf("%d%s",cwn->arr[ir],ir+1 < cwn->weight ? " " : "\n");
-      }
-
-    }    
-  }
-  free(cvec);
-  /** init `G` matrix */
-  csr_t *ans=csr_from_pairs(NULL, nz, prs, rowsG, mHt->rows);
-  if(p->debug&64)
-    csr_out(ans);
-  free(prs); /** not needed anymore */
-
-  /** free the hash */  
-  one_vec_t *cw, *tmp;
-  HASH_ITER(hh, hash, cw, tmp) {
-#if 0    
-    int *vec=cw->arr;
-    printf("LLR=%g w=%d ",cw->energ,cw->weight);
-    for(int ir=0; ir < cw->weight; ir++)
-      printf("%d%s",vec[ir],ir+1 < cw->weight ? " " : "\n");
-#endif 
-    HASH_DEL(hash, cw);
-  }
-  free(buf);
-  free(HL);
-  
-  /** verify the rank (should be `n`-`k`) ???? */
-  mzd_t *mmG = mzd_from_csr(NULL, ans);
-  int rankG=mzd_gauss_delayed(mmG,0,0);
-  mzd_free(mmG);
-  mzd_t *mmLt = mzd_from_csr(NULL, mLt);
-  int rankL=mzd_gauss_delayed(mmLt,0,0); /** `k` of the code */
-  mzd_free(mmLt);
-  mzd_t *mmHt = mzd_from_csr(NULL, mHt);
-  int rankH=mzd_gauss_delayed(mmHt,0,0); 
-  mzd_free(mmHt);
-  if(p->debug&1){
-    printf("# n=%d k=%d rankG=%d rankH=%d\n"
-	   "# Created matrix G of size %d x %d (all weight-3 rows)\n",
-	   mLt->rows, rankL, rankG, rankH, ans->rows, ans->cols);
-  }
-
-  if(rankH+rankL + rankG != mLt->rows )    
-    ERROR("FIXME: some longer cycles are missing from G\n"
-	  "n=%d != (k=%d) + (rankG=%d) + (rankH=%d)",
-	  mLt->rows, rankL, rankG, rankH );
-  /** This would require some extensive changes to the code.  DEMs
-      from Stim with depolarizing noise enabled have the shortest
-      cycles of length 3, and these are sufficient to generate the
-      full G matrix (may not be the case with some error models). */ 
-
-  
-  /** construct the actual matrix and clean-up */
-  return ans;
-}
-
-
  
 /** @brief return permutation = decreasing probabilities */
 mzp_t * sort_by_prob(mzp_t *perm, params_t const * const p){
@@ -401,6 +190,24 @@ mzp_t * do_skip_pivs(const size_t rank, const mzp_t * const pivs){
       printf(" %d%s",pivs->values[i],i+1 == rank ?"\n":"");
   }
   return ans;
+}
+
+/** @brief Read in vectors from `NZLIST` file `fnam` to hash.
+    @return number of entries read */
+long int nzlist_read(const char fnam[], params_t *p){
+  long int count=0, lineno;
+  assert(fnam);
+  FILE * f=nzlist_r_open(fnam, &lineno); /** no need to check if open */
+  one_vec_t *entry=NULL;
+  while((entry=nzlist_r_one(f,NULL, fnam, &lineno))){
+    /** `assume` unique vectors stored in the file */
+    const size_t keylen = entry->weight * sizeof(rci_t);
+    HASH_ADD(hh, p->codewords, arr, keylen, entry); /** store in the `hash` */
+    count ++;
+    //    printf("%s:%ld: read Xentry %ld w=%d\n",fnam,lineno,count,entry->weight);
+  }
+  fclose(f);
+  return count;
 }
 
 /** @brief Random Information Set search for small-E logical operators.
@@ -479,11 +286,6 @@ int do_LLR_dist(int dW, params_t  * const p){
       /** sort the column indices */
       qsort(ee, cnt, sizeof(rci_t), cmp_rci_t);
 #if 0      
-      if(p->debug & 16){
-        printf("vec=[");
-        for(int i=0;i<cnt; i++)
-          printf("%d%s",ee[i],i+1==cnt ? "]\n" : ", ");
-      }
 #endif
       /** verify logical operator */
       int nz;
@@ -504,7 +306,7 @@ int do_LLR_dist(int dW, params_t  * const p){
 	}
       }
       if(nz){ /** we got non-trivial codeword! */
-        /** todo: try local search to `lerr` */
+        /** TODO: try local search to `lerr` */
         /** calculate the energy and compare */
         qllr_t energ=0;
         for(int i=0; i<cnt; i++) 
@@ -528,6 +330,11 @@ int do_LLR_dist(int dW, params_t  * const p){
               printf("vector exists, cnt=%d\n",pvec->cnt);
           }
           else{ /** vector not found, inserting */
+	    if(p->debug & 16){
+	      printf("# new vec=[");
+	      for(int i=0;i<cnt; i++)
+		printf("%d%s",ee[i],i+1==cnt ? "]\n" : ", ");
+	    }
             ++ ichanged; /** increment counter how many vectors added */
             ++(p->num_cws);
             if(energ>maxE)
@@ -600,12 +407,35 @@ int do_LLR_dist(int dW, params_t  * const p){
   return minW;
 }
 
+int do_energ_verify(const qllr_t * const vE, const mzd_t * const mE, const params_t * const p){
+  int nfail=0;
+  for (int i=0;i < mE->nrows;i++){
+# ifdef USE_QLLR
+    if(vE[i] != mzd_row_energ(p->vLLR,mE,i)){
+      nfail++;
+#ifndef NDEBUG      
+      printf("mismatch i=%d vE=%d row_energ=%d\n",i,vE[i],mzd_row_energ(p->vLLR,mE,i));
+#endif       
+    }
+# else       
+    if(fabs(vE[i] - mzd_row_energ(p->vLLR,mE,i))>1e-5){
+      nfail++;
+#ifndef NDEBUG      
+      printf("mismatch i=%d vE=%g row_energ=%g\n",i,vE[i],mzd_row_energ(p->vLLR,mE,i));
+#endif       
+    }
+# endif
+  }
+  return nfail;
+}
+
 /**
  * @brief do local search up to `p->lerr` inclusive recursively
  * @param vE0 best energy values for each `e` a row in `mE0`
  * @param mE0 best error vectors so far for each syndrome (rows)
  * @param jstart start local search from this column in `mH`
  * @param lev recusion level, must not exceed `p->lerr`
+ * @param vE current energy values for each `e` a row in `mE`
  * @param mE input error vectors (rows)
  * @param mH check matrix in row echelon form (pivots in `pivs`)
  * @param skip_pivs `sorted` list of `n-rank` non-pivot positions in `mH`
@@ -614,79 +444,101 @@ int do_LLR_dist(int dW, params_t  * const p){
  * @return number of updated error vectors
  * @todo: see if binary ops + transposition is faster
  */
-int do_local_search(double *vE0, mzd_t * mE0, const rci_t jstart, const int lev,
-		    const mzd_t * const mE, const mzd_t * const mH,
+int do_local_search(qllr_t *vE0, mzd_t * mE0, rci_t jstart, int lev,
+		    const qllr_t * const vE, const mzd_t * const mE, const mzd_t * const mH,
 		    const mzp_t * const skip_pivs, const mzp_t * const pivs,
 		    const params_t * const p){
   assert(lev<=p->lerr);
+  int last_lev = lev < p->lerr ? 0 : 1;
+  qllr_t *vE1 = NULL;
+  mzd_t *mE1 = NULL; //mzd_copy(NULL,mE); /** error vectors to update */
   if(p->debug&128)
-    printf("entering lev=%d of recursion jstart=%d\n",lev,jstart);
+    printf("entering %slev=%d / %d of recursion jstart=%d\n",last_lev? "last " :"",lev,p->lerr, jstart);  
+#ifndef NDEBUG
+  if(0 != do_energ_verify(vE0,mE0,p)){
+    mzd_print(mE0);
+    ERROR("energy value mismatch vE0, mE0 at lev=%d of %d \n",lev, p->lerr);
+  }
+  if(0 != do_energ_verify(vE,mE,p)){
+    mzd_print(mE0);
+    ERROR("energy value mismatch vE, mE at lev=%d of %d \n",lev, p->lerr);
+  }
+#endif   
   int ich_here=0, ich_below=0;
   rci_t knum = skip_pivs->length; /** number of non-pivot cols in `mH` to go over */
   rci_t rank = p->nvar - knum; /** number of valid pivot cols */
   rci_t rnum; /** number of non-zero entries in rlis (for each `j`) */
   int * rlis = malloc(rank * sizeof(int));
   if(!rlis) ERROR("memory allocation failed!");
-  mzd_t *mE1 = NULL; //mzd_copy(NULL,mE); /** error vectors to update */
+  if(!last_lev){
+    vE1 = malloc(sizeof(qllr_t) * mE0->nrows);
+    if(!vE1) ERROR("memory allocation failed!");
+  }
 
   for(rci_t j=jstart; j<knum; j++){ /** `j`th `non-pivot` entry */
-    mE1 = mzd_copy(mE1,mE); /** fresh copy of error vectors to update */
-
+    if (!last_lev){
+      mE1 = mzd_copy(mE1,mE); /** fresh copy of error vectors to update */
+      memcpy(vE1,vE,sizeof(qllr_t) * mE0->nrows );
+    }
     rci_t jj=skip_pivs->values[j]; /** actual `non-pivot` column we are looking at */
     rnum=0; /** prepare list of positions to update for `jj`th col of `mH` */
     for(rci_t ir=0; ir<rank; ir++)
       if(mzd_read_bit(mH,ir,jj)) /** non-zero bit */
         rlis[rnum++] = pivs->values[ir]; /** column of `mH` to update */
+#ifndef NDEBUG
     if (p->debug & 128){
       printf("jj=%d rlis: ",jj);
       for(int ir=0; ir< rnum; ir++)
         printf(" %d%s",rlis[ir],ir+1==rnum?"\n":"");
     }
+#endif
 
-    for(rci_t is=0; is < mE1->nrows; is++){ /** syndrome rows */
-      if(mzd_read_bit(mE1,is,jj)) /** sanity check */
+    for(rci_t is=0; is < mE->nrows; is++){ /** syndrome rows */
+#ifndef NDEBUG      
+      if(mzd_read_bit(mE,is,jj)) /** sanity check */
         ERROR("bit found at is=%d jj=%d\n",is,jj);
-
-      if(vE0[is] > p->LLRmin){
-        /** min possible for a non-zero vector */
-        double energ = mzd_row_energ(p->vLLR,mE1,is);
-        mzd_flip_bit(mE1,is,jj);
+#endif 
+      if(vE0[is] >= 2 * p->LLRmin){/** TODO: add more reasonable cutoff here */
+        qllr_t energ = vE[is];
+	/** calculate updated energy only */
         energ += p->vLLR[jj];
         for(rci_t ir = 0 ;  ir < rnum; ++ir){
-          const int ii = rlis[ir]; /** position to update */
-          if(mzd_read_bit(mE1,is,ii))
+	  const int ii = rlis[ir]; /** position to update */
+          if(mzd_read_bit(mE,is,ii))
             energ -= p->vLLR[ii]; /** `1->0` flip */
           else
             energ += p->vLLR[ii]; /** `0->1` flip */
-          mzd_flip_bit(mE1,is,ii);
         }
+	if(!last_lev){ /* calculate updated error vector */
+	  vE1[is]=energ;
+	  mzd_flip_bit(mE1,is,jj);
+	  for(rci_t ir = 0 ;  ir < rnum; ++ir)
+	    mzd_flip_bit(mE1, is, rlis[ir]);
+	}
         if(energ < vE0[is]-1e-10){
+#ifndef NDEBUG
           if(p->debug & 128){/** inf set decoding */
-            printf("lev=%d j=%d jj=%d is=%d E0=%g E=%g success:\n",
-                   lev,j,jj,is,vE0[is],energ);
-            assert(fabs(energ - mzd_row_energ(p->vLLR,mE1,is))<1e-8);
-            mzd_print_row(mE0,is);
-            mzd_print_row(mE1,is);
+            printf("lev=%d j=%d jj=%d is=%d E0=%g E=%g success\n", lev,j,jj,is,
+		   dbl_from_llr(vE0[is]),dbl_from_llr(energ));
           }
+#endif
           vE0[is]=energ;
-          mzd_copy_row(mE0,is, mE1,is);
+	  if (!last_lev)
+	    mzd_copy_row(mE0,is, mE1,is);
+	  else{
+	    mzd_copy_row(mE0,is, mE,is);
+	    mzd_flip_bit(mE0,is,jj);
+	    for(rci_t ir = 0 ;  ir < rnum; ++ir)
+	      mzd_flip_bit(mE0, is, rlis[ir]);
+	  }
           ich_here++;
-        }
-        else{
-          if(p->debug & 128){/** inf set decoding */
-            printf("lev=%d j=%d jj=%d is=%d E0=%g E=%g no change:\n",
-                   lev,j,jj,is,vE0[is],energ);
-            assert(fabs(energ - mzd_row_energ(p->vLLR,mE1,is))<1e-8);
-            mzd_print_row(mE0,is);
-            mzd_print_row(mE1,is);
-          }
         }
       }
     }
 
-    if(lev+1 < p->lerr){ /** go up one recursion level */
+    if(!last_lev){ /** go up one recursion level */
       if(j+1<knum){
-        ich_below+=do_local_search(vE0,mE0,j+1,lev+1,mE1, mH, skip_pivs, pivs,p);
+        ich_below+=do_local_search(vE0,mE0,j+1,lev+1,vE1,mE1, mH, skip_pivs, pivs,p);
       }
     }
   }
@@ -695,7 +547,10 @@ int do_local_search(double *vE0, mzd_t * mE0, const rci_t jstart, const int lev,
       printf("exiting lev=%d of recursion, here ch=%d below ch=%d\n",
              lev,ich_here, ich_below);
   free(rlis);
-  mzd_free(mE1);
+  if (mE1)
+    mzd_free(mE1);
+  if (vE1)
+    free(vE1);
   return ich_below+ich_here;
 }
 
@@ -709,7 +564,7 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
   mzd_t * mH = mzd_from_csr(NULL, p->mH);
 
   mzd_t * mE = mzd_init(mH->ncols,mS->ncols); /**< error vectors by col */
-  double *vE = calloc(mS->ncols,sizeof(double)); /**< best energies */
+  qllr_t *vE = calloc(mS->ncols,sizeof(qllr_t)); /**< best energies */
   if((!mE) || (!vE))
     ERROR("memory allocation failed!\n");
 
@@ -755,14 +610,25 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
 
   if(p->lerr){  /** do information-set decoding `**********************` */
     mzp_t * skip_pivs = do_skip_pivs(rank, pivs);
-    mzd_t * mEt1 = mzd_copy(NULL, mEt0);
-    do_local_search(vE, mEt0, 0, 0, mEt1, mH, skip_pivs, pivs, p);
+    mzd_t * mEt1=NULL;
+    qllr_t *vE1=NULL;
+    if (p->lerr > 1){
+      mEt1 = mzd_copy(NULL, mEt0);
+      vE1 = malloc(sizeof(qllr_t) * mEt0->nrows);  if(!vE1) ERROR("memory allocation failed!");
+      memcpy(vE1,vE,sizeof(qllr_t) * mEt0->nrows);
+    }
+    do_local_search(vE, mEt0, 0, 1,
+		    p->lerr > 1 ? vE1 : vE,
+		    p->lerr > 1 ? mEt1 : mEt0, mH, skip_pivs, pivs, p);
     if(p->debug & 512){
       printf("mEt0 after local search:\n");
       mzd_print(mEt0);
     }
-    mzd_free(mEt1);
     free(skip_pivs);
+    if (p->lerr > 1){
+      mzd_free(mEt1);
+      free(vE1);
+    }
   }
 
   int iwait=0, ichanged=0;
@@ -784,12 +650,19 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
       mzd_copy_row(mE,pivs->values[i],mS,i);
     ichanged=0;
     mzd_t * mEt = mzd_transpose(NULL, mE);
+    qllr_t *vE1=NULL;
+    if(p->lerr){  /** do information-set decoding `**********************` */
+      vE1 = malloc(sizeof(qllr_t) * mEt0->nrows);
+      if(!vE1) ERROR("memory allocation failed!");
+    }
     for(int i=0; i< mEt->nrows; i++){
-      double energ=mzd_row_energ(p->vLLR,mEt,i);
+      qllr_t energ=mzd_row_energ(p->vLLR,mEt,i);
+      if(p->lerr)
+	vE1[i]=energ;
       if(energ < vE[i]){
-        vE[i]=energ;
-        mzd_copy_row(mEt0,i,mEt,i);
-        ichanged++;
+	vE[i]=energ;
+	mzd_copy_row(mEt0,i,mEt,i);
+	ichanged++;
       }
     }
     if(ichanged){
@@ -809,12 +682,14 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
     }
     if(p->lerr){  /** do information-set decoding `**********************` */
       mzp_t * skip_pivs = do_skip_pivs(rank, pivs);
-      do_local_search(vE, mEt0, 0, 0, mEt, mH, skip_pivs, pivs, p);
+      do_local_search(vE, mEt0, 0, 1, vE1, mEt, mH, skip_pivs, pivs, p);
       if(p->debug & 512){
         printf("mEt0 after local search:\n");
         mzd_print(mEt0);
       }
       free(skip_pivs);
+      if (p->lerr > 1)
+	free(vE1);
     }
 
     mzd_free(mEt);
@@ -1036,6 +911,22 @@ int var_init(int argc, char **argv, params_t *p){
         p->finL = argv[++i]; /**< allow space before file name */
       if (p->debug&1)
 	printf("# read %s, finL=%s\n",argv[i],p->finL);
+    }
+    else if (0==strncmp(argv[i],"finC=",5)){ /** `finC` in low-weight codeword list */
+      if(strlen(argv[i])>5)
+        p->finC = argv[i]+5;
+      else
+        p->finC = argv[++i]; /**< allow space before file name */
+      if (p->debug&1)
+	printf("# read %s, finC=%s\n",argv[i],p->finC);
+    }
+    else if (0==strncmp(argv[i],"outC=",5)){ /** `outC` out low-weight codeword list */
+      if(strlen(argv[i])>5)
+        p->outC = argv[i]+5;
+      else
+        p->outC = argv[++i]; /**< allow space before file name */
+      if (p->debug&1)
+	printf("# read %s, outC=%s\n",argv[i],p->outC);
     }
     else if (0==strncmp(argv[i],"finG=",5)){/** `finG` degeneracy generator matrix */
       if(strlen(argv[i])>5)
@@ -1294,7 +1185,6 @@ int var_init(int argc, char **argv, params_t *p){
     if(p->file_obs==NULL)
       ERROR("can't open the (obs) file %s for reading\n",p->fobs);
   }
-  //  else     p->internal=1;
 
   if(p->mode<=1){ /* vecdec RIS or BP decoder */
     p->mHe = mzd_init(p->nchk, p->nvec); /** each column a syndrome vector `H*e` */
@@ -1404,12 +1294,15 @@ int main(int argc, char **argv){
     //    p->mL=csr_identity(p->nvar, p->nvar);
   init_Ht(p);
   //  mat_init(p);
-
+  if(p->debug & 1)
+    printf("# mode=%d submode=%d debug=%d\n",p->mode,p->submode,p->debug);
 
   int ierr_tot=0, rounds=(int )ceil((double) p->ntot / (double) p->nvec);
+  if(((p->mode == 0) || (p->mode == 1)) && (p->debug & 2))
+    printf("# ntot=%d nvec=%d will do calculation in %d rounds\n",p->ntot,p->nvec,rounds);
 
   switch(p->mode){    
-  case 0: /** internal `vecdec` decoder */
+  case 0: /** `mode=0` internal `vecdec` decoder */
     /** at least one round always */
     long int synd_tot=0, synd_fail=0;
     for(int iround=0; iround < rounds; iround++){
@@ -1458,7 +1351,7 @@ int main(int argc, char **argv){
       //      mzd_free(mLe); mLe=NULL;
 
       int fails=0;
-      for(rci_t ic=0; ic< ierr_tot; ic++){ //! was: `prodLe->ncols`
+      for(rci_t ic=0; ic< ierr_tot; ic++){
 	rci_t ir=0;
 	if(mzd_find_pivot(prodLe, ir, ic, &ir, &ic)){
 	  fails++;
@@ -1467,7 +1360,7 @@ int main(int argc, char **argv){
 	  break;
       }
       /** update the global counts */
-      synd_tot  += ierr_tot; /** was: prodLe->ncols; */
+      synd_tot  += ierr_tot; /** was: prodLe->ncols */
       synd_fail += fails;
       mzd_free(prodLe); prodLe=NULL;
       if((p->nfail > 0) && (synd_fail >= p->nfail))
@@ -1479,7 +1372,7 @@ int main(int argc, char **argv){
       
     break;
 
-  case 1: /** various BP flavors */
+  case 1: /** `mode=1` various BP flavors */
     
     qllr_t *ans = calloc(p->nvar, sizeof(qllr_t));
       if(!ans) ERROR("memory allocation failed!"); 
@@ -1539,10 +1432,18 @@ int main(int argc, char **argv){
     cnt_out(p->debug&1);
     free(ans);
     break;
-  case 2:
+  case 2: /** `mode=2` */
     if(p->debug&1)
       printf("# mode=%d, estimating fail probability in %d steps\n",p->mode, p->steps);
+    if(p->finC){
+      p->num_cws = nzlist_read(p->finC,p);
+      if(p->debug&1)
+	printf("# %ld codewords read from %s\n",p->num_cws, p->finC);
+    }
     do_LLR_dist(p->nfail, p);
+    if(p->outC){
+      /** write the codewords here */
+    }
     break;
     
   case 3: /** read in DEM file and output the H, L, G matrices and P vector */
@@ -1570,7 +1471,7 @@ int main(int argc, char **argv){
       if(p->debug&1)
 	printf("# creating G matrix and writing to\t%s%s\n",
 	       p->fout, p->use_stdout ? "\n" :"G.mmx");
-      p->mG = do_G_matrix(p->mHt,p->mLt,p);
+      p->mG = do_G_matrix(p->mHt,p->mLt,p->vLLR, p->debug);
       comment[0]='G';
     }
     else{

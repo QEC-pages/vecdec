@@ -73,6 +73,33 @@ secondary decoder.  Ordered-statistics decoder (OSD) has been suggested for this
 purpose, which is essentially an RW decoder using the list of *aposteriori*
 probabilities returned by BP.
 
+### osd implementation 
+
+**Currently,** there is a function `do_local_search()` which for some
+reason is extremely slow.  It attempts to construct all error vectors
+at once.  Specifically, for each non-pivot point `jj` it
+ - makes a copy of current error vectors, 
+ - calculates the list `rlis` of pivot positions to update,
+ - after which goes over each syndrome vector:
+   - calculates the current energy `(may be slow?)`
+   - flips the bit at `jj`
+   - updates the energy by flipping each position in `rlis`
+   - compares with the stored energy values
+   
+To speed up this version:
+ - [x] copy the energy values between recursion levels
+ - [x] do not copy current error vectors for last recursion level
+ - [ ] introduce the maximum number of columns to do OSD with
+ - [ ] perhaps introduce a cut-off by weight? 
+ - [ ] use `mzd_find_pivot()` ???
+
+**Instead,** implement a recursive function `do_local_search_one()` which
+deals with one syndrome vector and one error vector at a time.  Use it
+for both `mode=0` (information set decoder) and as OSD with BP
+(`mode=1`).
+
+
+
 # Logical fail rate predictors 
 
 ## Asymptotic minimum-weight fail rate 
@@ -161,6 +188,10 @@ stim sample_dem \
 - [ ] Implement BP decoding with OSD
   - [x] Actual BP steps 
   - [x] Add `BoxPlus()` from `it++` library
+  - [x] serial BP (c-based): given the order of check nodes, select `c`, 
+    * update messages to `c`, 
+	* update messages from `c`.
+  - [ ] serial BP (v-based)   
   - [ ] Add error estimation
   - [ ] BP with randomization
   - [ ] BP with Freezing / Stabilizer inactivation (Savin et al)
@@ -179,7 +210,25 @@ stim sample_dem \
   - [ ] Estimate the fudge-factor $\alpha$, given the statistics of error probabilities
   - [ ] Estimate the effect of correlations between the trajectories.
 - [ ] Code transformations reducing the degeneracy for `mode=3`
+  - [ ] Check for `w=1` and `w=2` degeneracies (submode `w`: remove
+        degeneracies up to `w` if non-zero, otherwise do no
+        transformations)
   - [ ] Remove `w=3` degeneracies (rows of weight 3 in `G`)
+        (see the unfinished function `int star_triangle()` in `star_poly.c` )
   - [ ] Remove `w=4` degeneracies (rows of weight 4 in `G`)
   - [ ] Code for arbitrary row weight (exponentially large matrices may result)
-
+- [ ] List-based decoding 
+  - [ ] Write a list of codewords to a file; read it from a file.
+        Format: given $L$, each CW $c$ (column) has associated
+        syndrome vector $L c$ (a binary vector) and a list of non-zero
+        positions.  **We just store non-zero positions**.  Format: 
+		 ```
+		 %% NZLIST
+		 % end-of-line comments followed by rows formed by of column indices (ordered), 
+		 % starting with weight `w`, `1`-based and separated by spaces.
+		 % w  i1 i2 ... iw
+		 4  1 3 7 17
+		 5  2 4 8 23 61
+		 ```
+	
+  - [ ] Given the found error vector (syndrome OK), try to add the codewords one-by-one.

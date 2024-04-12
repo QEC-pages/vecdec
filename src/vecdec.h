@@ -20,29 +20,7 @@ extern "C"{
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include "uthash.h" /** hashing storage macros */
 #include  "qllr.h" 
-
-  /**< @brief structure to hold sparse vectors in a hash */
-  typedef struct ONE_VEC_T {
-    UT_hash_handle hh;
-    double energ; /**< sum of LLRs */
-    int weight; /**< number of integers in the list */
-    int cnt; /** how many times this vector was encountered */
-    //  size_t len; /** `weight*sizeof(int)` (is this really needed?) */
-    int arr[0]; /** array of `weight` integers, the actual key  */
-  } one_vec_t;
-
-  /** @brief structure to read in one line of data */
-  typedef struct ONE_PROB_T {
-    double p; /**< probability */
-    int n1;   /**< number of entries in H column */
-    int n2;   /**< number of entries in L column */
-    int idx[]; /**< flexible array to store `n1+n2` entries */
-  } one_prob_t;
-
-  /** @bried helper structure to sort by probabilities */
-  typedef struct IPPAIR_T {int index; double prob; } ippair_t; 
 
 
   typedef enum EXTR_T { TOTAL, CONV_TRIVIAL, CONV_BP, CONV_BP_AVG,
@@ -75,6 +53,8 @@ extern "C"{
     char *finL; /** `input file` name for Lx=L (if input separately or a classical code) */
     char *finG; /** `input file` name for Hz=G (must use separate input) */
     char *finP; /** `input file` name for P (if input separately or a classical code) */
+    char *finC; /** `input file` name for `C` (list of non-trivial CWs for decoding) */
+    char *outC; /** `output file` name for `C` (list of non-trivial CWs for decoding) */
     char *fout; /** `output file name`  header for files creaded with `mode=3` */
     char *fdem; /** `input file` name for detector error model (`DEM`) */
     char *fdet; /** `input file` name for detector events */
@@ -126,23 +106,8 @@ extern "C"{
     return 0;
   }
 
-  /** @brief helper function to sort `int`
-   *  use `qsort(array, len, sizeof(rci_t), cmp_rci_t);`
-   */
-  static inline int cmp_rci_t(const void *a, const void *b){
-    const rci_t va= *((rci_t *) a);
-    const rci_t vb= *((rci_t *) b);
-    return va-vb;
-#if 0
-    if (va<vb)
-      return +1;
-    else if (va>vb)
-      return -1;
-    return 0;
-#endif
-  }
 
-  /** functions defined in `iter_dec.c` */
+  /** functions defined in `iter_dec.c` ******************************************** */
   void cnt_out(int print_banner);
   void cnt_update(extr_t which, int iteration);
   void out_llr(const char str[], const int num, const qllr_t llr[]);
@@ -154,6 +119,11 @@ extern "C"{
   int do_parallel_BP(qllr_t * outLLR, const mzd_t * const srow,
 		   const csr_t * const H, const csr_t * const Ht,
 		     const qllr_t LLR[], const params_t * const p);
+
+  /** function defined in `star_poly.c` ********************************************* */
+
+  csr_t * do_G_matrix(const csr_t * const mHt, const csr_t * const mLt, const qllr_t LLR[], 
+		      const int debug);
 
   /** 
    * @brief The help message. 
@@ -172,6 +142,9 @@ extern "C"{
   "\t finG=[string]\t: file with dual check matrix Hz (mm or alist)\n"	\
   "\t finL=[string]\t: file with logical dual check matrix Lx (mm or alist)\n" \
   "\t finP=[string]\t: input file for probabilities (mm or a column of doubles)\n" \
+  "\t finC=[string]\t: input file name for codewords in `nzlist` format\n" \
+  "\t outC=[string]\t: output file name for codewords in `nzlist` format\n" \
+  "\t\t\t (if same as finC, the file will be updated)\n"		\
   "\t useP=[double]\t: fixed probability value (override values in DEM file)\n"	\
   "\t\t for a quantum code specify 'fdem' OR 'finH' and ( 'finL' OR 'finG' );\n" \
   "\t\t for classical just 'finH' (and optionally the dual matrix 'finL')\n" \
@@ -182,7 +155,7 @@ extern "C"{
   "\t fout=[string]\t: header for output file names ('tmp', see 'mode=3')\n" \
   "\t\t (space is OK in front of file names to enable shell completion)\n" \
   "\t steps=[integer]\t: num of RIS or BP decoding steps (default: 50)\n" \
-  "\t lerr =[integer]\t: OSD search level (0, ***not implemented***)\n" \
+  "\t lerr =[integer]\t: OSD search level (0, only implemented with `mode=0`)\n" \
   "\t swait=[integer]\t: Gauss steps w/o new errors to stop (0, do not stop)\n" \
   "\t nvec =[integer]\t: max vector size for decoding (default: 1024)\n" \
   "\t\t\t (list size for distance or energy calculations)\n"		\
@@ -194,19 +167,23 @@ extern "C"{
   "\t qllr3=[integer]\t: if 'USE_QLLR' is set, parameter 'd3' (7)\n"	\
   "\t\t These are used to speed-up LLR calculations, see 'qllr.h'\n"	\
   "\t\t Use 'qllr2=0' for min-sum.\n"					\
-  "\t mode= [int.int]\t: operation mode.submode (default: 0.0)\n"	\
+  "\t mode=int[.int]\t: operation mode[.submode] (default: 0.0)\n"	\
   "\t\t* 0: use basic vectorized (random information set) decoder\n"	\
   "\t\t\t read detector events from file 'fdet' if given, otherwise\n"  \
   "\t\t\t generate 'ntot' detector events and matching observable flips;\n" \
-  "\t\t\t read observable flips from file 'fobs' if given\n"            \
+  "\t\t\t decode in chunks of size 'nvec'. \n"				\
+  "\t\t\t Read observable flips from file 'fobs' if given\n"            \
   "\t\t* 1: Belief Propagation decoder\n"				\
   "\t\t\t .0 parallel BP using LLR and average LLR\n"			\
   "\t\t\t .1 parallel BP using only LLR\n"				\
-  "\t\t* 2: generate most likely fault vectors, estimate Prob(Fail)\n"  \
-  "\t\t\t generate up to 'ntot' unique min-energy fault vectors\n"	\
-  "\t\t\t use up to 'steps' random window decoding steps unless no new\n" \
-  "\t\t\t fault vectors have been found for 'swait' steps.\n"           \
-  "\t\t\t Keep vectors of weight up to 'nfail' above min weight found\n" \
+  "\t\t* 2: generate most likely fault vectors, estimate Prob(Fail).\n"  \
+  "\t\t\t Use up to 'steps' random information set (RIS) decoding steps\n" \
+  "\t\t\t unless no new fault vectors have been found for 'swait' steps.\n" \
+  "\t\t\t Keep vectors of weight up to 'nfail' above min weight found.\n" \
+  "\t\t\t Generate up to 'ntot' unique min-energy fault vectors.\n"	\
+  "\t\t\t (if the corresponding parameters are set to non-zero values)\n" \
+  "\t\t\t If 'outC' is set, write full list of CWs to this file.\n"	\
+  "\t\t\t If 'finC' is set, read initial set of CWs from this file.\n"	\
   "\t\t* 3: Read in the DEM file and output the corresponding \n"	\
   "\t\t\t H, G, and L matrices and the probability vector P.\n"		\
   "\t\t\t Use 'fout=' command line argument to generate file names\n"	\

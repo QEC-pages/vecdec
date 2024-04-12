@@ -74,9 +74,15 @@ int mm_read_unsymmetric_sparse(const char *fname, int *M_, int *N_, int *nz_,
  
     for (i=0; i<nz; i++)
     {
-        fscanf(f, "%d %d %lg\n", &I[i], &J[i], &val[i]);
+      int res = fscanf(f, "%d %d %lg\n", &I[i], &J[i], &val[i]);
+      if ((res!=EOF) && (res==3)){
         I[i]--;  /* adjust from 1-based to 0-based */
         J[i]--;
+      }else {
+	fprintf(stderr, "error reading file %s at data line %d\n",fname,i);
+	exit(-1);
+      }
+      
     }
     fclose(f);
  

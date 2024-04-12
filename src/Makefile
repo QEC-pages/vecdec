@@ -18,8 +18,8 @@ src = vecdec.c utils_m4ri.c  utils.c tinymt64.c ${VECDEC_HDRS}
 #-Wmissing-prototypes   -Wconversion -Wextra
 # -std=gnu11
 VECDEC_HDRS = vecdec.h util_m4ri.h utils.h mmio.h tinymt64.h uthash.h qllr.h 
-VECDEC_SECS = vecdec.c util_m4ri.c utils.c mmio.c tinymt64.c qllr.c iter_dec.c 
-VECDEC_OBJS = vecdec.o util_m4ri.o utils.o tinymt64.o qllr.o iter_dec.o 
+VECDEC_SECS = vecdec.c util_m4ri.c utils.c mmio.c tinymt64.c qllr.c iter_dec.c star_poly.c 
+VECDEC_OBJS = vecdec.o util_m4ri.o utils.o tinymt64.o qllr.o iter_dec.o star_poly.o
 VECDEC_XTRA = mmio.o 
 ## unused (documentation only): mainpage.h
 
@@ -71,7 +71,7 @@ tags:
 
 
 veryclean: clean
-	rm -f vecdec vecdec.exe vecdec.zip 
+	rm -f vecdec vecdec.exe vecdec.zip vecdec_dbl
 
 zip: ${src}
 	zip -9 -o vecdec.zip ${src} ../Doxyfile ../README.md
