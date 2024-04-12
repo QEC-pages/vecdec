@@ -155,7 +155,7 @@ extern "C"{
   "\t fout=[string]\t: header for output file names ('tmp', see 'mode=3')\n" \
   "\t\t (space is OK in front of file names to enable shell completion)\n" \
   "\t steps=[integer]\t: num of RIS or BP decoding steps (default: 50)\n" \
-  "\t lerr =[integer]\t: OSD search level (0, ***not implemented***)\n" \
+  "\t lerr =[integer]\t: OSD search level (0, only implemented with `mode=0`)\n" \
   "\t swait=[integer]\t: Gauss steps w/o new errors to stop (0, do not stop)\n" \
   "\t nvec =[integer]\t: max vector size for decoding (default: 1024)\n" \
   "\t\t\t (list size for distance or energy calculations)\n"		\
