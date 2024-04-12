@@ -50,9 +50,12 @@ long long int iter2[EXTR_MAX]; /** sums of BP iteration numbers squared */
 /** @brief calculate the energy of the row `i` in `A` */
 qllr_t mzd_row_energ(qllr_t *coeff, const mzd_t *A, const int i){
   qllr_t ans=0;
+  //  mzd_print(A);
   for(rci_t j = 0; j < A->ncols; ++j)
-    if(mzd_read_bit(A, i, j))
+    if(mzd_read_bit(A, i, j)){
+      //      printf("non-zero i=%d j=%d coeff=%d\n",i,j,coeff[j]);
       ans += coeff[j];
+    }
   return (ans);
   /** todo: rewrite in terms of `__builtin_clzll` */
 }
@@ -404,6 +407,28 @@ int do_LLR_dist(int dW, params_t  * const p){
   return minW;
 }
 
+int do_energ_verify(const qllr_t * const vE, const mzd_t * const mE, const params_t * const p){
+  int nfail=0;
+  for (int i=0;i < mE->nrows;i++){
+# ifdef USE_QLLR
+    if(vE[i] != mzd_row_energ(p->vLLR,mE,i)){
+      nfail++;
+#ifndef NDEBUG      
+      printf("mismatch i=%d vE=%d row_energ=%d\n",i,vE[i],mzd_row_energ(p->vLLR,mE,i));
+#endif       
+    }
+# else       
+    if(fabs(vE[i] - mzd_row_energ(p->vLLR,mE,i))>1e-5){
+      nfail++;
+#ifndef NDEBUG      
+      printf("mismatch i=%d vE=%g row_energ=%g\n",i,vE[i],mzd_row_energ(p->vLLR,mE,i));
+#endif       
+    }
+# endif
+  }
+  return nfail;
+}
+
 /**
  * @brief do local search up to `p->lerr` inclusive recursively
  * @param vE0 best energy values for each `e` a row in `mE0`
@@ -419,16 +444,26 @@ int do_LLR_dist(int dW, params_t  * const p){
  * @return number of updated error vectors
  * @todo: see if binary ops + transposition is faster
  */
-int do_local_search(double *vE0, mzd_t * mE0, rci_t jstart, int lev,
-		    const double * const vE, const mzd_t * const mE, const mzd_t * const mH,
+int do_local_search(qllr_t *vE0, mzd_t * mE0, rci_t jstart, int lev,
+		    const qllr_t * const vE, const mzd_t * const mE, const mzd_t * const mH,
 		    const mzp_t * const skip_pivs, const mzp_t * const pivs,
 		    const params_t * const p){
   assert(lev<=p->lerr);
   int last_lev = lev < p->lerr ? 0 : 1;
-  double *vE1 = NULL;
+  qllr_t *vE1 = NULL;
   mzd_t *mE1 = NULL; //mzd_copy(NULL,mE); /** error vectors to update */
   if(p->debug&128)
-    printf("entering %slev=%d / %d of recursion jstart=%d\n",last_lev? "last " :"",lev,p->lerr, jstart);
+    printf("entering %slev=%d / %d of recursion jstart=%d\n",last_lev? "last " :"",lev,p->lerr, jstart);  
+#ifndef NDEBUG
+  if(0 != do_energ_verify(vE0,mE0,p)){
+    mzd_print(mE0);
+    ERROR("energy value mismatch vE0, mE0 at lev=%d of %d \n",lev, p->lerr);
+  }
+  if(0 != do_energ_verify(vE,mE,p)){
+    mzd_print(mE0);
+    ERROR("energy value mismatch vE, mE at lev=%d of %d \n",lev, p->lerr);
+  }
+#endif   
   int ich_here=0, ich_below=0;
   rci_t knum = skip_pivs->length; /** number of non-pivot cols in `mH` to go over */
   rci_t rank = p->nvar - knum; /** number of valid pivot cols */
@@ -436,14 +471,14 @@ int do_local_search(double *vE0, mzd_t * mE0, rci_t jstart, int lev,
   int * rlis = malloc(rank * sizeof(int));
   if(!rlis) ERROR("memory allocation failed!");
   if(!last_lev){
-    vE1 = malloc(sizeof(vE));
+    vE1 = malloc(sizeof(qllr_t) * mE0->nrows);
     if(!vE1) ERROR("memory allocation failed!");
   }
 
   for(rci_t j=jstart; j<knum; j++){ /** `j`th `non-pivot` entry */
     if (!last_lev){
       mE1 = mzd_copy(mE1,mE); /** fresh copy of error vectors to update */
-      memcpy(vE1,vE,sizeof(vE) );
+      memcpy(vE1,vE,sizeof(qllr_t) * mE0->nrows );
     }
     rci_t jj=skip_pivs->values[j]; /** actual `non-pivot` column we are looking at */
     rnum=0; /** prepare list of positions to update for `jj`th col of `mH` */
@@ -464,10 +499,14 @@ int do_local_search(double *vE0, mzd_t * mE0, rci_t jstart, int lev,
         ERROR("bit found at is=%d jj=%d\n",is,jj);
 #endif 
       //      if(vE0[is] > p->LLRmin){/** min possible for a non-zero vector */
-        double energ = vE[is];
-	if(fabs(energ - mzd_row_energ(p->vLLR,mE,is))>1e-5){
+        qllr_t energ = vE[is];
+#ifdef USE_QLLR
+	if(energ != mzd_row_energ(p->vLLR,mE,is))
+	  ERROR("mismatch lev=%d j=%d is=%d vE=%d row_energ=%d\n",lev,j,is,energ,mzd_row_energ(p->vLLR,mE,is));
+#else 	
+	if(fabs(energ - mzd_row_energ(p->vLLR,mE,is))>1e-5)
 	  ERROR("mismatch lev=%d j=%d is=%d vE=%g row_energ=%g\n",lev,j,is,energ,mzd_row_energ(p->vLLR,mE,is));
-	}
+#endif	
 	/** calculate updated energy only */
         energ += p->vLLR[jj];
         for(rci_t ir = 0 ;  ir < rnum; ++ir){
@@ -478,6 +517,7 @@ int do_local_search(double *vE0, mzd_t * mE0, rci_t jstart, int lev,
             energ += p->vLLR[rlis[ir]]; /** `0->1` flip */
         }
 	if(!last_lev){ /* calculate updated error vector */
+	  vE1[is]=energ;
 	  mzd_flip_bit(mE1,is,jj);
 	  for(rci_t ir = 0 ;  ir < rnum; ++ir)
 	    mzd_flip_bit(mE1, is, rlis[ir]);
@@ -485,11 +525,11 @@ int do_local_search(double *vE0, mzd_t * mE0, rci_t jstart, int lev,
         if(energ < vE0[is]-1e-10){
 #ifndef NDEBUG
           if(p->debug & 128){/** inf set decoding */
-            printf("lev=%d j=%d jj=%d is=%d E0=%g E=%g success:\n",
-                   lev,j,jj,is,vE0[is],energ);
-	    //            assert(fabs(energ - mzd_row_energ(p->vLLR,mE1,is))<1e-8);
-	    //            mzd_print_row(mE0,is);
-	    //            mzd_print_row(mE1,is);
+#  ifdef USE_QLLR
+            printf("lev=%d j=%d jj=%d is=%d E0=%d E=%d success\n", lev,j,jj,is,vE0[is],energ);
+#  else 	    
+            printf("lev=%d j=%d jj=%d is=%d E0=%g E=%g success\n", lev,j,jj,is,vE0[is],energ);
+#  endif
           }
 #endif
           vE0[is]=energ;
@@ -503,17 +543,6 @@ int do_local_search(double *vE0, mzd_t * mE0, rci_t jstart, int lev,
 	  }
           ich_here++;
         }
-#if 0	
-        else{
-          if(p->debug & 128){/** inf set decoding */
-            printf("lev=%d j=%d jj=%d is=%d E0=%g E=%g no change:\n",
-                   lev,j,jj,is,vE0[is],energ);
-	    //            assert(fabs(energ - mzd_row_energ(p->vLLR,mE1,is))<1e-8);
-	    //            mzd_print_row(mE0,is);
-	    //            mzd_print_row(mE1,is);
-          }
-        }
-#endif 	
 	//      }
     }
 
@@ -545,7 +574,7 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
   mzd_t * mH = mzd_from_csr(NULL, p->mH);
 
   mzd_t * mE = mzd_init(mH->ncols,mS->ncols); /**< error vectors by col */
-  double *vE = calloc(mS->ncols,sizeof(double)); /**< best energies */
+  qllr_t *vE = calloc(mS->ncols,sizeof(qllr_t)); /**< best energies */
   if((!mE) || (!vE))
     ERROR("memory allocation failed!\n");
 
@@ -592,12 +621,11 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
   if(p->lerr){  /** do information-set decoding `**********************` */
     mzp_t * skip_pivs = do_skip_pivs(rank, pivs);
     mzd_t * mEt1=NULL;
-    double *vE1=NULL;
+    qllr_t *vE1=NULL;
     if (p->lerr > 1){
       mEt1 = mzd_copy(NULL, mEt0);
-      vE1 = malloc(sizeof(double) * mEt0->nrows);
-      if(!vE1) ERROR("memory allocation failed!");
-      memcpy(vE1,vE,sizeof(double) * mE->nrows);
+      vE1 = malloc(sizeof(qllr_t) * mEt0->nrows);  if(!vE1) ERROR("memory allocation failed!");
+      memcpy(vE1,vE,sizeof(qllr_t) * mEt0->nrows);
     }
     do_local_search(vE, mEt0, 0, 1,
 		    p->lerr > 1 ? vE1 : vE,
@@ -632,12 +660,19 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
       mzd_copy_row(mE,pivs->values[i],mS,i);
     ichanged=0;
     mzd_t * mEt = mzd_transpose(NULL, mE);
+    qllr_t *vE1=NULL;
+    if(p->lerr){  /** do information-set decoding `**********************` */
+      vE1 = malloc(sizeof(qllr_t) * mEt0->nrows);
+      if(!vE1) ERROR("memory allocation failed!");
+    }
     for(int i=0; i< mEt->nrows; i++){
-      double energ=mzd_row_energ(p->vLLR,mEt,i);
+      qllr_t energ=mzd_row_energ(p->vLLR,mEt,i);
+      if(p->lerr)
+	vE1[i]=energ;
       if(energ < vE[i]){
-        vE[i]=energ;
-        mzd_copy_row(mEt0,i,mEt,i);
-        ichanged++;
+	vE[i]=energ;
+	mzd_copy_row(mEt0,i,mEt,i);
+	ichanged++;
       }
     }
     if(ichanged){
@@ -657,13 +692,7 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
     }
     if(p->lerr){  /** do information-set decoding `**********************` */
       mzp_t * skip_pivs = do_skip_pivs(rank, pivs);
-      double *vE1=NULL;
-      if (p->lerr > 1){
-	vE1 = malloc(sizeof(double) * mEt0->nrows);
-	if(!vE1) ERROR("memory allocation failed!");
-	memcpy(vE1,vE,sizeof(double) * mE->nrows);
-      }
-      do_local_search(vE, mEt0, 0, 1, p->lerr > 1 ? vE1 : vE, mEt, mH, skip_pivs, pivs, p);
+      do_local_search(vE, mEt0, 0, 1, vE1, mEt, mH, skip_pivs, pivs, p);
       if(p->debug & 512){
         printf("mEt0 after local search:\n");
         mzd_print(mEt0);
