@@ -306,7 +306,7 @@ int do_LLR_dist(int dW, params_t  * const p){
 	}
       }
       if(nz){ /** we got non-trivial codeword! */
-        /** todo: try local search to `lerr` */
+        /** TODO: try local search to `lerr` */
         /** calculate the energy and compare */
         qllr_t energ=0;
         for(int i=0; i<cnt; i++) 
@@ -518,11 +518,8 @@ int do_local_search(qllr_t *vE0, mzd_t * mE0, rci_t jstart, int lev,
         if(energ < vE0[is]-1e-10){
 #ifndef NDEBUG
           if(p->debug & 128){/** inf set decoding */
-#  ifdef USE_QLLR
-            printf("lev=%d j=%d jj=%d is=%d E0=%d E=%d success\n", lev,j,jj,is,vE0[is],energ);
-#  else 	    
-            printf("lev=%d j=%d jj=%d is=%d E0=%g E=%g success\n", lev,j,jj,is,vE0[is],energ);
-#  endif
+            printf("lev=%d j=%d jj=%d is=%d E0=%g E=%g success\n", lev,j,jj,is,
+		   dbl_from_llr(vE0[is]),dbl_from_llr(energ));
           }
 #endif
           vE0[is]=energ;
