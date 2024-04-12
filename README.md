@@ -244,7 +244,7 @@ You can generate the list of supported command line arguments by running
          fout=[string]  : header for output file names ('tmp', see 'mode=3')
                  (space is OK in front of file names to enable shell completion)
          steps=[integer]        : num of RIS or BP decoding steps (default: 50)
-         lerr =[integer]        : OSD search level (0, ***not implemented***)
+         lerr =[integer]        : OSD search level (0, only implemented with `mode=0`)
          swait=[integer]        : Gauss steps w/o new errors to stop (0, do not stop)
          nvec =[integer]        : max vector size for decoding (default: 1024)
                          (list size for distance or energy calculations)
