@@ -1261,7 +1261,7 @@ int do_err_vecs(params_t * const p){
     do_errors(p->mHe,p->mLe,p->mHt, p->mLt, p->vP);
     if(p->debug&1)
       printf("# generated %d det/obs pairs\n",p->mHe->ncols);
-    if((p->debug&128)&&(p->nvar <= 128)&&(p->nvec <= 128)){
+    if((p->debug&128)&&(p->nvar <= 256)&&(p->nvec <= 256)){
       printf("He:\n");
       mzd_print(p->mHe);
       printf("Le:\n");
@@ -1275,7 +1275,7 @@ int do_err_vecs(params_t * const p){
       printf("# read %d errors from file %s\n",il1,p->ferr);
     csr_mzd_mul(p->mHe,p->mH,p->mE,1);
     csr_mzd_mul(p->mLe,p->mL,p->mE,1);
-    if((p->debug&128)&&(p->nvar <= 128)&&(p->nvec <= 128)){
+    if((p->debug&128)&&(p->nvar <= 256)&&(p->nvec <= 256)){
       printf("error columns read:\n");
       mzd_print(p->mE);
       //      printf("He:\n");
@@ -1408,9 +1408,9 @@ int main(int argc, char **argv){
 	}
 	else{ /** non-trivial syndrome */
 #ifndef NDEBUG	  
-	  if((p->debug&8)&&(p->nvar <= 128)){
+	  if((p->debug&8)&&(p->nvar <= 256)){
 	    printf("non-trivial error %d of %d:\n",ierr+1,ierr_tot);
-	    if(p->mE)
+	    if(p->mE) /** print column as row */	      
 	      for(int i=0; i<p->nvar; i++)
 		printf("%s%d%s",i==0?"[":" ",mzd_read_bit(p->mE,i,ierr),i+1<p->nvar?"":"]\n");
 	    mzd_print_row(p->mHeT,ierr);
@@ -1420,6 +1420,13 @@ int main(int argc, char **argv){
 #endif 	  
 	  mzd_t * const srow = mzd_init_window(p->mHeT, ierr,0, ierr+1,p->nchk); /* syndrome row */
 	  succ_BP = do_parallel_BP(ans, srow, p->mH, p->mHt, p->vLLR, p);
+	  if((!succ_BP) && (p->lerr >=0)){
+	      if(p->debug&128)
+		printf("ierr=%d starting OSD lerr=%d maxosd=%d\n",ierr,p->lerr, p->maxosd);
+	      //	    	  mzd_t *res = 
+	      do_osd_start(ans,srow,p->mH,p);
+	      succ_BP=1;
+	    }
 
 	  if(succ_BP){              /** `convergence success`  */
 	    mzd_t * const obsrow = mzd_init_window(p->mLeT, ierr,0, ierr+1,p->mLeT->ncols);
@@ -1428,10 +1435,6 @@ int main(int argc, char **argv){
 	      cnt[SUCC_TOT]++;
 	    }
 	    mzd_free(obsrow);
-	  } else if (p->lerr >= 0){ /** `convergence failure` and OSD requested */
-	    printf("ierr=%d starting OSD lerr=%d maxosd=%d\n",ierr,p->lerr, p->maxosd);
-	    //	    	  mzd_t *res = 
-	    do_osd_start(ans,srow,p->mH,p);
 	  }
 	  mzd_free(srow);
 	  //#endif 

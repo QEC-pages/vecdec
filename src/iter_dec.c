@@ -215,6 +215,17 @@ int do_osd_recurs(int minrow, rci_t jstart, int lev, qllr_t vE[], mzd_t *mE,
 	      const mzp_t * const skip_pivs, const params_t * const p){
   assert(lev<=p->lerr);
   assert(lev>0);
+
+#ifndef NDEBUG  
+  if(p->debug & 128){
+    printf("starting OSD lev=%d of %d jstart=%d maxosd=%d\n",lev,p->lerr,jstart, p->maxosd);
+    if(p->nvar <= 256)
+      mzd_print(mE);
+    for(int i=0; i<=minrow; i++)
+      printf("E[%d]=%g%s",i,dbl_from_llr(vE[i]),i<minrow?" ":"\n");
+  }
+#endif   
+
   int last_lev = lev < p->lerr ? 0 : 1;
   int ich_here=0, ich_below=0;
 
@@ -231,6 +242,7 @@ int do_osd_recurs(int minrow, rci_t jstart, int lev, qllr_t vE[], mzd_t *mE,
       ERROR("set bit found at lev=%d jj=%d\n",lev,jj);
 #endif
     vE[lev] += LLR[jj];
+    mzd_flip_bit(mE,lev,jj);
 
     for(int ii=sHt->p[jj]; ii < sHt->p[jj+1] ; ii++){
       int ir=sHt->i[ii]; /** pos of `ii`-th non-zero elt in row `jj` */
@@ -244,8 +256,10 @@ int do_osd_recurs(int minrow, rci_t jstart, int lev, qllr_t vE[], mzd_t *mE,
     if (vE[lev] < vE[minrow] - 1e-10){ /** update min-energy vector */
 #ifndef NDEBUG
       if(p->debug & 128){/** inf set decoding */
-	printf("lev=%d j=%d jj=%d E0=%g E=%g success\n", lev,j,jj,
+	printf("lev=%d j=%d jj=%d E0=%g -> E=%g success\n", lev,j,jj,
 	       dbl_from_llr(vE[minrow]),dbl_from_llr(vE[lev]));
+	if(p->nvar <= 256)
+	  mzd_print_row(mE,lev);
       }
 #endif
       vE[minrow]=vE[lev];
@@ -254,7 +268,7 @@ int do_osd_recurs(int minrow, rci_t jstart, int lev, qllr_t vE[], mzd_t *mE,
     }
     if(!last_lev){ /** go up one recursion level */
       if(j+1<knum){
-        ich_below+=do_osd_recurs(minrow,j+1,lev+1,vE,mE, sHt, LLR,skip_pivs, p);
+        ich_below += do_osd_recurs(minrow,j+1,lev+1,vE,mE, sHt, LLR,skip_pivs, p);
       }
     }
   }
@@ -277,6 +291,7 @@ int do_osd_recurs(int minrow, rci_t jstart, int lev, qllr_t vE[], mzd_t *mE,
 int do_osd_start(qllr_t * LLR, const mzd_t * const srow,
 		 const csr_t * const H, const params_t * const p){
   assert(p->lerr >= 0); /** use `-1` for no OSD */
+
   /** generate permutation, create binary matrix */
   const int nvar = H->cols;
   mzp_t * perm = mzp_init(nvar);    /* initialize the permutation */
@@ -287,7 +302,7 @@ int do_osd_start(qllr_t * LLR, const mzd_t * const srow,
   mzd_t * mSrow = mzd_copy(NULL,srow);
   const int minrow = p->lerr +1; /** WARNING: the minimum energy vector at this row */
   mzd_t * mE = mzd_init(minrow +1, nvar); /* storage for error vectors */
-  mzd_print(mSrow);
+  //  mzd_print(mSrow);
   perm = sort_by_llr(perm, LLR, p);   /** order of decreasing `p` */
 
   /** full row echelon form (gauss elimination) using the order of `p`,
@@ -302,18 +317,27 @@ int do_osd_start(qllr_t * LLR, const mzd_t * const srow,
   }
   /** create error vector and calculate energy (`OSD0`) */
   qllr_t * vE = calloc(minrow+1,sizeof(qllr_t));
+  if(vE==NULL) ERROR("memory allocation failed");
   for(int i=0;i< rank; i++)
     if(mzd_read_bit(mSrow,0,i)){
       mzd_write_bit(mE,minrow,pivs->values[i],1);
-      vE[minrow] += LLR[pivs->values[i]];
+      vE[minrow] += p->vLLR[pivs->values[i]];
     }
+
+#ifndef NDEBUG
+  if(p->debug & 128){/** inf set decoding */
+    printf("lev=0 E0=%g \n", dbl_from_llr(vE[minrow]));
+    if(p->nvar <= 256)
+      mzd_print_row(mE,minrow);
+  }
+#endif
+  
   
   if(p->lerr>0){
     /** TODO: `(later, maybe)` do Gauss while updating `s` if non-NULL */
   
     /** prepare CSR version of modified `Ht` */
     mzd_t * mHt = mzd_transpose(NULL, mH);
-    mzd_free(mH);
     csr_t * sHt = csr_from_mzd(NULL, mHt);
     mzd_free(mHt);
     
@@ -322,14 +346,17 @@ int do_osd_start(qllr_t * LLR, const mzd_t * const srow,
     mzd_copy_row(mE,0, mE,minrow); /** initial row for OSD */
 
     /** with current `Emin`,`vmin` and `E`, `v`, launch recursion */
-    do_osd_recurs(minrow, 0, 1, vE, mE, sHt, LLR, skip_pivs, p);
+    do_osd_recurs(minrow, 0, 1, vE, mE, sHt, p->vLLR, skip_pivs, p);
+    csr_free(sHt);
   }
 
   /** copy bits to LLR vector WARNING: `this is a hack!` */
   for (int i=0; i<nvar; i++)
-    LLR[i] = (mzd_read_bit(mE,minrow,i)) ? -1 : 1;
-  
+    LLR[i] = (mzd_read_bit(mE,minrow,i)) ? -5000 : 5000;
+  if((p->debug & 128) && (nvar <= 256))
+    out_llr(":",nvar,LLR);
   /** clean up */
+  free(vE);
   mzd_free(mE);
   mzd_free(mSrow);
   mzd_free(mH);
