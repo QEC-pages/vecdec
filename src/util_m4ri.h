@@ -73,6 +73,17 @@ static inline int m4ri_bitcount(word w)  {
 
 #endif /* __POPCNT__ */
 
+/**
+ * \brief Flip the bit at position M[row,col].
+ *
+ * \param M Matrix
+ * \param row Row index
+ * \param col Column index
+ *
+ * \note No bounds checks whatsoever are performed.
+ *
+ */
+
 
 /**
  * sparse binary matrix in compressed-row form (CSR, nz=-1) or 
@@ -137,6 +148,11 @@ csr_t * csr_from_mzd(csr_t *mat, const mzd_t * const orig);
  */
 size_t mzd_weight(const mzd_t *A);
 
+static inline void mzd_flip_bit(mzd_t const *M, rci_t const row, rci_t const col ) {
+  __M4RI_FLIP_BIT(M->rows[row][col/m4ri_radix], col%m4ri_radix);
+}
+
+  
 /** @brief return 1 if row `i` of `A` is zero */
 int mzd_row_is_zero(const mzd_t * const A, const int i);
 
@@ -167,12 +183,69 @@ static inline int nextelement(const word * const set1, const int m, const int po
   }
 }
 
+/**
+ * \brief Swap the two bits cola and colb in `row`.
+ * 
+ * \param M Matrix.
+ * \param a Column index.
+ * \param b Column index.
+ * \param row Row index.
+ */
+ 
+static inline void mzd_col_swap_in_row(mzd_t *M, rci_t const a, rci_t const b, rci_t const row){
+  if (a == b)
+    return;
+  if (mzd_read_bit(M,row,a) == mzd_read_bit(M,row,b))
+    return;
+  mzd_flip_bit(M,row,a);
+  mzd_flip_bit(M,row,b);
+}
+  
 
 /**
  * Copy of mzd_gauss_delayed from mzd.c (m4ri package) except additionally 
  * returns the list of pivot columns in second argument 
  */
 rci_t mzd_gauss_naive(mzd_t *M, mzp_t *q, int full);
+
+
+/**
+ * @brief one step of gauss on column `idx` of two-block matrix `[M|S]`
+ * @param M the first block (check matrix)
+ * @param Svec the second block (syndrome `row`)
+ * @param idx index of the column of `M` to deal with
+ * @param begrow row to start with
+ * @return number of pivot points found, `0` or `1` only
+ */
+static inline int matvec_gauss_one(mzd_t *M, mzd_t *S, const int idx, const int begrow){
+  /** note: force-inlining actually slows it down (`???`) */
+  rci_t startrow = begrow;
+  rci_t pivots = 0;
+  const rci_t i = idx;
+  //  for (rci_t i = startcol; i < endcol ; ++i) {
+  for(rci_t j = startrow ; j < M->nrows; ++j) {
+    if (mzd_read_bit(M, j, i)) {
+      mzd_row_swap(M, startrow, j);
+      mzd_col_swap_in_row(S, startrow, j, 0); /** column operation for `S` */
+      ++pivots;
+      for(rci_t ii = 0 ;  ii < M->nrows; ++ii) {
+        if (ii != startrow) {
+          if (mzd_read_bit(M, ii, i)) {
+            mzd_row_add_offset(M, ii, startrow,0);
+	    if(mzd_read_bit(S,0,startrow))
+	      mzd_flip_bit(S,0,ii);  /** column operation for `S` */
+          }
+        }
+      }
+      startrow = startrow + 1;
+      break;
+    }
+  }
+  //  }
+  return pivots; /** 0 or 1 only */
+  // if one, need to update the current pivot list
+}
+  
 
 /** 
  * return max row weight of CSR matrix p
@@ -298,20 +371,6 @@ int read_01(mzd_t *M, FILE *fin, int *lineno, const char* fnam,
  */
 csr_t *csr_apply_perm(csr_t *dst, const csr_t * const src, const mzp_t * const perm);
 
-/**
- * \brief Flip the bit at position M[row,col].
- *
- * \param M Matrix
- * \param row Row index
- * \param col Column index
- *
- * \note No bounds checks whatsoever are performed.
- *
- */
-
-static inline void mzd_flip_bit(mzd_t const *M, rci_t const row, rci_t const col ) {
-  __M4RI_FLIP_BIT(M->rows[row][col/m4ri_radix], col%m4ri_radix);
-}
 
   
 /** 

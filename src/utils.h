@@ -81,9 +81,6 @@ static inline double rnd_exponential(void){
     int idx[]; /**< flexible array to store `n1+n2` entries */
   } one_prob_t;
 
-  /** @bried helper structure to sort by probabilities */
-  typedef struct IPPAIR_T {int index; double prob; } ippair_t; 
-
   /** @brief print entire `one_vec_t` structure by pointer */
   void print_one_vec(const one_vec_t * const pvec);
 

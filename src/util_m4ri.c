@@ -56,6 +56,7 @@ int mzd_row_is_zero(const mzd_t  * const A, const int i) {
 }
 
 
+
 /**
  * Copy of mzd_gauss_delayed from mzd.c (m4ri package) except additionally 
  * returns the list of pivot columns in second argument 

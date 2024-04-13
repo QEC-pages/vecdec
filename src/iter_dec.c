@@ -207,3 +207,133 @@ int do_parallel_BP(qllr_t * outLLR, const mzd_t * const srow,
 
   return succ_BP;
 }
+
+
+/** @brief recursive part of OSD */
+int do_osd_recurs(int minrow, rci_t jstart, int lev, qllr_t vE[], mzd_t *mE,
+	      const csr_t * const sHt, const qllr_t LLR[],
+	      const mzp_t * const skip_pivs, const params_t * const p){
+  assert(lev<=p->lerr);
+  assert(lev>0);
+  int last_lev = lev < p->lerr ? 0 : 1;
+  int ich_here=0, ich_below=0;
+
+  int knum = skip_pivs->length; /** number of non-pivot cols in `mH` to go over */
+  if ((lev>1) && (knum > p->maxosd))
+    knum = p->maxosd;
+
+  for(rci_t j=jstart; j<knum; j++){ /** `j`th `non-pivot` entry */
+    rci_t jj=skip_pivs->values[j]; /** actual `non-pivot` column we are looking at */
+    mzd_copy_row(mE,lev,mE,lev-1); /** fresh copy of error vector to update */
+    vE[lev]=vE[lev-1];
+#ifndef NDEBUG      
+    if(mzd_read_bit(mE,lev,jj)) /** sanity check */
+      ERROR("set bit found at lev=%d jj=%d\n",lev,jj);
+#endif
+    vE[lev] += LLR[jj];
+
+    for(int ii=sHt->p[jj]; ii < sHt->p[jj+1] ; ii++){
+      int ir=sHt->i[ii]; /** pos of `ii`-th non-zero elt in row `jj` */
+      if(mzd_read_bit(mE,lev,ir)){
+	mzd_flip_bit(mE,lev,ir);
+        vE[lev] -= LLR[ir]; /** `1->0` flip */
+      }
+      else
+	vE[lev] += LLR[ir]; /** `0->1` flip */
+    }
+    if (vE[lev] < vE[minrow] - 1e-10){ /** update min-energy vector */
+#ifndef NDEBUG
+      if(p->debug & 128){/** inf set decoding */
+	printf("lev=%d j=%d jj=%d E0=%g E=%g success\n", lev,j,jj,
+	       dbl_from_llr(vE[minrow]),dbl_from_llr(vE[lev]));
+      }
+#endif
+      vE[minrow]=vE[lev];
+      mzd_copy_row(mE,minrow, mE,lev);
+      ich_here++;
+    }
+    if(!last_lev){ /** go up one recursion level */
+      if(j+1<knum){
+        ich_below+=do_osd_recurs(minrow,j+1,lev+1,vE,mE, sHt, LLR,skip_pivs, p);
+      }
+    }
+  }
+
+  if(p->debug & 128)
+    if(ich_here + ich_below)
+      printf("exiting lev=%d of recursion, here ch=%d below ch=%d\n",
+             lev,ich_here, ich_below);
+
+  return 0;
+}
+
+/** @brief run OSD up to `p->lerr` using up to `p->maxosd` columns at high levels.
+    @param[in] LLR input LLR values (e.g., as returned by PB).
+    @param[out] LLR output LLR values (+/- 1) from OSD. (`???`)
+    @param srow syndrome row to match or NULL `to compute codewords` (???)
+    @param Check matrix to use
+    @output always `1` (???) 
+*/
+int do_osd_start(qllr_t * LLR, const mzd_t * const srow,
+		 const csr_t * const H, const params_t * const p){
+  assert(p->lerr >= 0); /** use `-1` for no OSD */
+  /** generate permutation, create binary matrix */
+  const int nvar = H->cols;
+  mzp_t * perm = mzp_init(nvar);    /* initialize the permutation */
+  mzp_t * pivs = mzp_init(nvar); /** list of pivot columns */
+  if((!pivs) || (!perm))
+    ERROR("memory allocation failed!\n");
+  mzd_t * mH = mzd_from_csr(NULL, H);
+  mzd_t * mSrow = mzd_copy(NULL,srow);
+  const int minrow = p->lerr +1; /** WARNING: the minimum energy vector at this row */
+  mzd_t * mE = mzd_init(minrow +1, nvar); /* storage for error vectors */
+  mzd_print(mSrow);
+  perm = sort_by_llr(perm, LLR, p);   /** order of decreasing `p` */
+
+  /** full row echelon form (gauss elimination) using the order of `p`,
+   * on the block matrix `[H|S]` (matrix / vector).
+   */
+  int rank=0;
+  for(int i=0; i< p->nvar; i++){
+    int col=perm->values[i];
+    int ret=matvec_gauss_one(mH, mSrow, col, rank);
+    if(ret)
+      pivs->values[rank++]=col;
+  }
+  /** create error vector and calculate energy (`OSD0`) */
+  qllr_t * vE = calloc(minrow+1,sizeof(qllr_t));
+  for(int i=0;i< rank; i++)
+    if(mzd_read_bit(mSrow,0,i)){
+      mzd_write_bit(mE,minrow,pivs->values[i],1);
+      vE[minrow] += LLR[pivs->values[i]];
+    }
+  
+  if(p->lerr>0){
+    /** TODO: `(later, maybe)` do Gauss while updating `s` if non-NULL */
+  
+    /** prepare CSR version of modified `Ht` */
+    mzd_t * mHt = mzd_transpose(NULL, mH);
+    mzd_free(mH);
+    csr_t * sHt = csr_from_mzd(NULL, mHt);
+    mzd_free(mHt);
+    
+    mzp_t * skip_pivs = do_skip_pivs(rank, pivs);    
+    vE[0]=vE[minrow];
+    mzd_copy_row(mE,0, mE,minrow); /** initial row for OSD */
+
+    /** with current `Emin`,`vmin` and `E`, `v`, launch recursion */
+    do_osd_recurs(minrow, 0, 1, vE, mE, sHt, LLR, skip_pivs, p);
+  }
+
+  /** copy bits to LLR vector WARNING: `this is a hack!` */
+  for (int i=0; i<nvar; i++)
+    LLR[i] = (mzd_read_bit(mE,minrow,i)) ? -1 : 1;
+  
+  /** clean up */
+  mzd_free(mE);
+  mzd_free(mSrow);
+  mzd_free(mH);
+  mzp_free(pivs);
+  mzp_free(perm);
+  return 1;
+}
