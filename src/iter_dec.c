@@ -268,18 +268,19 @@ int do_osd_recurs(const int minrow, const rci_t jstart, const int lev, qllr_t vE
       mzd_copy_row(mE,minrow, mE,lev);
       ich_here++;
     }
-    if(!last_lev){ /** go up one recursion level */
+
+    if((!last_lev) && (vE[minrow] >= 2*p->LLRmin)){ /** go up one recursion level */
       if(j+1<knum){
         ich_below += do_osd_recurs(minrow,j+1,lev+1,vE,mE, sHt, LLR,pivs,skip_pivs, p);
       }
     }
   }
-
+#ifndef NDEBUG
   if(p->debug & 128)
     if(ich_here + ich_below)
       printf("exiting lev=%d of recursion, here ch=%d below ch=%d\n",
              lev,ich_here, ich_below);
-
+#endif 
   return 0;
 }
 
@@ -335,7 +336,7 @@ int do_osd_start(qllr_t * LLR, const mzd_t * const srow,
 #endif
   
   
-  if(p->lerr>0){
+  if((p->lerr>0) && (vE[minrow] >= 2*p->LLRmin)){
     /** TODO: `(later, maybe)` do Gauss while updating `s` if non-NULL */
   
     /** prepare CSR version of modified `Ht` */
