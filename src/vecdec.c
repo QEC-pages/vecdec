@@ -25,7 +25,7 @@
 #include "qllr.h"
 
 params_t prm={ .nchk=0, .nvar=0, .ncws=0, .steps=50,
-  .lerr=0, .swait=0,
+  .lerr=-1, .maxosd=100, .swait=0,
   .nvec=1024, .ntot=1, .nfail=0, .seed=0, .useP=0, 
   .debug=1, .fdem=NULL, .fdet=NULL, .fobs=NULL, .fout="tmp", .ferr=NULL,
   .mode=0, .submode=0, .use_stdout=0, 
@@ -141,17 +141,18 @@ static inline int twomat_gauss_one(mzd_t *M, mzd_t *S, const int idx, const int 
   // if one, need to update the current pivot list
 }
 
-
  
-/** @brief return permutation = decreasing probabilities */
-mzp_t * sort_by_prob(mzp_t *perm, params_t const * const p){
+/** @brief return permutation = decreasing probabilities (increasing LLR) */
+mzp_t * sort_by_llr(mzp_t *perm, const qllr_t vLLR[], params_t const * const p){
+  assert(perm->length == p->nvar);
   /** prepare array of ippairs */
   ippair_t * pairs = malloc(p->nvar * sizeof(ippair_t));
   if (!pairs)
     ERROR("memory allocation failed\n");
   for(int i=0; i<p->nvar; i++){
     pairs[i].index = i;
-    pairs[i].prob = p->vP[i];
+    //    pairs[i].prob = p->vP[i];
+    pairs[i].llr = vLLR[i];
   }
   qsort(pairs, p->nvar, sizeof(ippair_t), cmp_ippairs);
   for(int i=0; i<p->nvar; i++)
@@ -250,7 +251,7 @@ int do_LLR_dist(int dW, params_t  * const p){
     ERROR("memory allocation failed!\n");
 
   int iwait=0, ichanged=0;
-  perm = sort_by_prob(perm, p);   /** order of decreasing `p` */
+  perm = sort_by_llr(perm, p->vLLR, p);   /** order of decreasing `p` */
   for (int ii=0; ii< p->steps; ii++){
     if(ii!=0){
       pivs=mzp_rand(pivs); /** random pivots LAPAC-style */
@@ -574,7 +575,7 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
     ERROR("memory allocation failed!\n");
 
   /** first pass ******************************************* */
-  perm = sort_by_prob(perm, p);   /** order of decreasing `p` */
+  perm = sort_by_llr(perm, p->vLLR, p);   /** order of decreasing `p` */
   /** full row echelon form (gauss elimination) using the order of `p`,
    * on the block matrix `[H|S]` (in fact, two matrices).
    */
@@ -608,7 +609,7 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
     mzd_print(mEt0);
   }
 
-  if(p->lerr){  /** do information-set decoding `**********************` */
+  if(p->lerr>0){  /** do information-set decoding `**********************` */
     mzp_t * skip_pivs = do_skip_pivs(rank, pivs);
     mzd_t * mEt1=NULL;
     qllr_t *vE1=NULL;
@@ -651,13 +652,13 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
     ichanged=0;
     mzd_t * mEt = mzd_transpose(NULL, mE);
     qllr_t *vE1=NULL;
-    if(p->lerr){  /** do information-set decoding `**********************` */
+    if(p->lerr > 0){  /** do information-set decoding `**********************` */
       vE1 = malloc(sizeof(qllr_t) * mEt0->nrows);
       if(!vE1) ERROR("memory allocation failed!");
     }
     for(int i=0; i< mEt->nrows; i++){
       qllr_t energ=mzd_row_energ(p->vLLR,mEt,i);
-      if(p->lerr)
+      if(p->lerr > 0)
 	vE1[i]=energ;
       if(energ < vE[i]){
 	vE[i]=energ;
@@ -680,7 +681,7 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
         mzd_print(mEt0);
       }
     }
-    if(p->lerr){  /** do information-set decoding `**********************` */
+    if(p->lerr > 0){  /** do information-set decoding `**********************` */
       mzp_t * skip_pivs = do_skip_pivs(rank, pivs);
       do_local_search(vE, mEt0, 0, 1, vE1, mEt, mH, skip_pivs, pivs, p);
       if(p->debug & 512){
@@ -842,6 +843,11 @@ int var_init(int argc, char **argv, params_t *p){
       p -> lerr = dbg;
       if (p->debug&1)
 	printf("# read %s, lerr=%d\n",argv[i],p-> lerr);
+    }
+    else if (sscanf(argv[i],"maxosd=%d",&dbg)==1){ /** `maxosd` */
+      p -> maxosd = dbg;
+      if (p->debug&1)
+	printf("# read %s, maxosd=%d\n",argv[i],p-> maxosd);
     }
     else if (sscanf(argv[i],"ntot=%d",&dbg)==1){ /** `ntot` */
       p -> ntot = dbg;
@@ -1255,7 +1261,7 @@ int do_err_vecs(params_t * const p){
     do_errors(p->mHe,p->mLe,p->mHt, p->mLt, p->vP);
     if(p->debug&1)
       printf("# generated %d det/obs pairs\n",p->mHe->ncols);
-    if((p->debug&128)&&(p->nvar <= 128)&&(p->nvec <= 128)){
+    if((p->debug&128)&&(p->nvar <= 256)&&(p->nvec <= 256)&&(p->debug &512)){
       printf("He:\n");
       mzd_print(p->mHe);
       printf("Le:\n");
@@ -1269,7 +1275,7 @@ int do_err_vecs(params_t * const p){
       printf("# read %d errors from file %s\n",il1,p->ferr);
     csr_mzd_mul(p->mHe,p->mH,p->mE,1);
     csr_mzd_mul(p->mLe,p->mL,p->mE,1);
-    if((p->debug&128)&&(p->nvar <= 128)&&(p->nvec <= 128)){
+    if((p->debug&128)&&(p->nvar <= 256)&&(p->nvec <= 256)&&(p->debug &512)){
       printf("error columns read:\n");
       mzd_print(p->mE);
       //      printf("He:\n");
@@ -1401,20 +1407,28 @@ int main(int argc, char **argv){
 	  continue ; /** next error / syndrome vector pair */     
 	}
 	else{ /** non-trivial syndrome */
-	  if((p->debug&8)&&(p->nvar <= 128)){
+#ifndef NDEBUG	  
+	  if((p->debug&8)&&(p->nvar <= 256)&&(p->debug &512)){
 	    printf("non-trivial error %d of %d:\n",ierr+1,ierr_tot);
-	    if(p->mE)
+	    if(p->mE) /** print column as row */	      
 	      for(int i=0; i<p->nvar; i++)
 		printf("%s%d%s",i==0?"[":" ",mzd_read_bit(p->mE,i,ierr),i+1<p->nvar?"":"]\n");
 	    mzd_print_row(p->mHeT,ierr);
 	    mzd_print_row(p->mLeT,ierr);
 	    out_llr("i",p->nvar,p->vLLR);
 	  }
+#endif 	  
 	  mzd_t * const srow = mzd_init_window(p->mHeT, ierr,0, ierr+1,p->nchk); /* syndrome row */
-	  succ_BP = do_parallel_BP(ans, srow, p->mH, p->mHt, p->vLLR, p);    
-	  mzd_free(srow);
+	  succ_BP = do_parallel_BP(ans, srow, p->mH, p->mHt, p->vLLR, p);
+	  if((!succ_BP) && (p->lerr >=0)){
+	      if(p->debug&128)
+		printf("ierr=%d starting OSD lerr=%d maxosd=%d\n",ierr,p->lerr, p->maxosd);
+	      //	    	  mzd_t *res = 
+	      do_osd_start(ans,srow,p->mH,p);
+	      succ_BP=1;
+	    }
 
-	  if(succ_BP){/* convergence success  */
+	  if(succ_BP){              /** `convergence success`  */
 	    mzd_t * const obsrow = mzd_init_window(p->mLeT, ierr,0, ierr+1,p->mLeT->ncols);
 	    if(syndrome_check(ans, obsrow, p->mL, p)){
 	      cnt[SUCC_BP]++;
@@ -1422,6 +1436,9 @@ int main(int argc, char **argv){
 	    }
 	    mzd_free(obsrow);
 	  }
+	  mzd_free(srow);
+	  //#endif 
+	  
 	  if(p->debug&16)
 	    printf("i=%d of %d succ=%d\n",ierr,ierr_tot,succ_BP);
 	}

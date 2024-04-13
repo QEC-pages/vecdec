@@ -43,7 +43,8 @@ extern "C"{
     int ntot;  /** total number of syndromes to generate (default: `1`) */
     int nfail; /** when non-zero, num of fails to terminate the run (default: `0`, do not terminate) */
     int swait; /** gauss decoding steps with no vectors changed to stop (default: `0`, do not stop) */
-    int lerr;  /** local search after gauss up to this weight (default: `0`) */
+    int lerr;  /** local search after gauss up to this weight (default: `-1`, no OSD) */
+    int maxosd;  /** max column for OSD2 and above (default: `100`) */
     int mode;  /** operation mode, see help */
     int submode; /** additional options, see help */
     int d1, d2, d3; /** QLLR parameters for BP */
@@ -93,20 +94,28 @@ extern "C"{
 
   extern params_t prm;
 
+  /** @bried helper structure to sort by probabilities (inv by LLR) */
+  typedef struct IPPAIR_T {int index; qllr_t llr; } ippair_t; 
+  
   /** @brief helper function to sort `ippair_t`
    *  use `qsort(array, len, sizeof(ippair_t), cmp_ippairs);`
    */
   static inline int cmp_ippairs(const void *a, const void *b){
-    const double pa=((ippair_t *) a) -> prob;
-    const double pb=((ippair_t *) b) -> prob;
+    const qllr_t pa=((ippair_t *) a) -> llr;
+    const qllr_t pb=((ippair_t *) b) -> llr;
     if (pa<pb)
-      return +1;
+      return -1; /** was `+1` with probabilities */
     else if (pa>pb)
-      return -1;
+      return +1; /** was `-1` */
     return 0;
   }
 
+  /** @brief return permutation = decreasing probabilities (increasing LLR) */
+  mzp_t * sort_by_llr(mzp_t *perm, const qllr_t vLLR[], params_t const * const p);  
 
+  /** @brief prepare an ordered pivot-skip list of length `n-rank` */
+  mzp_t * do_skip_pivs(const size_t rank, const mzp_t * const pivs);
+  
   /** functions defined in `iter_dec.c` ******************************************** */
   void cnt_out(int print_banner);
   void cnt_update(extr_t which, int iteration);
@@ -115,6 +124,9 @@ extern "C"{
   int syndrome_check(const qllr_t LLR[], const mzd_t * const syndrome,
 		     const csr_t * const H,
 		     [[maybe_unused]] const params_t * const p);
+  
+  int do_osd_start(qllr_t * LLR, const mzd_t * const srow,
+		   const csr_t * const H, const params_t * const p);
   
   int do_parallel_BP(qllr_t * outLLR, const mzd_t * const srow,
 		   const csr_t * const H, const csr_t * const Ht,
@@ -155,7 +167,8 @@ extern "C"{
   "\t fout=[string]\t: header for output file names ('tmp', see 'mode=3')\n" \
   "\t\t (space is OK in front of file names to enable shell completion)\n" \
   "\t steps=[integer]\t: num of RIS or BP decoding steps (default: 50)\n" \
-  "\t lerr =[integer]\t: OSD search level (0, only implemented with `mode=0`)\n" \
+  "\t lerr =[integer]\t: OSD search level (-1, only implemented with `mode=0`)\n" \
+  "\t maxosd=[integer]\t: max column for OSD2 and above (100)\n"	\
   "\t swait=[integer]\t: Gauss steps w/o new errors to stop (0, do not stop)\n" \
   "\t nvec =[integer]\t: max vector size for decoding (default: 1024)\n" \
   "\t\t\t (list size for distance or energy calculations)\n"		\
@@ -195,7 +208,7 @@ extern "C"{
   "\t\t*   2: output matrices for verification\n"                       \
   "\t\t\t see the source code for more options\n"			\
   "\t See program documentation for input file syntax.\n"               \
-  "\t Multiple `debug` parameters are XOR combined except for 0.\n"	\
+  "\t Multiple 'debug' parameters are XOR combined except for 0.\n"	\
   "\t Use debug=0 as the 1st argument to suppress all debug messages.\n"
 
 #define MORE_HELP							\
