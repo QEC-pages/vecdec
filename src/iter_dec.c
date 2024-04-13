@@ -210,19 +210,23 @@ int do_parallel_BP(qllr_t * outLLR, const mzd_t * const srow,
 
 
 /** @brief recursive part of OSD */
-int do_osd_recurs(int minrow, rci_t jstart, int lev, qllr_t vE[], mzd_t *mE,
+int do_osd_recurs(const int minrow, const rci_t jstart, const int lev, qllr_t vE[], mzd_t *mE,
 	      const csr_t * const sHt, const qllr_t LLR[],
-	      const mzp_t * const skip_pivs, const params_t * const p){
+	      const mzp_t * const pivs, const mzp_t * const skip_pivs, const params_t * const p){
   assert(lev<=p->lerr);
   assert(lev>0);
 
 #ifndef NDEBUG  
   if(p->debug & 128){
     printf("starting OSD lev=%d of %d jstart=%d maxosd=%d\n",lev,p->lerr,jstart, p->maxosd);
-    if(p->nvar <= 256)
-      mzd_print(mE);
-    for(int i=0; i<=minrow; i++)
-      printf("E[%d]=%g%s",i,dbl_from_llr(vE[i]),i<minrow?" ":"\n");
+    if((p->nvar <= 256)&&(p->debug &512))   mzd_print(mE);
+    printf("E[%d]=%g  ",minrow,dbl_from_llr(vE[minrow]));
+    if((p->nvar <= 256)&&(p->debug &512))   mzd_print_row(mE,minrow);
+    for(int i=0; i<lev; i++){
+      printf("E[%d]=%g  ",i,dbl_from_llr(vE[i]));
+      if((p->nvar <= 256)&&(p->debug &512))   mzd_print_row(mE,minrow);
+    }
+    printf("\n");
   }
 #endif   
 
@@ -237,28 +241,26 @@ int do_osd_recurs(int minrow, rci_t jstart, int lev, qllr_t vE[], mzd_t *mE,
     rci_t jj=skip_pivs->values[j]; /** actual `non-pivot` column we are looking at */
     mzd_copy_row(mE,lev,mE,lev-1); /** fresh copy of error vector to update */
     vE[lev]=vE[lev-1];
-#ifndef NDEBUG      
-    if(mzd_read_bit(mE,lev,jj)) /** sanity check */
-      ERROR("set bit found at lev=%d jj=%d\n",lev,jj);
-#endif
+#ifdef NDEBUG
+    if(mzd_read_bit(mE,lev,jj))
+      ERROR("set bit non-pivot position lev=%d jstart=%d jj=%d\n",lev,jstart,jj);
+#endif 	    
     vE[lev] += LLR[jj];
     mzd_flip_bit(mE,lev,jj);
-
     for(int ii=sHt->p[jj]; ii < sHt->p[jj+1] ; ii++){
-      int ir=sHt->i[ii]; /** pos of `ii`-th non-zero elt in row `jj` */
-      if(mzd_read_bit(mE,lev,ir)){
-	mzd_flip_bit(mE,lev,ir);
-        vE[lev] -= LLR[ir]; /** `1->0` flip */
-      }
+      int ir=pivs->values[sHt->i[ii]]; /** pivot for `ii`-th non-zero elt in row `jj` */
+      if(mzd_read_bit(mE,lev,ir))
+        vE[lev] -= LLR[ir]; /** `1->0` flip */      
       else
 	vE[lev] += LLR[ir]; /** `0->1` flip */
+      mzd_flip_bit(mE,lev,ir);
     }
     if (vE[lev] < vE[minrow] - 1e-10){ /** update min-energy vector */
 #ifndef NDEBUG
       if(p->debug & 128){/** inf set decoding */
 	printf("lev=%d j=%d jj=%d E0=%g -> E=%g success\n", lev,j,jj,
 	       dbl_from_llr(vE[minrow]),dbl_from_llr(vE[lev]));
-	if(p->nvar <= 256)
+	if((p->nvar <= 256)&&(p->debug &512))
 	  mzd_print_row(mE,lev);
       }
 #endif
@@ -268,7 +270,7 @@ int do_osd_recurs(int minrow, rci_t jstart, int lev, qllr_t vE[], mzd_t *mE,
     }
     if(!last_lev){ /** go up one recursion level */
       if(j+1<knum){
-        ich_below += do_osd_recurs(minrow,j+1,lev+1,vE,mE, sHt, LLR,skip_pivs, p);
+        ich_below += do_osd_recurs(minrow,j+1,lev+1,vE,mE, sHt, LLR,pivs,skip_pivs, p);
       }
     }
   }
@@ -327,7 +329,7 @@ int do_osd_start(qllr_t * LLR, const mzd_t * const srow,
 #ifndef NDEBUG
   if(p->debug & 128){/** inf set decoding */
     printf("lev=0 E0=%g \n", dbl_from_llr(vE[minrow]));
-    if(p->nvar <= 256)
+    if((p->nvar <= 256)&&(p->debug &512))
       mzd_print_row(mE,minrow);
   }
 #endif
@@ -346,7 +348,7 @@ int do_osd_start(qllr_t * LLR, const mzd_t * const srow,
     mzd_copy_row(mE,0, mE,minrow); /** initial row for OSD */
 
     /** with current `Emin`,`vmin` and `E`, `v`, launch recursion */
-    do_osd_recurs(minrow, 0, 1, vE, mE, sHt, p->vLLR, skip_pivs, p);
+    do_osd_recurs(minrow, 0, 1, vE, mE, sHt, p->vLLR, pivs, skip_pivs, p);
     csr_free(sHt);
   }
 

@@ -16,7 +16,7 @@ dmax=9 # maximum code distance
 p0=0.05 # error probability for j=0 
 jmin=0 # range for calculating p1 and p2 (using p0/2**j )
 jmax=15
-Ntotal=$((1024*1024)) # total number of steps to use
+Ntotal=$((1024*10)) # total number of steps to use
 if (( $# > 0 )) ; then # we actually mean to do the calculation 
   echo "# running surf_est.sh" > $outfile
   echo "# depolarizing probability p1" >> $outfile

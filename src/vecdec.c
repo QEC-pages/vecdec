@@ -1261,7 +1261,7 @@ int do_err_vecs(params_t * const p){
     do_errors(p->mHe,p->mLe,p->mHt, p->mLt, p->vP);
     if(p->debug&1)
       printf("# generated %d det/obs pairs\n",p->mHe->ncols);
-    if((p->debug&128)&&(p->nvar <= 256)&&(p->nvec <= 256)){
+    if((p->debug&128)&&(p->nvar <= 256)&&(p->nvec <= 256)&&(p->debug &512)){
       printf("He:\n");
       mzd_print(p->mHe);
       printf("Le:\n");
@@ -1275,7 +1275,7 @@ int do_err_vecs(params_t * const p){
       printf("# read %d errors from file %s\n",il1,p->ferr);
     csr_mzd_mul(p->mHe,p->mH,p->mE,1);
     csr_mzd_mul(p->mLe,p->mL,p->mE,1);
-    if((p->debug&128)&&(p->nvar <= 256)&&(p->nvec <= 256)){
+    if((p->debug&128)&&(p->nvar <= 256)&&(p->nvec <= 256)&&(p->debug &512)){
       printf("error columns read:\n");
       mzd_print(p->mE);
       //      printf("He:\n");
@@ -1408,7 +1408,7 @@ int main(int argc, char **argv){
 	}
 	else{ /** non-trivial syndrome */
 #ifndef NDEBUG	  
-	  if((p->debug&8)&&(p->nvar <= 256)){
+	  if((p->debug&8)&&(p->nvar <= 256)&&(p->debug &512)){
 	    printf("non-trivial error %d of %d:\n",ierr+1,ierr_tot);
 	    if(p->mE) /** print column as row */	      
 	      for(int i=0; i<p->nvar; i++)
