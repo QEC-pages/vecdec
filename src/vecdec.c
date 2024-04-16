@@ -25,7 +25,7 @@
 #include "qllr.h"
 
 params_t prm={ .nchk=0, .nvar=0, .ncws=0, .steps=50,
-  .lerr=-1, .maxosd=100, .swait=0,
+  .lerr=-1, .maxosd=100, .bpalpha=0.5, .swait=0,
   .nvec=1024, .ntot=1, .nfail=0, .seed=0, .useP=0, 
   .debug=1, .fdem=NULL, .fdet=NULL, .fobs=NULL, .fout="tmp", .ferr=NULL,
   .mode=0, .submode=0, .use_stdout=0, 
@@ -864,6 +864,11 @@ int var_init(int argc, char **argv, params_t *p){
       if (p->debug&1)
 	printf("# read %s, seed=%d\n",argv[i],p->seed);
     }
+    else if (sscanf(argv[i],"bpalpha=%lg",&val)==1){ /** `bpalpha` */
+      p -> bpalpha = val; /** WARNING: no value verification!!! */
+      if (p->debug&1)
+	printf("# read %s, bpalpha=%g\n",argv[i],p-> bpalpha);
+    }
     else if (sscanf(argv[i],"useP=%lg",&val)==1){ /** `useP` */
       p -> useP = val;
       if (p->debug&1)
@@ -1091,20 +1096,18 @@ int var_init(int argc, char **argv, params_t *p){
   case 1:  /** currently only needed for BP */
     if(p->debug&1){
       out_LLR_params(LLR_table);
-      switch(p->submode){
-      case 0: 
-	printf("# submode=%d, parallel BP using LLR and average LLR\n",p->submode);
-	break;
-      case 1:
-	printf("# submode=%d, parallel BP using LLR only\n",p->submode);
-	break;
-      default:
-	break;
-      }
+      printf("# submode=%d, %s BP using %s LLR\n",
+	     p->submode,
+	     p->submode & 4 ? (p->submode & 8 ? "serial-V" : "serial-C") : "parallel",
+	     (((p->submode & 3)==3) || ((p->submode & 3)==0)) ? "both regular and average" :
+	     p->submode & 2 ? "average" : "instantaneous");
+      if(((p->submode & 2)) || ((p->submode & 3)==0))
+	printf("# use average LLR: aLLR = %g * aLLR + %g * LLR\n",p->bpalpha,1-p->bpalpha);
+      if((p->submode & 4) && (p->submode & 16))
+	printf("# randomize node order at each step");
     }
-    if ((p->submode>1))
-      ERROR(" mode=%d : non-zero submode='%d' unsupported\n",
-	    p->mode, p->submode);    
+    if (p->submode>=8)
+      ERROR(" mode=%d BP : submode='%d' unsupported\n", p->mode, p->submode);    
     /* fall through */
   case 0:
     if((p->ferr) && (p->fobs))
@@ -1419,11 +1422,18 @@ int main(int argc, char **argv){
 	  }
 #endif 	  
 	  mzd_t * const srow = mzd_init_window(p->mHeT, ierr,0, ierr+1,p->nchk); /* syndrome row */
-	  succ_BP = do_parallel_BP(ans, srow, p->mH, p->mHt, p->vLLR, p);
+	  if(p->submode&4){ /** bit 2 is set, use serial schedule */
+	    if(p->submode&8)
+	      ERROR("serial-V schedule not implemented");
+	    else
+	      succ_BP = do_serialC_BP(ans, srow, p->mH, p->mHt, p->vLLR, p);
+	  }
+	  else{             /** bit 2 is not set, parallel schedule */
+	    succ_BP = do_parallel_BP(ans, srow, p->mH, p->mHt, p->vLLR, p);	   
+	  }
 	  if((!succ_BP) && (p->lerr >=0)){
 	      if(p->debug&128)
 		printf("ierr=%d starting OSD lerr=%d maxosd=%d\n",ierr,p->lerr, p->maxosd);
-	      //	    	  mzd_t *res = 
 	      do_osd_start(ans,srow,p->mH,p);
 	      succ_BP=1;
 	    }

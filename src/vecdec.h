@@ -45,6 +45,7 @@ extern "C"{
     int swait; /** gauss decoding steps with no vectors changed to stop (default: `0`, do not stop) */
     int lerr;  /** local search after gauss up to this weight (default: `-1`, no OSD) */
     int maxosd;  /** max column for OSD2 and above (default: `100`) */
+    double bpalpha; /** average LLR parameter; multiply old LLR by `bpalpha` new by `1-bpalpha` (default: `0.5`) */
     int mode;  /** operation mode, see help */
     int submode; /** additional options, see help */
     int d1, d2, d3; /** QLLR parameters for BP */
@@ -132,6 +133,14 @@ extern "C"{
 		   const csr_t * const H, const csr_t * const Ht,
 		     const qllr_t LLR[], const params_t * const p);
 
+  int do_serialC_BP(qllr_t * outLLR, const mzd_t * const srow,
+		   const csr_t * const H, const csr_t * const Ht,
+		     const qllr_t LLR[], const params_t * const p);
+
+  int do_serialV_BP(qllr_t * outLLR, const mzd_t * const srow,
+		    const csr_t * const H, const csr_t * const Ht,
+		    const qllr_t LLR[], const params_t * const p);
+  
   /** function defined in `star_poly.c` ********************************************* */
 
   csr_t * do_G_matrix(const csr_t * const mHt, const csr_t * const mLt, const qllr_t LLR[], 
@@ -186,9 +195,15 @@ extern "C"{
   "\t\t\t generate 'ntot' detector events and matching observable flips;\n" \
   "\t\t\t decode in chunks of size 'nvec'. \n"				\
   "\t\t\t Read observable flips from file 'fobs' if given\n"            \
-  "\t\t* 1: Belief Propagation decoder\n"				\
-  "\t\t\t .0 parallel BP using LLR and average LLR\n"			\
-  "\t\t\t .1 parallel BP using only LLR\n"				\
+  "\t\t* 1: Belief Propagation decoder.  By default (no submode specified)\n"\
+  "\t\t\t   parallel BP using both regular and average LLRs.\n"		\
+  "\t\t\t   Other options are selected by 'submode' bitmap: \n"		\
+  "\t\t\t .1 (bit 0) use regular LLR\n"					\
+  "\t\t\t .2 (bit 1) use average LLR - these take precendence\n"	\
+  "\t\t\t .4 (bit 2) use serial BP schedule (not parallel)\n"		\
+  "\t\t\t .8 (bit 3) with serial, use V-based order (not C-based)\n"	\
+  "\t\t\t .16 (bit 4) with serial, randomize node order in each round \n" \
+  "\t\t\t     (by default randomize only once per run)\n"		\
   "\t\t* 2: generate most likely fault vectors, estimate Prob(Fail).\n"  \
   "\t\t\t Use up to 'steps' random information set (RIS) decoding steps\n" \
   "\t\t\t unless no new fault vectors have been found for 'swait' steps.\n" \

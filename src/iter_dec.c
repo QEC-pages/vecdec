@@ -46,6 +46,10 @@ void cnt_update(extr_t which, int iteration){
   }
 }
 
+/** @brief helper function for binary search */
+int cmpfunc(const void * a, const void * b) {
+   return ( *(int *) a - *(int *) b );
+}
 
 void out_llr(const char str[], const int num, const qllr_t llr[]){
   const int max= num > 20 ? 20 : num-1 ;
@@ -74,14 +78,119 @@ int syndrome_check(const qllr_t LLR[], const mzd_t * const syndrome,
   return 1; /** valid codeword */
 }
 
+/** @brief for given `ic` compute V to C messages */
+static inline void bp_do_VCc(const int ic, qllr_t * const mVtoC, const qllr_t * const mCtoV, const qllr_t xLLR[], 
+			    const csr_t * const H, const csr_t * const Ht, _maybe_unused const qllr_t LLR[]){  
+  for(int j = H->p[ic]; j < H->p[ic+1] ; j++){
+    const int iv = H->i[j]; /** origin `variable` node index */
+#if 0 /** these give identical results! */
+    qllr_t msg = LLR[iv]; /** `bare LLR` need an extra parameter */
+    for(int j1 = Ht->p[iv]; j1 < Ht->p[iv+1] ; j1++){
+      const int ic1 = Ht->i[j1];/** aux `check` node index */
+      if(ic1 != ic)
+	msg += mCtoV[j1];
+    }
+    mVtoC[j] = msg;
+#else /* simplified calculation using binary search */
+    const int j0 = Ht->p[iv];
+    const int *beg = &(Ht->i[j0]);
+    const int *pos = (int *) bsearch (& ic, beg, Ht->p[iv+1] - j0, sizeof(int), cmpfunc);
+    int j1 = (pos-beg) + j0;
+    assert(Ht->i[j1] == ic);
+    mVtoC[j] = xLLR[iv] - mCtoV[j1];
+#endif /* 0 */	
+  }
+}
+
+/** @brief init all V->C messages to bare LLR */
+static inline void bp_init_VC(qllr_t mesVtoC[], const csr_t * const H, const qllr_t LLR[]){
+  const int nchk = H->rows;
+  for(int ic=0; ic<nchk; ic++){ /** target `check` node index */
+    for(int j = H->p[ic]; j < H->p[ic+1] ; j++){
+      const int iv = H->i[j]; /** `variable` node index */
+      mesVtoC[j]= LLR[iv];   /** `j` is the edge (message) index */
+    }
+  }
+}
+
+/** @brief for given `iv` compute C to V messages */
+static inline void bp_do_CVv(const int iv, const qllr_t * const mVtoC, qllr_t * const mCtoV, 
+		     const csr_t * const H, const csr_t * const Ht, 
+		     const mzd_t * const srow){  
+  for(int j = Ht->p[iv]; j < Ht->p[iv+1] ; j++){
+    /** TODO: optimize this loop as in `LDPC_Code::bp_decode()` of `itpp` package */
+    const int ic = Ht->i[j];/** origin `check` node index */
+    int sbit = mzd_read_bit(srow,0,ic); /** syndrome bit */
+    qllr_t msg=0; 
+    int new=1;
+    for(int j1 = H->p[ic]; j1 < H->p[ic+1] ; j1++){
+      const int iv1 = H->i[j1]; /** aux `variable` node index */
+      if(iv1!=iv){
+	if(new){
+	  msg = mVtoC[j1];
+	  new=0;
+	}
+	else
+	  msg = boxplus(msg, mVtoC[j1]);
+      }
+    }
+    mCtoV[j] = (sbit ? -msg : msg);
+  }
+}
+
+/** @brief for given `ic` compute C to V messages */
+static inline void bp_do_CVc(const int ic, const qllr_t * const mVtoC, qllr_t * const mCtoV, 
+		     const csr_t * const H, const csr_t * const Ht, const int sbit){  
+  //  int sbit = mzd_read_bit(srow,0,ic); /** syndrome bit */
+  /** TODO: optimize this loop as in `LDPC_Code::bp_decode()` of `itpp` package (`maybe`) */
+  for(int jv = H->p[ic]; jv < Ht->p[ic+1] ; jv++){
+    int iv=H->i[jv]; /** initial `v` node */
+      
+    /** find j: `Ht->p[iv]` <= `j` < `Ht->p[iv+1]` s.t. `Ht->i[j]`==`ic` */
+    const int j0 = Ht->p[iv];
+    const int *beg = &(Ht->i[j0]);
+    const int *pos = (int *) bsearch (& ic, beg, Ht->p[iv+1] - j0, sizeof(int), cmpfunc);
+    int j = (pos-beg) + j0;
+    assert(Ht->i[j] == ic);
+    
+    qllr_t msg=0; 
+    int new=1;
+    for(int j1 = H->p[ic]; j1 < H->p[ic+1] ; j1++){
+      const int iv1 = H->i[j1]; /** `variable` node summation index */
+      if(iv1!=iv){
+	if(new){
+	  msg = mVtoC[j1];
+	  new=0;
+	}
+	else
+	  msg = boxplus(msg, mVtoC[j1]);
+      }
+    }
+    mCtoV[j] = (sbit ? -msg : msg);
+  }
+}
+
+
+/** @brief for given `iv` compute expected LLR */
+static inline qllr_t bp_do_LLR(const int iv, const qllr_t * const mCtoV, const csr_t * const Ht, const qllr_t LLR){  
+  qllr_t val= LLR; /** WARNING: do we need this? */
+  for(int j1 = Ht->p[iv]; j1 < Ht->p[iv+1] ; j1++)
+    val += mCtoV[j1];
+  
+  return val; /** need this in any case */
+}
+
+
 /** @brief baseline parallel BP algorithm (sum-product or max-product depending on LLRs used).  
  * 
  * Decode `e` vector using syndrome bits in `srow = e*Ht` and apriori
  * bit LLR values in `LLR`.  Assume `srow` non-zero (no check for a
- * trivial solution).
+ * trivial solution).  Non-zero return value: (+ number of steps) for regular
+ * LLR, and (- number of steps) for average LLR.
  * 
  * @param[out] outLLR the resulting LLR (whether converged or not)
- * @return 0 if failed to converge or (the number of steps) if converged successfully
+ * @return 0 if failed to converge or (+/- the number of steps) if converged successfully. 
+ *  
  */
 int do_parallel_BP(qllr_t * outLLR, const mzd_t * const srow,
 		   const csr_t * const H, const csr_t * const Ht,
@@ -92,118 +201,163 @@ int do_parallel_BP(qllr_t * outLLR, const mzd_t * const srow,
   const int nz = p->mH->p[p->nchk]; /** number of messages */
   qllr_t *mesVtoC = malloc(nz*sizeof(qllr_t));
   qllr_t *mesCtoV = malloc(nz*sizeof(qllr_t));
-  //  double * xLLR = malloc(nvar*sizeof(double));
-  qllr_t * const xLLR = outLLR; /** return soft vector of LLR here */
-  qllr_t * aLLR = calloc(nvar,sizeof(qllr_t)); /** averaged LLR */
-  if((!aLLR)||(!mesVtoC)||(!mesCtoV))
-    ERROR("memory allocation failed");
+  if((!mesVtoC)||(!mesCtoV)) ERROR("memory allocation failed");
+  qllr_t * xLLR=NULL, *aLLR=NULL;
   int succ_BP=0;
-  
-    /** init V->C messages to bare LLR */
-  for(int ic=0; ic<nchk; ic++){ /** target `check` node index */
-    for(int j = H->p[ic]; j < H->p[ic+1] ; j++){
-      const int iv = H->i[j]; /** `variable` node index */
-      mesVtoC[j]= LLR[iv];   /** `j` is the edge (message) index */
-    }
+  /** convenience setting: by default, use both LLR and average LLR */
+  const int submode = ((p->submode & 3) == 0) ? (p->submode | 3) : p->submode;
+
+  if((submode & 3) == 1) /** use xLLR only */
+    xLLR = outLLR; /** return soft vector of LLR here */
+  else{                /** use aLLR or both LLR and aLLR */
+    aLLR = outLLR; 
+    xLLR = calloc(nvar,sizeof(qllr_t)); /** needed for calculations in any case */
+    if(!xLLR) ERROR("memory allocation failed");
   }
   
+  /** init V->C messages to bare LLR */
+  bp_init_VC(mesVtoC,H,LLR);
+
   for (int istep=1; istep <= p->steps  ; istep++){ /** main decoding cycle */
-    //    cnt[TOTAL]++;
     /** C -> V messages */
-    for(int iv=0; iv<nvar; iv++){ /** target `variable` node index */
-      for(int j = Ht->p[iv]; j < Ht->p[iv+1] ; j++){
-	/** TODO: optimize this loop as in `LDPC_Code::bp_decode()` of `itpp` package */
-	const int ic = Ht->i[j];/** origin `check` node index */
-	int sbit = mzd_read_bit(srow,0,ic); /** syndrome bit */
-	qllr_t msg=0; 
-	int new=1;
-	for(int j1 = H->p[ic]; j1 < H->p[ic+1] ; j1++){
-	  const int iv1 = H->i[j1]; /** aux `variable` node index */
-	  if(iv1!=iv){
-	    if(new){
-	      msg = mesVtoC[j1];
-	      new=0;
-	    }
-	    else
-	      msg = boxplus(msg, mesVtoC[j1]);
-	  }
-	}
-	mesCtoV[j] = (sbit ? -msg : msg);
-      }
-    }
+    for(int iv=0; iv<nvar; iv++) /** target `variable` node index */
+      bp_do_CVv(iv, mesVtoC, mesCtoV, H, Ht, srow);
+            
+    for(int iv = 0; iv< nvar; iv++) /** calculate expected LLR for variable nodes */
+      xLLR[iv] = bp_do_LLR(iv,mesCtoV,Ht,LLR[iv]);
+    
+    if(submode&2) /** use average LLR */
+      for(int iv = 0; iv< nvar; iv++)
+	aLLR[iv] = llr_from_dbl(p->bpalpha * dbl_from_llr(aLLR[iv]) +(1.0 - p->bpalpha) * dbl_from_llr(xLLR[iv])); 
 
-        
-    for(int iv = 0; iv< nvar; iv++){
-      qllr_t val= LLR[iv]; /** HERE! (WARNING: do we need this?) */
-      for(int j1 = Ht->p[iv]; j1 < Ht->p[iv+1] ; j1++){
-	// const int ic1 = Ht->i[j1];/** aux `check` node index */
-	val += mesCtoV[j1];
-      }
-      xLLR[iv] = val;
-      /** TODO: play with the decay value `0.5` */
-      if(!(p->submode&1))
-	aLLR[iv] = llr_from_dbl(0.5 * dbl_from_llr(aLLR[iv]) + dbl_from_llr(val)); 
-    }
+#ifndef NDEBUG    
     if(p->debug & 8){
-      out_llr("x",p->nvar, xLLR);
-      if(!(p->submode&1))
+      if(submode&1) /** use regular LLR */
+	out_llr("x",p->nvar, xLLR);
+      if(submode&2)
 	out_llr("a",p->nvar, aLLR);
-      
-      //      for(int iv = 0; iv < max; iv++)
-      //	printf(" %5.1g%s", dbl_from_llr(aLLR[iv]), iv< max ? "" : "\n");
     }
-
-
-    if(syndrome_check(xLLR,srow,p->mH, p)){
-      //      outLLR = xLLR; 
-      cnt_update(CONV_BP, istep);
-      succ_BP=istep;
-      break;
-    }
-    else if((!(p->submode&1)) && (syndrome_check(aLLR,srow,p->mH, p))){
-      for(int iv=0; iv< p->nvar; iv++)
-	outLLR[iv] = aLLR[iv];
+#endif
+    /** do convergence check */
+    if((submode&2) && (syndrome_check(aLLR,srow,p->mH, p))){ 
       cnt_update(CONV_BP_AVG, istep);
       succ_BP=-istep;
       break;
     }
-
-    
-    /* V -> C messages */ 
-    for(int ic=0; ic<nchk; ic++){ /** target `check` node */
-      for(int j = H->p[ic]; j < H->p[ic+1] ; j++){
-	const int iv = H->i[j]; /** origin `variable` node index */
-#if 0 /** TODO: verify these give identical results! */
-	qllr_t msg = LLR[iv];
-	for(int j1 = Ht->p[iv]; j1 < Ht->p[iv+1] ; j1++){
-	  const int ic1 = Ht->i[j1];/** aux `check` node index */
-	  if(ic1 != ic)
-	    msg += mesCtoV[j1];
-	}
-	mesVtoC[j] = msg;
-#else /* simplified calculation */
-	//	assert(ic == Ht->i[j]);
-	for(int j1 = Ht->p[iv]; j1 < Ht->p[iv+1] ; j1++){
-	  const int ic1 = Ht->i[j1];/** aux `check` node index */
-	  if(ic1 == ic)
-	    mesVtoC[j] = xLLR[iv] - mesCtoV[j1];
-	  /** TODO: use binary search here instead */
-	}
-#endif /* 0 */	
-      }
+    else if((submode&1) && syndrome_check(xLLR,srow,p->mH, p)){
+      cnt_update(CONV_BP, istep);
+      succ_BP=istep;
+      if(submode&2)/** need to copy */
+	for(int iv=0; iv < p->nvar; iv++)
+	  outLLR[iv] = xLLR[iv];
+      break;
     }
 
+    /* V -> C messages */ 
+    for(int ic=0; ic<nchk; ic++) /** target `check` node */
+      bp_do_VCc(ic, mesVtoC, mesCtoV, xLLR, H, Ht, LLR);
+    
   }
-  if(!succ_BP)
-    outLLR = xLLR; /** TODO: make an option to change this to aLLR */
+  
   /** clean up ********************/
-  //  free(xLLR);
-  if(aLLR){
-    free(aLLR);
-    aLLR=NULL;
-  }
+  if(submode&2)
+    free(xLLR);
   free(mesVtoC);
   free(mesCtoV);
+
+  /** default value is returned */
+
+  return succ_BP;
+}
+
+/** @brief serial-C BP algorithm (sum-product or max-product depending on LLRs used).  
+ * 
+ * Same as `do_parallel_BP()` function above but using `check-based` serial order: 
+ * for each `ic` do:
+ *    update V->C messages to `ic`;
+ *    update C->V messages from `ic`.
+ * 
+ * @param[out] outLLR the resulting LLR (whether converged or not)
+ * @return 0 if failed to converge or (+/- the number of steps) if converged successfully. 
+ *  
+ */
+int do_serialC_BP(qllr_t * outLLR, const mzd_t * const srow,
+		   const csr_t * const H, const csr_t * const Ht,
+		   const qllr_t LLR[], const params_t * const p){
+  assert(outLLR != NULL);
+  const int nchk = p->nchk; /** number of check nodes */
+  const int nvar = p->nvar;     /** number of variable nodes */
+  const int nz = p->mH->p[p->nchk]; /** number of messages */
+  qllr_t *mesVtoC = malloc(nz*sizeof(qllr_t));
+  qllr_t *mesCtoV = malloc(nz*sizeof(qllr_t));
+  if((!mesVtoC)||(!mesCtoV)) ERROR("memory allocation failed");
+  qllr_t * xLLR=NULL, *aLLR=NULL;
+  int succ_BP=0;
+  /** convenience setting: by default, use both LLR and average LLR */
+  const int submode = ((p->submode & 3) == 0) ? (p->submode | 3) : p->submode;
+
+  if((submode & 3) == 1) /** use xLLR only */
+    xLLR = outLLR; /** return soft vector of LLR here */
+  else{                /** use aLLR or both LLR and aLLR */
+    aLLR = outLLR; 
+    xLLR = calloc(nvar,sizeof(qllr_t)); /** needed for calculations in any case */
+    if(!xLLR) ERROR("memory allocation failed");
+  }
+  
+  /** init V->C messages to bare LLR */
+  bp_init_VC(mesVtoC,H,LLR);
+
+  /** one round of parallel to init C->V messages */
+  for (int iv=0; iv < nvar; iv++)
+    bp_do_CVv(iv, mesVtoC, mesCtoV, H, Ht, srow);
+
+  for (int istep=1; istep <= p->steps  ; istep++){ /** main decoding cycle */
+    for(int ii=0; ii<nchk; ii++){
+      int ic = ii; /** TODO: set up permutation */
+      int sbit = mzd_read_bit(srow,0,ic); /** syndrome bit at `ic` */
+      //! send all V->C messages into `ic`;
+      bp_do_VCc(ic, mesVtoC, mesCtoV, xLLR, H, Ht, LLR);
+      //! send all C->V messages from `ic`;      
+      bp_do_CVc(ic, mesVtoC, mesCtoV, H, Ht, sbit);
+    }
+
+    for(int iv = 0; iv< nvar; iv++) /** calculate expected LLR for variable nodes */
+      xLLR[iv] = bp_do_LLR(iv,mesCtoV,Ht,LLR[iv]);
+    
+    if(submode&2) /** use average LLR */
+      for(int iv = 0; iv< nvar; iv++)
+	aLLR[iv] = llr_from_dbl(p->bpalpha * dbl_from_llr(aLLR[iv]) +(1.0 - p->bpalpha) * dbl_from_llr(xLLR[iv])); 
+
+#ifndef NDEBUG    
+    if(p->debug & 8){
+      if(submode&1) /** use regular LLR */
+	out_llr("x",p->nvar, xLLR);
+      if(submode&2)
+	out_llr("a",p->nvar, aLLR);
+    }
+#endif
+    /** do convergence check */
+    if((submode&2) && syndrome_check(aLLR, srow,p->mH, p)){ 
+      cnt_update(CONV_BP_AVG, istep);
+      succ_BP=-istep;
+      break;
+    }
+    else if((submode&1) && syndrome_check(xLLR,srow,p->mH, p)){
+      cnt_update(CONV_BP, istep);
+      succ_BP=istep;
+      if(submode&2) /** need to copy */
+	for(int iv=0; iv < p->nvar; iv++)
+	  outLLR[iv] = xLLR[iv];
+      break;
+    }
+  }
+  /** clean up ********************/
+  if(submode&2)
+    free(xLLR);
+  free(mesVtoC);
+  free(mesCtoV);
+
+  /** default value is returned */
 
   return succ_BP;
 }
