@@ -25,7 +25,7 @@
 #include "qllr.h"
 
 params_t prm={ .nchk=0, .nvar=0, .ncws=0, .steps=50,
-  .lerr=-1, .maxosd=100, .bpalpha=0.5, .swait=0,
+  .lerr=-1, .maxosd=100, .bpalpha=0.5, .bpretry=1, .swait=0,
   .nvec=1024, .ntot=1, .nfail=0, .seed=0, .useP=0, 
   .debug=1, .fdem=NULL, .fdet=NULL, .fobs=NULL, .fout="tmp", .ferr=NULL,
   .mode=0, .submode=0, .use_stdout=0, 
@@ -868,6 +868,13 @@ int var_init(int argc, char **argv, params_t *p){
       p -> bpalpha = val; /** WARNING: no value verification!!! */
       if (p->debug&1)
 	printf("# read %s, bpalpha=%g\n",argv[i],p-> bpalpha);
+    }
+    else if (sscanf(argv[i],"bpretry=%d",&dbg)==1){ /** `bpretry` */
+      p -> bpretry = dbg;
+      if(dbg<1)
+	ERROR("read arg[%d]=%s, bpretry=%d should be at least 1",i,argv[i],dbg);
+      if (p->debug&1)
+	printf("# read %s, bpretry=%d\n",argv[i],p-> bpretry);
     }
     else if (sscanf(argv[i],"useP=%lg",&val)==1){ /** `useP` */
       p -> useP = val;

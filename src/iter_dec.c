@@ -304,72 +304,70 @@ int do_serialC_BP(qllr_t * outLLR, const mzd_t * const srow,
     if(!xLLR) ERROR("memory allocation failed");
   }
 
-  mzp_t *pivots = mzp_init(nchk);
+  mzp_t *pivots = mzp_init(nchk); 
   mzp_t *perm   = perm_p(NULL, pivots,0); /* actual permutation */
-  
-  if(p->debug &1){
-    printf("randomizing initial node order\n");
+
+  for (int itry=0; itry<p->bpretry; itry++){
+
+    //  if(p->debug &1)    printf("randomizing initial node order\n");
     pivots = mzp_rand(pivots); /* LAPAC-style random node permutation */
-    perm   = perm_p(NULL, pivots,0); /* actual permutation */    
-    mzp_out(perm);
-  }
-  
-  
-  /** init V->C messages to bare LLR */
-  bp_init_VC(mesVtoC,H,LLR);
+    perm   = perm_p(NULL, pivots,0); /* actual permutation */
+    
+    /** init V->C messages to bare LLR */
+    bp_init_VC(mesVtoC,H,LLR);
 
-  /** one round of parallel to init C->V messages */
-  for (int iv=0; iv < nvar; iv++)
-    bp_do_CVv(iv, mesVtoC, mesCtoV, H, Ht, srow);
+    /** one round of parallel to init C->V messages */
+    for (int iv=0; iv < nvar; iv++)
+      bp_do_CVv(iv, mesVtoC, mesCtoV, H, Ht, srow);
 
-  for (int istep=1; istep <= p->steps  ; istep++){ /** main decoding cycle */
-    if(p->submode & 16){
-      if(p->debug &1){
-	printf("step = %d, randomizing order\n",istep);
+    for (int istep=1; istep <= p->steps  ; istep++){ /** main decoding cycle */
+      if(p->submode & 16){
 	pivots = mzp_rand(pivots); /* LAPAC-style random node permutation */
 	perm   = perm_p(perm, pivots,0); /* actual permutation */    
-	mzp_out(perm);
+	//      if(p->debug &1)	printf("step = %d, randomizing order\n",istep);	//	mzp_out(perm);	
       }
-    }
-    
-    for(int ii=0; ii<nchk; ii++){      
-      int ic = perm->values[ii]; /** use the random permutation */
-      int sbit = mzd_read_bit(srow,0,ic); /** syndrome bit at `ic` */
-      //! send all V->C messages into `ic`;
-      bp_do_VCc(ic, mesVtoC, mesCtoV, xLLR, H, Ht, LLR);
-      //! send all C->V messages from `ic`;      
-      bp_do_CVc(ic, mesVtoC, mesCtoV, H, Ht, sbit);
-    }
+      
+      for(int ii=0; ii<nchk; ii++){      
+	int ic = perm->values[ii]; /** use the random permutation */
+	int sbit = mzd_read_bit(srow,0,ic); /** syndrome bit at `ic` */
+	//! send all V->C messages into `ic`;
+	bp_do_VCc(ic, mesVtoC, mesCtoV, xLLR, H, Ht, LLR);
+	//! send all C->V messages from `ic`;      
+	bp_do_CVc(ic, mesVtoC, mesCtoV, H, Ht, sbit);
+      }
 
-    for(int iv = 0; iv< nvar; iv++) /** calculate expected LLR for variable nodes */
-      xLLR[iv] = bp_do_LLR(iv,mesCtoV,Ht,LLR[iv]);
+      for(int iv = 0; iv< nvar; iv++) /** calculate expected LLR for variable nodes */
+	xLLR[iv] = bp_do_LLR(iv,mesCtoV,Ht,LLR[iv]);
     
-    if(submode&2) /** use average LLR */
-      for(int iv = 0; iv< nvar; iv++)
-	aLLR[iv] = llr_from_dbl(p->bpalpha * dbl_from_llr(aLLR[iv]) +(1.0 - p->bpalpha) * dbl_from_llr(xLLR[iv])); 
+      if(submode&2) /** use average LLR */
+	for(int iv = 0; iv< nvar; iv++)
+	  aLLR[iv] = llr_from_dbl(p->bpalpha * dbl_from_llr(aLLR[iv]) +(1.0 - p->bpalpha) * dbl_from_llr(xLLR[iv])); 
 
 #ifndef NDEBUG    
-    if(p->debug & 8){
-      if(submode&1) /** use regular LLR */
-	out_llr("x",p->nvar, xLLR);
-      if(submode&2)
-	out_llr("a",p->nvar, aLLR);
-    }
+      if(p->debug & 8){
+	if(submode&1) /** use regular LLR */
+	  out_llr("x",p->nvar, xLLR);
+	if(submode&2)
+	  out_llr("a",p->nvar, aLLR);
+      }
 #endif
-    /** do convergence check */
-    if((submode&2) && syndrome_check(aLLR, srow,p->mH, p)){ 
-      cnt_update(CONV_BP_AVG, istep);
-      succ_BP=-istep;
-      break;
+      /** do convergence check */
+      if((submode&2) && syndrome_check(aLLR, srow,p->mH, p)){ 
+	cnt_update(CONV_BP_AVG, istep);
+	succ_BP=-istep;
+	break;
+      }
+      else if((submode&1) && syndrome_check(xLLR,srow,p->mH, p)){
+	cnt_update(CONV_BP, istep);
+	succ_BP=istep;
+	if(submode&2) /** need to copy */
+	  for(int iv=0; iv < p->nvar; iv++)
+	    outLLR[iv] = xLLR[iv];
+	break;
+      }
     }
-    else if((submode&1) && syndrome_check(xLLR,srow,p->mH, p)){
-      cnt_update(CONV_BP, istep);
-      succ_BP=istep;
-      if(submode&2) /** need to copy */
-	for(int iv=0; iv < p->nvar; iv++)
-	  outLLR[iv] = xLLR[iv];
-      break;
-    }
+    if (succ_BP)
+      break; /* from the re-try loop */
   }
   /** clean up ********************/
   if(submode&2)

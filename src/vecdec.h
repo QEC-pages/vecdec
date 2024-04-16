@@ -46,6 +46,7 @@ extern "C"{
     int lerr;  /** local search after gauss up to this weight (default: `-1`, no OSD) */
     int maxosd;  /** max column for OSD2 and above (default: `100`) */
     double bpalpha; /** average LLR parameter; multiply old LLR by `bpalpha` new by `1-bpalpha` (default: `0.5`) */
+    int bpretry; /** for each syndrome try BP up to this many times  (default: `1`) */
     int mode;  /** operation mode, see help */
     int submode; /** additional options, see help */
     int d1, d2, d3; /** QLLR parameters for BP */
@@ -176,8 +177,10 @@ extern "C"{
   "\t fout=[string]\t: header for output file names ('tmp', see 'mode=3')\n" \
   "\t\t (space is OK in front of file names to enable shell completion)\n" \
   "\t steps=[integer]\t: num of RIS or BP decoding steps (default: 50)\n" \
-  "\t lerr =[integer]\t: OSD search level (-1, only implemented with `mode=0`)\n" \
+  "\t lerr =[integer]\t: OSD search level (-1, only implemented with `mode=0`, `1`)\n" \
   "\t maxosd=[integer]\t: max column for OSD2 and above (100)\n"	\
+  "\t bpalpha=[float]\t: average LLR scaling coefficient for BP (default 0.5)\n" \
+  "\t bpretry=[integer]\t: retry BP up to this many times per syndrome bit (1)\n"	\
   "\t swait=[integer]\t: Gauss steps w/o new errors to stop (0, do not stop)\n" \
   "\t nvec =[integer]\t: max vector size for decoding (default: 1024)\n" \
   "\t\t\t (list size for distance or energy calculations)\n"		\
