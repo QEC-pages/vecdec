@@ -1106,8 +1106,8 @@ int var_init(int argc, char **argv, params_t *p){
       if((p->submode & 4) && (p->submode & 16))
 	printf("# randomize node order at each step");
     }
-    if (p->submode>=8)
-      ERROR(" mode=%d BP : submode='%d' unsupported\n", p->mode, p->submode);    
+    if ((p->submode>=32) || (p->submode & 8))
+      ERROR(" mode=%d BP : submode='%d' currently unsupported\n", p->mode, p->submode);    
     /* fall through */
   case 0:
     if((p->ferr) && (p->fobs))

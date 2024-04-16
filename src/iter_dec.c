@@ -303,6 +303,17 @@ int do_serialC_BP(qllr_t * outLLR, const mzd_t * const srow,
     xLLR = calloc(nvar,sizeof(qllr_t)); /** needed for calculations in any case */
     if(!xLLR) ERROR("memory allocation failed");
   }
+
+  mzp_t *pivots = mzp_init(nchk);
+  mzp_t *perm   = perm_p(NULL, pivots,0); /* actual permutation */
+  
+  if(p->debug &1){
+    printf("randomizing initial node order\n");
+    pivots = mzp_rand(pivots); /* LAPAC-style random node permutation */
+    perm   = perm_p(NULL, pivots,0); /* actual permutation */    
+    mzp_out(perm);
+  }
+  
   
   /** init V->C messages to bare LLR */
   bp_init_VC(mesVtoC,H,LLR);
@@ -312,8 +323,17 @@ int do_serialC_BP(qllr_t * outLLR, const mzd_t * const srow,
     bp_do_CVv(iv, mesVtoC, mesCtoV, H, Ht, srow);
 
   for (int istep=1; istep <= p->steps  ; istep++){ /** main decoding cycle */
-    for(int ii=0; ii<nchk; ii++){
-      int ic = ii; /** TODO: set up permutation */
+    if(p->submode & 16){
+      if(p->debug &1){
+	printf("step = %d, randomizing order\n",istep);
+	pivots = mzp_rand(pivots); /* LAPAC-style random node permutation */
+	perm   = perm_p(perm, pivots,0); /* actual permutation */    
+	mzp_out(perm);
+      }
+    }
+    
+    for(int ii=0; ii<nchk; ii++){      
+      int ic = perm->values[ii]; /** use the random permutation */
       int sbit = mzd_read_bit(srow,0,ic); /** syndrome bit at `ic` */
       //! send all V->C messages into `ic`;
       bp_do_VCc(ic, mesVtoC, mesCtoV, xLLR, H, Ht, LLR);
@@ -356,6 +376,8 @@ int do_serialC_BP(qllr_t * outLLR, const mzd_t * const srow,
     free(xLLR);
   free(mesVtoC);
   free(mesCtoV);
+  mzp_free(perm);
+  mzp_free(pivots);
 
   /** default value is returned */
 
