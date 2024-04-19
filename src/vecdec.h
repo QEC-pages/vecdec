@@ -42,6 +42,7 @@ extern "C"{
     int nvec;  /** max number of syndromes to process in one bunch (default: `16`) */
     int ntot;  /** total number of syndromes to generate (default: `1`) */
     int nfail; /** when non-zero, num of fails to terminate the run (default: `0`, do not terminate) */
+    int dmin; /** if non-zero, terminate distance calculation immediately when a vector of weight `d`<=`dmin` is found, return `-d` (default: 0) */
     int swait; /** gauss decoding steps with no vectors changed to stop (default: `0`, do not stop) */
     int lerr;  /** local search after gauss up to this weight (default: `-1`, no OSD) */
     int maxosd;  /** max column for OSD2 and above (default: `100`) */
@@ -180,12 +181,14 @@ extern "C"{
   "\t lerr =[integer]\t: OSD search level (-1, only implemented with `mode=0`, `1`)\n" \
   "\t maxosd=[integer]\t: max column for OSD2 and above (100)\n"	\
   "\t bpalpha=[float]\t: average LLR scaling coefficient for BP (default 0.5)\n" \
-  "\t bpretry=[integer]\t: retry BP up to this many times per syndrome bit (1)\n"	\
+  "\t bpretry=[integer]\t: retry BP up to this many times per syndrome (1)\n" \
   "\t swait=[integer]\t: Gauss steps w/o new errors to stop (0, do not stop)\n" \
   "\t nvec =[integer]\t: max vector size for decoding (default: 1024)\n" \
   "\t\t\t (list size for distance or energy calculations)\n"		\
   "\t ntot =[integer]\t: total syndromes to generate (default: 1)\n"	\
   "\t nfail=[integer]\t: total fails to terminate (0, do not terminate)\n" \
+  "\t dmin=[integer]\t: terminate distance calculation immediately when\n" \
+  "\t\t\t a vector of weight w<=dmin is found, return '-w' (default: 0)\n" \
   "\t seed= [integer]\t: RNG seed or use time(NULL) if 0 (default)\n"	\
   "\t qllr1=[integer]\t: if 'USE_QLLR' is set, parameter 'd1' (12)\n"	\
   "\t qllr2=[integer]\t: if 'USE_QLLR' is set, parameter 'd2' (300)\n"	\
