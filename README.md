@@ -189,6 +189,16 @@ In fact, right now it just tries to find the single most likely codeword $c$ and
 outputs an estimate of the corresponding contribution to the logical error
 probability, $$\prod_{i\in \mathop{\rm supp}c} 2[ p_i(1-p_i)]^{1/2}.$$
 
+To speed up the distance calculation, you can use the parameter `dmin`
+(by default, `dmin=0`).  When non-zero, if a code word of weight `w`
+$\le$ `dmin` is found, the distance calculation is terminated
+immediately, and the result `-w` with a negative sign is printed.
+This is useful if, e.g., we are trying to construct a fault-tolerant
+measurement circuit whose circuit distance should coincide with the
+distance `d` of the original code.  In this case, if we specify
+`dmin=(d-1)`, distance calculation will be terminated immediately so
+that a different circuit can be studied.
+
 ## Export the matrices 
 
 This section describes operation with the command-line switch

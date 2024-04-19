@@ -26,7 +26,7 @@
 
 params_t prm={ .nchk=0, .nvar=0, .ncws=0, .steps=50,
   .lerr=-1, .maxosd=100, .bpalpha=0.5, .bpretry=1, .swait=0,
-  .nvec=1024, .ntot=1, .nfail=0, .seed=0, .useP=0, 
+  .nvec=1024, .ntot=1, .nfail=0, .seed=0, .useP=0, .dmin=0,
   .debug=1, .fdem=NULL, .fdet=NULL, .fobs=NULL, .fout="tmp", .ferr=NULL,
   .mode=0, .submode=0, .use_stdout=0, 
   .LLRmin=0, .LLRmax=0, .codewords=NULL, .num_cws=0,
@@ -219,7 +219,7 @@ long int nzlist_read(const char fnam[], params_t *p){
  * 
  * @param dW weight increment from the minimum found
  * @param p pointer to global parameters structure
- * @return minimum `weight` of a CW found 
+ * @return minimum `weight` of a CW found (or `-weigt` if early termination condition is reached). 
  */
 int do_LLR_dist(int dW, params_t  * const p){
   /** whether to verify logical ops as a vector or individually */
@@ -319,8 +319,13 @@ int do_LLR_dist(int dW, params_t  * const p){
             printf("nz=%d cnt=%d energ=%g\n",nz,cnt,dbl_from_llr(energ));
           minE=energ;
         }
-        if (cnt < minW)
+        if (cnt < minW){
           minW=cnt;
+	  if (minW <= p->dmin){ /** early termination condition */
+	    minW = -minW; /** this distance value is of little interest; */
+	    goto alldone; 
+	  }
+	}
         if (cnt <= minW + dW){ /** try to add to hashing storage */
           const size_t keylen = cnt * sizeof(rci_t);
           one_vec_t *pvec=NULL;
@@ -383,10 +388,12 @@ int do_LLR_dist(int dW, params_t  * const p){
       pmax=prob;
   }
   /** TODO: prefactor calculation */
+
+ alldone: 
   if(p->debug&1)
     printf("# sumP(fail) maxP(fail) min_weight num_found\n");
   printf("%g %g %d %ld\n", pfail, pmax, minW, p->num_cws);
-      
+
   /** clean up */
   mzp_free(perm);
   mzp_free(pivs);
@@ -828,6 +835,13 @@ int var_init(int argc, char **argv, params_t *p){
       p -> nvec = dbg;
       if (p->debug&1)
 	printf("# read %s, nvec=%d\n",argv[i],p-> nvec);
+    }
+    else if (sscanf(argv[i],"dmin=%d",&dbg)==1){ /** `dmin` */
+      p -> dmin = dbg;
+      if (dbg<0)
+	ERROR("command line argument %d dmin=%d must be non-negative\n",i,dbg);
+      if (p->debug&1)
+	printf("# read %s, dmin=%d\n",argv[i],p-> dmin);
     }
     else if (sscanf(argv[i],"steps=%d",&dbg)==1){ /** `steps` */
       p -> steps = dbg;
@@ -1476,7 +1490,7 @@ int main(int argc, char **argv){
     }
     do_LLR_dist(p->nfail, p);
     if(p->outC){
-      /** write the codewords here */
+      /** TODO: write the codewords here */
     }
     break;
     
