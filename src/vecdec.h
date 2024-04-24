@@ -40,8 +40,8 @@ extern "C"{
     int nvar;     /** columns in H `n` (set in the `input file`) */
     int steps; /** number of random window or BP decoding steps, default: `50` */
     int nvec;  /** max number of syndromes to process in one bunch (default: `16`) */
-    int ntot;  /** total number of syndromes to generate (default: `1`) */
-    int nfail; /** when non-zero, num of fails to terminate the run (default: `0`, do not terminate) */
+    long long int ntot;  /** total number of syndromes to generate (default: `1`) */
+    long long int nfail; /** when non-zero, num of fails to terminate the run (default: `0`, do not terminate) */
     int dmin; /** if non-zero, terminate distance calculation immediately when a vector of weight `d`<=`dmin` is found, return `-d` (default: 0) */
     int swait; /** gauss decoding steps with no vectors changed to stop (default: `0`, do not stop) */
     int lerr;  /** local search after gauss up to this weight (default: `-1`, no OSD) */
@@ -66,7 +66,7 @@ extern "C"{
     char *ferr; /** `input file` name for error vectors */
     int classical; /** `1` if this is a classical code? */
     int internal; /** `1` to generate obs/det internally, `2` to generate from `err` file */
-    int seed;  /** rng `seed`, set=0 for automatic */
+    long long int seed;  /** rng `seed`, set=0 for automatic */
     double useP; /** global error probability `overriding` values in the `DEM` file (default: 0, no override) */
     double *vP; /** probability vector (total of `n`) */
     qllr_t *vLLR; /** vector of LLRs (total of `n`) */
@@ -81,13 +81,13 @@ extern "C"{
     qllr_t LLRmin;
     qllr_t LLRmax;
     one_vec_t *codewords; /** `hash table` with found codewords */
-    long int num_cws; /** `number` of codewords in the `hash` */
+    long long int num_cws; /** `number` of codewords in the `hash` */
     FILE *file_err;
     FILE *file_det;
     FILE *file_obs;
-    int line_err; /** current line of the err file */
-    int line_det; /** current line of the det file */
-    int line_obs; /** current line of the obs file */
+    long long int line_err; /** current line of the err file */
+    long long int line_det; /** current line of the det file */
+    long long int line_obs; /** current line of the obs file */
     mzd_t *mE;
     mzd_t *mHe;
     mzd_t *mLe;
@@ -185,11 +185,11 @@ extern "C"{
   "\t swait=[integer]\t: Gauss steps w/o new errors to stop (0, do not stop)\n" \
   "\t nvec =[integer]\t: max vector size for decoding (default: 1024)\n" \
   "\t\t\t (list size for distance or energy calculations)\n"		\
-  "\t ntot =[integer]\t: total syndromes to generate (default: 1)\n"	\
-  "\t nfail=[integer]\t: total fails to terminate (0, do not terminate)\n" \
+  "\t ntot =[long long int]\t: total syndromes to generate (default: 1)\n"	\
+  "\t nfail=[long long int]\t: total fails to terminate (0, do not terminate)\n" \
   "\t dmin=[integer]\t: terminate distance calculation immediately when\n" \
   "\t\t\t a vector of weight w<=dmin is found, return '-w' (default: 0)\n" \
-  "\t seed= [integer]\t: RNG seed or use time(NULL) if 0 (default)\n"	\
+  "\t seed= [long long int]\t: RNG seed or use time(NULL) if 0 (default)\n"	\
   "\t qllr1=[integer]\t: if 'USE_QLLR' is set, parameter 'd1' (12)\n"	\
   "\t qllr2=[integer]\t: if 'USE_QLLR' is set, parameter 'd2' (300)\n"	\
   "\t qllr3=[integer]\t: if 'USE_QLLR' is set, parameter 'd3' (7)\n"	\

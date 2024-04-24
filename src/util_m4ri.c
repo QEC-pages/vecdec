@@ -820,7 +820,7 @@ int all_space(const char * str) {
  * @return the number of rows actually read.
  *
  */
-int read_01(mzd_t *M, FILE *fin, int *lineno, const char* fnam,
+int read_01(mzd_t *M, FILE *fin, long long int *lineno, const char* fnam,
 	      const int debug){
   if(!M)
     ERROR("expected initialized matrix 'M'!\n");
@@ -831,7 +831,7 @@ int read_01(mzd_t *M, FILE *fin, int *lineno, const char* fnam,
   if(!fin)
     ERROR("file 'fin' named '%s' must be open for reading\n",fnam);
   if(debug&8) /** file io */
-    printf("# about to read 01 data from line %d in file '%s'\n",
+    printf("# about to read 01 data from line %lld in file '%s'\n",
            *lineno,fnam);
 
   char *buf=NULL;
@@ -845,14 +845,14 @@ int read_01(mzd_t *M, FILE *fin, int *lineno, const char* fnam,
     case '0': case '1':
       if(linelen<=m)
 	ERROR("line is too short, expected %d 01 characters\n"
-	      "%s:%d:1: '%s'\n", m,fnam,*lineno,buf);
+	      "%s:%lld:1: '%s'\n", m,fnam,*lineno,buf);
       else{
 	for(int i=0; i<m; i++){
 	  if (buf[i]=='1')
 	    mzd_write_bit(M,i,il,1); /** row `i`, col `il` */
 	  else if (buf[i]!='0')
 	    ERROR("invalid 01 line\n"
-		  "%s:%d:%d: '%s'\n", fnam,*lineno,i+1,buf);
+		  "%s:%lld:%d: '%s'\n", fnam,*lineno,i+1,buf);
 	}
 	(il)++; /** success */
       }
@@ -862,7 +862,7 @@ int read_01(mzd_t *M, FILE *fin, int *lineno, const char* fnam,
     default:
       if (!all_space(buf))
 	ERROR("invalid 01 line\n"
-	      "%s:%d:1: '%s'\n", fnam,*lineno,buf);
+	      "%s:%lld:1: '%s'\n", fnam,*lineno,buf);
       break;
     }
   }
