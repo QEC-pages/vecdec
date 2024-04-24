@@ -364,7 +364,7 @@ csr_t *csr_mm_read(char *fnam, csr_t *mat, int transpose, int debug);
 void csr_mm_write( char * const fout, const char fext[], const csr_t * const mat,
 		  const char comment[]);
 
-int read_01(mzd_t *M, FILE *fin, int *lineno, const char* fnam,
+int read_01(mzd_t *M, FILE *fin, long long int *lineno, const char* fnam,
 	      const int debug);  
   
 /** 
