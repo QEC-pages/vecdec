@@ -5,6 +5,7 @@
  * some code borrowed from various sources 
  ************************************************************************/
 #include <m4ri/m4ri.h>
+#include <m4ri/mzd.h>
 #include <stdio.h>
 // #include <"copy_m4ri.h"
 #include "mmio.h"
@@ -551,7 +552,7 @@ void csr_compress(csr_t *mat){
   int i, j=0;
   for(i=0;i<mat->rows;i++){
     mat->p[i]=j;
-    while ((pairs[j].a == i)&&(j<nz)){
+    while ((j<nz)&&(pairs[j].a == i)){
       mat->i[j]=pairs[j].b;
       j++;
     }

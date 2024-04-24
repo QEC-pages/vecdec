@@ -156,6 +156,7 @@ static inline void mzd_flip_bit(mzd_t const *M, rci_t const row, rci_t const col
 /** @brief return 1 if row `i` of `A` is zero */
 int mzd_row_is_zero(const mzd_t * const A, const int i);
 
+
 /**
 * nextelement(set1,m,pos) = the position of the first element in set set1   
 * which occupies a position greater or equal than pos.  If no such element exists,   

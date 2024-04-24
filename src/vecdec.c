@@ -19,6 +19,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <m4ri/m4ri.h>
+#include <m4ri/mzd.h>
 #include "utils.h"
 #include "util_m4ri.h"
 #include "vecdec.h"
@@ -46,9 +47,8 @@ long long int iter2[EXTR_MAX]; /** sums of BP iteration numbers squared */
 
 
 
-
 /** @brief calculate the energy of the row `i` in `A` */
-qllr_t mzd_row_energ(qllr_t *coeff, const mzd_t *A, const int i){
+qllr_t mzd_row_energ_naive(qllr_t *coeff, const mzd_t *A, const int i){
   qllr_t ans=0;
   //  mzd_print(A);
   for(rci_t j = 0; j < A->ncols; ++j)
@@ -57,8 +57,37 @@ qllr_t mzd_row_energ(qllr_t *coeff, const mzd_t *A, const int i){
       ans += coeff[j];
     }
   return (ans);
-  /** todo: rewrite in terms of `__builtin_clzll` */
 }
+
+#if 1
+qllr_t mzd_row_energ(qllr_t *coeff, const mzd_t *A, const int i){
+  return mzd_row_energ_naive(coeff, A, i);
+}
+#else /* not 1 */
+/** @brief calculate the energy of the row `i` in `A` */
+qllr_t mzd_row_energ(qllr_t *coeff, const mzd_t *A, const int i){
+#ifndef NDEBUG  
+  if (mzd_is_windowed(A))
+    ERROR("this does not work on a windowed matrix, use `mzd_row_energ_naive()`");  
+#endif   
+  qllr_t ans=0;
+  word const * truerow = mzd_row(A, i);
+  //  mzd_print(A);
+  //  for(rci_t j = 0; j < A->ncols; ++j)
+  int j=0;
+  while((j=nextelement(truerow,A->width,j)) != -1){
+    ans += coeff[j];
+  }
+#ifndef NDEBUG
+#  ifdef USE_QLLR
+  assert(ans==mzd_row_energ_naive(coeff,A,i));
+#  else
+  assert(fabs(ans-mzd_row_energ_naive(coeff,A,i)) < 0.001 * prm.LLRmin);
+#  endif 
+#endif   
+  return (ans);
+}
+#endif /* if 1 */
 
 
 /** @brief calculate the probability of codeword in `one_vec_t` */

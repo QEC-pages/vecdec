@@ -1,6 +1,7 @@
 WARN = -Wall -Wsign-compare -Wextra
 # add -Warray-bounds=2 for run-time memory checks (does it actually work?)
 # OPT  = -O2 -g -pg # for use with gprof
+# use `-ggdb3` for use with valgrind
 ## EXTRA may be set on the command line, e.g., "EXTRA=''" or "EXTRA='-pg -DNDEBUG'"
 # EXTRA = -DNDEBUG -Wno-unused-variable -Wno-unused-parameter  
 # OPT  = -g -march=native -mtune=native -O3 ${PRODUCTION}
