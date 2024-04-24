@@ -62,7 +62,7 @@ void out_llr(const char str[], const int num, const qllr_t llr[]){
  * @return 1 if codeword is valid, 0 otherwise */
 int syndrome_check(const qllr_t LLR[], const mzd_t * const syndrome,
 		   const csr_t * const H,
-		   [[maybe_unused]] const params_t * const p){
+		   _maybe_unused const params_t * const p){
   const int nchk = H->rows;
   //  const csr_t * const H = p->mH;
   for(int ic=0; ic<nchk; ic++){ /** target `check` node */

@@ -94,7 +94,7 @@ extern "C"{
 }
 
 #else /* not USE_QLLR */
-  void out_LLR_params([[maybe_unused]] qllr_params_t *lcu){
+  void out_LLR_params(_maybe_unused qllr_params_t *lcu){
     printf( "---------- LLR calculation unit uses exact double arithmetic ------------\n");
   }
 

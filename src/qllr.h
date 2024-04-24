@@ -162,7 +162,7 @@ static inline qllr_t boxplus(const qllr_t x, const qllr_t y){
 #endif /* USE_QLLR */
 
   qllr_params_t * init_LLR_tables (const int d1, const int d2, const int d3);
-  void out_LLR_params([[maybe_unused]] qllr_params_t *lcu);
+  void out_LLR_params(_maybe_unused qllr_params_t *lcu);
   
 #ifdef __cplusplus
 }

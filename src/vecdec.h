@@ -126,7 +126,7 @@ extern "C"{
   
   int syndrome_check(const qllr_t LLR[], const mzd_t * const syndrome,
 		     const csr_t * const H,
-		     [[maybe_unused]] const params_t * const p);
+		     _maybe_unused const params_t * const p);
   
   int do_osd_start(qllr_t * LLR, const mzd_t * const srow,
 		   const csr_t * const H, const params_t * const p);
