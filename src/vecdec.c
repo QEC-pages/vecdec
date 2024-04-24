@@ -1328,21 +1328,21 @@ int main(int argc, char **argv){
   if(p->debug & 1)
     printf("# mode=%d submode=%d debug=%d\n",p->mode,p->submode,p->debug);
 
-  int ierr_tot=0, rounds=(int )ceil((double) p->ntot / (double) p->nvec);
+  long long int ierr_tot=0, rounds=(long long int )ceil((double) p->ntot / (double) p->nvec);
   if(((p->mode == 0) || (p->mode == 1)) && (p->debug & 2))
-    printf("# ntot=%lld nvec=%d will do calculation in %d rounds\n",p->ntot,p->nvec,rounds);
+    printf("# ntot=%lld nvec=%d will do calculation in %lld rounds\n",p->ntot,p->nvec,rounds);
 
   switch(p->mode){
-    long int synd_tot, synd_fail; /** case 0 */
+    long long int synd_tot, synd_fail; /** case 0 */
     qllr_t *ans;                  /** case 1 */
     size_t size;                  /** case 3 */
     char * comment;
   case 0: /** `mode=0` internal `vecdec` decoder */
     /** at least one round always */
     synd_tot=0, synd_fail=0;
-    for(int iround=0; iround < rounds; iround++){
+    for(long long int iround=0; iround < rounds; iround++){
       if(p->debug &1)
-	printf("# starting round %d of %d\n", iround, rounds);
+	printf("# starting round %lld of %lld\n", iround, rounds);
     
       if( !(ierr_tot = do_err_vecs(p)))
 	break; /** no more rounds */
@@ -1403,7 +1403,7 @@ int main(int argc, char **argv){
     }
     if(p->debug&1)
       printf("# fail_fraction total_cnt sycces_cnt\n");
-    printf(" %g %ld %ld # %s\n",(double) synd_fail/synd_tot, synd_tot, synd_tot-synd_fail, p->fdem ? p->fdem : p->finH );
+    printf(" %g %lld %lld # %s\n",(double) synd_fail/synd_tot, synd_tot, synd_tot-synd_fail, p->fdem ? p->fdem : p->finH );
       
     break;
 
@@ -1411,17 +1411,17 @@ int main(int argc, char **argv){
     ans = calloc(p->nvar, sizeof(qllr_t));
       if(!ans) ERROR("memory allocation failed!"); 
 
-    for(int iround=0; iround < rounds; iround++){
+    for(long long int iround=0; iround < rounds; iround++){
       if(p->debug &1)
-	printf("# starting round %d of %d\n", iround, rounds);
+	printf("# starting round %lld of %lld\n", iround, rounds);
     
       if( !(ierr_tot = do_err_vecs(p)))
 	break; /** no more rounds */
       p->mHeT = mzd_transpose(p->mHeT,p->mHe);
       p->mLeT = mzd_transpose(p->mLeT,p->mLe);
-      for(int ierr = 0; ierr < ierr_tot; ierr++){ /** cycle over errors */
+      for(long long int ierr = 0; ierr < ierr_tot; ierr++){ /** cycle over errors */
 	cnt[TOTAL]++;
-	int succ_BP = 0;
+	long long int succ_BP = 0;
 	if(mzd_row_is_zero(p->mHeT,ierr)){
 	  //	  printf("ierr=%d of tot=%d\n",ierr,ierr_tot);
 
@@ -1431,13 +1431,13 @@ int main(int argc, char **argv){
 	    cnt[SUCC_TOT]++;
 	  }
 	  if(p->debug & 128)
-	    printf("error %d of %d is trivial\n",ierr+1,ierr_tot);
+	    printf("error %lld of %lld is trivial\n",ierr+1,ierr_tot);
 	  continue ; /** next error / syndrome vector pair */     
 	}
 	else{ /** non-trivial syndrome */
 #ifndef NDEBUG	  
 	  if((p->debug&8)&&(p->nvar <= 256)&&(p->debug &512)){
-	    printf("non-trivial error %d of %d:\n",ierr+1,ierr_tot);
+	    printf("non-trivial error %lld of %lld:\n",ierr+1,ierr_tot);
 	    if(p->mE) /** print column as row */	      
 	      for(int i=0; i<p->nvar; i++)
 		printf("%s%d%s",i==0?"[":" ",mzd_read_bit(p->mE,i,ierr),i+1<p->nvar?"":"]\n");
@@ -1458,7 +1458,7 @@ int main(int argc, char **argv){
 	  }
 	  if((!succ_BP) && (p->lerr >=0)){
 	      if(p->debug&128)
-		printf("ierr=%d starting OSD lerr=%d maxosd=%d\n",ierr,p->lerr, p->maxosd);
+		printf("ierr=%lld starting OSD lerr=%d maxosd=%d\n",ierr,p->lerr, p->maxosd);
 	      do_osd_start(ans,srow,p->mH,p);
 	      succ_BP=1;
 	    }
@@ -1475,7 +1475,7 @@ int main(int argc, char **argv){
 	  //#endif 
 	  
 	  if(p->debug&16)
-	    printf("i=%d of %d succ=%d\n",ierr,ierr_tot,succ_BP);
+	    printf("i=%lld of %lld succ=%lld\n",ierr,ierr_tot,succ_BP);
 	}
 	if((p->nfail) && cnt[TOTAL]-cnt[SUCC_TOT] >= p->nfail)
 	  break;
