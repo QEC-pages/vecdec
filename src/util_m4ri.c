@@ -441,7 +441,7 @@ csr_t * csr_from_pairs(csr_t *mat, int nz, int_pair *prs, int nrows, int ncols){
   int i, j=0;
   for(i=0;i < mat->rows; i++){
     mat->p[i]=j;
-    while ((prs[j].a == i) && (j<nz)){
+    while ((j<nz) && (prs[j].a == i)){
       mat->i[j]=prs[j].b;
       j++;
     }

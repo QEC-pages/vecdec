@@ -48,7 +48,7 @@ long long int iter2[EXTR_MAX]; /** sums of BP iteration numbers squared */
 
 
 /** @brief calculate the energy of the row `i` in `A` */
-qllr_t mzd_row_energ_naive(qllr_t *coeff, const mzd_t *A, const int i){
+static inline qllr_t mzd_row_energ_naive(qllr_t *coeff, const mzd_t *A, const int i){
   qllr_t ans=0;
   //  mzd_print(A);
   for(rci_t j = 0; j < A->ncols; ++j)
@@ -59,11 +59,11 @@ qllr_t mzd_row_energ_naive(qllr_t *coeff, const mzd_t *A, const int i){
   return (ans);
 }
 
-#if 1
-qllr_t mzd_row_energ(qllr_t *coeff, const mzd_t *A, const int i){
+#if 0
+static inline qllr_t mzd_row_energ(qllr_t *coeff, const mzd_t *A, const int i){
   return mzd_row_energ_naive(coeff, A, i);
 }
-#else /* not 1 */
+#else /** substantial speed-up of `mode=0` calculation for large matrices */
 /** @brief calculate the energy of the row `i` in `A` */
 qllr_t mzd_row_energ(qllr_t *coeff, const mzd_t *A, const int i){
 #ifndef NDEBUG  
@@ -74,8 +74,10 @@ qllr_t mzd_row_energ(qllr_t *coeff, const mzd_t *A, const int i){
   word const * truerow = mzd_row(A, i);
   //  mzd_print(A);
   //  for(rci_t j = 0; j < A->ncols; ++j)
-  int j=0;
-  while((j=nextelement(truerow,A->width,j)) != -1){
+  int j=-1;
+  while((j=nextelement(truerow,A->width,j+1)) != -1){
+    if(j >= A->ncols)
+      break;
     ans += coeff[j];
   }
 #ifndef NDEBUG
@@ -661,7 +663,7 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
       printf("mEt0 after local search:\n");
       mzd_print(mEt0);
     }
-    free(skip_pivs);
+    mzp_free(skip_pivs);
     if (p->lerr > 1){
       mzd_free(mEt1);
       free(vE1);
@@ -724,7 +726,7 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
         printf("mEt0 after local search:\n");
         mzd_print(mEt0);
       }
-      free(skip_pivs);
+      mzp_free(skip_pivs);
       if (p->lerr > 1)
 	free(vE1);
     }

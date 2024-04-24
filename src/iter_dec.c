@@ -311,7 +311,7 @@ int do_serialC_BP(qllr_t * outLLR, const mzd_t * const srow,
 
     //  if(p->debug &1)    printf("randomizing initial node order\n");
     pivots = mzp_rand(pivots); /* LAPAC-style random node permutation */
-    perm   = perm_p(NULL, pivots,0); /* actual permutation */
+    perm   = perm_p(perm, pivots,0); /* actual permutation */
     
     /** init V->C messages to bare LLR */
     bp_init_VC(mesVtoC,H,LLR);
@@ -524,6 +524,7 @@ int do_osd_start(qllr_t * LLR, const mzd_t * const srow,
 
     /** with current `Emin`,`vmin` and `E`, `v`, launch recursion */
     do_osd_recurs(minrow, 0, 1, vE, mE, sHt, p->vLLR, pivs, skip_pivs, p);
+    mzp_free(skip_pivs);
     csr_free(sHt);
   }
 
