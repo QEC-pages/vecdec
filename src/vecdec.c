@@ -1331,10 +1331,14 @@ int main(int argc, char **argv){
   if(((p->mode == 0) || (p->mode == 1)) && (p->debug & 2))
     printf("# ntot=%d nvec=%d will do calculation in %d rounds\n",p->ntot,p->nvec,rounds);
 
-  switch(p->mode){    
+  switch(p->mode){
+    long int synd_tot, synd_fail; /** case 0 */
+    qllr_t *ans;                  /** case 1 */
+    size_t size;                  /** case 3 */
+    char * comment;
   case 0: /** `mode=0` internal `vecdec` decoder */
     /** at least one round always */
-    long int synd_tot=0, synd_fail=0;
+    synd_tot=0, synd_fail=0;
     for(int iround=0; iround < rounds; iround++){
       if(p->debug &1)
 	printf("# starting round %d of %d\n", iround, rounds);
@@ -1402,9 +1406,8 @@ int main(int argc, char **argv){
       
     break;
 
-  case 1: /** `mode=1` various BP flavors */
-    
-    qllr_t *ans = calloc(p->nvar, sizeof(qllr_t));
+  case 1: /** `mode=1` various BP flavors */    
+    ans = calloc(p->nvar, sizeof(qllr_t));
       if(!ans) ERROR("memory allocation failed!"); 
 
     for(int iround=0; iround < rounds; iround++){
@@ -1495,8 +1498,8 @@ int main(int argc, char **argv){
     break;
     
   case 3: /** read in DEM file and output the H, L, G matrices and P vector */
-    size_t size = snprintf(NULL, 0, "H matrix from DEM file %s", p->fdem);
-    char * comment = malloc(size + 1);
+    size = snprintf(NULL, 0, "H matrix from DEM file %s", p->fdem);
+    comment = malloc(size + 1);
     sprintf(comment, "H matrix from DEM file %s", p->fdem);
     if(p->debug&1)
       printf("# writing H matrix [ %d x %d ] to \t%s%s\n",
