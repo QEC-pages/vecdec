@@ -360,7 +360,7 @@ int do_LLR_dist(int dW, params_t  * const p){
       }
     } /** end of the dual matrix rows loop */
     if(p->debug & 16)
-      printf(" round=%d of %d minE=%g minW=%d maxE=%g num_cws=%ld ichanged=%d iwait=%d\n",
+      printf(" round=%d of %d minE=%g minW=%d maxE=%g num_cws=%lld ichanged=%d iwait=%d\n",
              ii+1, p->steps, dbl_from_llr(minE), minW, dbl_from_llr(maxE), p->num_cws, ichanged, iwait);
     
     mzp_free(skip_pivs);
@@ -392,7 +392,7 @@ int do_LLR_dist(int dW, params_t  * const p){
  alldone: 
   if(p->debug&1)
     printf("# sumP(fail) maxP(fail) min_weight num_found\n");
-  printf("%g %g %d %ld\n", pfail, pmax, minW, p->num_cws);
+  printf("%g %g %d %lld\n", pfail, pmax, minW, p->num_cws);
 
   /** clean up */
   mzp_free(perm);
@@ -782,6 +782,7 @@ void init_Ht(params_t *p){
 int var_init(int argc, char **argv, params_t *p){
 
   int dbg=0;
+  long long int lldbg=0;
   double val;
 
   if(argc<=1)
@@ -863,20 +864,20 @@ int var_init(int argc, char **argv, params_t *p){
       if (p->debug&1)
 	printf("# read %s, maxosd=%d\n",argv[i],p-> maxosd);
     }
-    else if (sscanf(argv[i],"ntot=%d",&dbg)==1){ /** `ntot` */
-      p -> ntot = dbg;
+    else if (sscanf(argv[i],"ntot=%lld",&lldbg)==1){ /** `ntot` */
+      p -> ntot = lldbg;
       if (p->debug&1)
-	printf("# read %s, ntot=%d\n",argv[i],p-> ntot);
+	printf("# read %s, ntot=%lld\n",argv[i],p-> ntot);
     }
-    else if (sscanf(argv[i],"nfail=%d",&dbg)==1){ /** `nfail` */
-      p -> nfail = dbg;
+    else if (sscanf(argv[i],"nfail=%lld",&lldbg)==1){ /** `nfail` */
+      p -> nfail = lldbg;
       if (p->debug&1)
-	printf("# read %s, nfail=%d\n",argv[i],p-> nfail);
+	printf("# read %s, nfail=%lld\n",argv[i],p-> nfail);
     }
-    else if (sscanf(argv[i],"seed=%d",&dbg)==1){ /** `seed` */
-      p->seed=dbg;
+    else if (sscanf(argv[i],"seed=%lld",&lldbg)==1){ /** `seed` */
+      p->seed=lldbg;
       if (p->debug&1)
-	printf("# read %s, seed=%d\n",argv[i],p->seed);
+	printf("# read %s, seed=%lld\n",argv[i],p->seed);
     }
     else if (sscanf(argv[i],"bpalpha=%lg",&val)==1){ /** `bpalpha` */
       p -> bpalpha = val; /** WARNING: no value verification!!! */
@@ -1016,7 +1017,7 @@ int var_init(int argc, char **argv, params_t *p){
   if (p->seed == 0){
     p->seed=time(NULL)+1000000ul*getpid(); /* ensure a different seed even if started at the same time */
     if((p->debug)&&(p->mode!=3))
-      printf("# initializing seed=%d from time(NULL)+1000000ul*getpid()\n",p->seed);
+      printf("# initializing seed=%lld from time(NULL)+1000000ul*getpid()\n",p->seed);
     /** use `tinymt64_generate_double(&pp.tinymt)` for double [0,1] */
   }
   
@@ -1276,7 +1277,7 @@ int do_err_vecs(params_t * const p){
     /** TODO: enable external processing of observables */
     il2=read_01(p->mLe,p->file_obs, &p->line_obs, p->fobs, p->debug);
     if(il1!=il2)
-      ERROR("mismatched DET %s (line %d) and OBS %s (line %d) files!",
+      ERROR("mismatched DET %s (line %lld) and OBS %s (line %lld) files!",
 	    p->fdet,p->line_det,p->fobs,p->line_obs);
     if(p->debug&1)
       printf("read %d det/obs pairs\n",il1);		 
@@ -1329,7 +1330,7 @@ int main(int argc, char **argv){
 
   int ierr_tot=0, rounds=(int )ceil((double) p->ntot / (double) p->nvec);
   if(((p->mode == 0) || (p->mode == 1)) && (p->debug & 2))
-    printf("# ntot=%d nvec=%d will do calculation in %d rounds\n",p->ntot,p->nvec,rounds);
+    printf("# ntot=%lld nvec=%d will do calculation in %d rounds\n",p->ntot,p->nvec,rounds);
 
   switch(p->mode){
     long int synd_tot, synd_fail; /** case 0 */
@@ -1489,7 +1490,7 @@ int main(int argc, char **argv){
     if(p->finC){
       p->num_cws = nzlist_read(p->finC,p);
       if(p->debug&1)
-	printf("# %ld codewords read from %s\n",p->num_cws, p->finC);
+	printf("# %lld codewords read from %s\n",p->num_cws, p->finC);
     }
     do_LLR_dist(p->nfail, p);
     if(p->outC){
