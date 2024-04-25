@@ -31,7 +31,7 @@ params_t prm={ .nchk=0, .nvar=0, .ncws=0, .steps=50,
   .debug=1, .fdem=NULL, .fdet=NULL, .fobs=NULL, .fout="tmp", .ferr=NULL,
   .mode=0, .submode=0, .use_stdout=0, 
   .LLRmin=0, .LLRmax=0, .codewords=NULL, .num_cws=0,
-  .finH=NULL, .finL=NULL, .finG=NULL, .finP=NULL,
+  .finH=NULL, .finL=NULL, .finG=NULL, .finK=NULL, .finP=NULL,
   .finC=NULL, .outC=NULL, 
   .vP=NULL, .vLLR=NULL, .mH=NULL, .mHt=NULL,
   .mL=NULL, .mLt=NULL, .internal=0, 
@@ -976,6 +976,14 @@ int var_init(int argc, char **argv, params_t *p){
       if (p->debug&1)
 	printf("# read %s, finL=%s\n",argv[i],p->finL);
     }
+    else if (0==strncmp(argv[i],"finK=",5)){ /** `finK` logical */
+      if(strlen(argv[i])>5)
+        p->finK = argv[i]+5;
+      else
+        p->finK = argv[++i]; /**< allow space before file name */
+      if (p->debug&1)
+	printf("# read %s, finK=%s\n",argv[i],p->finK);
+    }
     else if (0==strncmp(argv[i],"finC=",5)){ /** `finC` in low-weight codeword list */
       if(strlen(argv[i])>5)
         p->finC = argv[i]+5;
@@ -1100,6 +1108,21 @@ int var_init(int argc, char **argv, params_t *p){
     if(p->mL->cols != p->nvar)
       ERROR("column number mismatch L[%d,%d] and H[%d,%d]\n",
 	    p->mL->rows, p->mL->cols, p->mH->rows, p->mH->cols);
+  }  
+
+  if(p->finK){
+    p->mK=csr_mm_read(p->finK, p->mK, 0, p->debug);
+    int ncws = p->mK->rows;
+    if(p->ncws){
+      if (ncws != p->ncws)
+	ERROR("number of codewords mismatch: K[%d,%d] and L[%d,%d]\n",
+	      p->mK->rows, p->mK->cols, p->mL->rows, p->mL->cols);
+    }
+    else
+      p->ncws = ncws;  
+    if(p->mK->cols != p->nvar)
+      ERROR("column number mismatch K[%d,%d] and H[%d,%d]\n",
+	    p->mK->rows, p->mK->cols, p->mH->rows, p->mH->cols);
   }  
 
   if(p->finG){
@@ -1531,14 +1554,15 @@ int main(int argc, char **argv){
     
   case 3: /** read in DEM file and output the H, L, G matrices and P vector */
     size = snprintf(NULL, 0, "H matrix from DEM file %s", p->fdem);
-    comment = malloc(size + 1);
+    if(!(comment = malloc(size + 1)))
+      ERROR("memory allocation");
     sprintf(comment, "H matrix from DEM file %s", p->fdem);
     if(p->debug&1)
-      printf("# writing H matrix [ %d x %d ] to \t%s%s\n",
+      printf("# writing H=Hx matrix [ %d x %d ] to \t%s%s\n",
 	     p->mH->rows, p->mH->cols, p->fout, p->use_stdout ? "\n" :"H.mmx");
     csr_mm_write(p->fout,"H.mmx",p->mH,comment);
     if(p->debug&1)
-      printf("# writing L matrix [ %d x %d ] to \t%s%s\n",
+      printf("# writing L=Lx matrix [ %d x %d ] to \t%s%s\n",
 	     p->mL->rows, p->mL->cols, p->fout, p->use_stdout ? "\n" :"L.mmx");
     comment[0]='L';
     csr_mm_write(p->fout,"L.mmx",p->mL,comment);
@@ -1552,19 +1576,37 @@ int main(int argc, char **argv){
 
     if(!p->mG){
       if(p->debug&1)
-	printf("# creating G matrix and writing to\t%s%s\n",
+	printf("# creating G=Hz matrix and writing to\t%s%s\n",
 	       p->fout, p->use_stdout ? "\n" :"G.mmx");
       p->mG = do_G_matrix(p->mHt,p->mLt,p->vLLR, p->debug);
       comment[0]='G';
     }
     else{
       size_t size2 = snprintf(NULL, 0, "G matrix from file %s", p->finG);
-      if(size2>size)
+      if(size2>size){
 	comment = realloc(comment, size2 + 1);
+	size=size2;
+      }    
       assert(comment);
       sprintf(comment, "G matrix from file %s", p->finG);
     }
     csr_mm_write(p->fout,"G.mmx",p->mG,comment);
+
+    if(!p->mK){ /** create `Lz` */
+      if(p->debug&1)
+	printf("# creating K=Lz matrix and writing to\t%s%s\n",
+	       p->fout, p->use_stdout ? "\n" :"K.mmx");
+      p->mK=Lx_for_CSS_code(p->mG,p->mH);
+      comment[0]='K';
+    }
+    else{
+      size_t size2 = snprintf(NULL, 0, "K matrix from file %s", p->finK);
+      if(size2>size)
+	if(!(comment = realloc(comment, size2 + 1)))
+	  ERROR("memory allocation");
+      sprintf(comment, "K matrix from file %s", p->finK);
+    }
+    csr_mm_write(p->fout,"K.mmx",p->mK,comment);
     
     free(comment);
     break;
