@@ -78,12 +78,34 @@ int syndrome_check(const qllr_t LLR[], const mzd_t * const syndrome,
   return 1; /** valid codeword */
 }
 
-/** @brief for given `ic` compute V to C messages */
-static inline void bp_do_VCc(const int ic, qllr_t * const mVtoC, const qllr_t * const mCtoV, const qllr_t xLLR[], 
-			    const csr_t * const H, const csr_t * const Ht, _maybe_unused const qllr_t LLR[]){  
+/** 
+ * NOTE: `message indexing conventions` 
+ * total number of messages the same as non-zero elements in `H` (or `Ht`) matrix.
+ * for `V->C` messages: `j` is index of element `v` in row `c` of `H`
+ * for `C->V` messages: `i` is index of element `c` in row `v` of `Ht`.
+ */ 
+
+/** @brief for given `ic` compute V to C messages.  WARNING: `xLLR` need to be updated just before run */
+static inline void bp_do_VCc_opt(const int ic, qllr_t * const mVtoC, const qllr_t * const mCtoV,
+			     const qllr_t xLLR[], 
+			     const csr_t * const H, const csr_t * const Ht){  
   for(int j = H->p[ic]; j < H->p[ic+1] ; j++){
     const int iv = H->i[j]; /** origin `variable` node index */
-#if 0 /** these give identical results! */
+    const int j0 = Ht->p[iv];
+    const int *beg = &(Ht->i[j0]);
+    const int *pos = (int *) bsearch (& ic, beg, Ht->p[iv+1] - j0, sizeof(int), cmpfunc);
+    int j1 = (pos-beg) + j0;
+    assert(Ht->i[j1] == ic);
+    mVtoC[j] = xLLR[iv] - mCtoV[j1];
+  }
+}
+
+/** @brief for given `ic` compute V to C messages.  
+    This version only uses bare LLR values */
+static inline void bp_do_VCc(const int ic, qllr_t * const mVtoC, const qllr_t * const mCtoV,
+			     const csr_t * const H, const csr_t * const Ht, const qllr_t LLR[]){  
+  for(int j = H->p[ic]; j < H->p[ic+1] ; j++){
+    const int iv = H->i[j]; /** origin `variable` node index */
     qllr_t msg = LLR[iv]; /** `bare LLR` need an extra parameter */
     for(int j1 = Ht->p[iv]; j1 < Ht->p[iv+1] ; j1++){
       const int ic1 = Ht->i[j1];/** aux `check` node index */
@@ -91,14 +113,6 @@ static inline void bp_do_VCc(const int ic, qllr_t * const mVtoC, const qllr_t * 
 	msg += mCtoV[j1];
     }
     mVtoC[j] = msg;
-#else /* simplified calculation using binary search */
-    const int j0 = Ht->p[iv];
-    const int *beg = &(Ht->i[j0]);
-    const int *pos = (int *) bsearch (& ic, beg, Ht->p[iv+1] - j0, sizeof(int), cmpfunc);
-    int j1 = (pos-beg) + j0;
-    assert(Ht->i[j1] == ic);
-    mVtoC[j] = xLLR[iv] - mCtoV[j1];
-#endif /* 0 */	
   }
 }
 
@@ -143,7 +157,7 @@ static inline void bp_do_CVc(const int ic, const qllr_t * const mVtoC, qllr_t * 
 		     const csr_t * const H, const csr_t * const Ht, const int sbit){  
   //  int sbit = mzd_read_bit(srow,0,ic); /** syndrome bit */
   /** TODO: optimize this loop as in `LDPC_Code::bp_decode()` of `itpp` package (`maybe`) */
-  for(int jv = H->p[ic]; jv < Ht->p[ic+1] ; jv++){
+  for(int jv = H->p[ic]; jv < H->p[ic+1] ; jv++){
     int iv=H->i[jv]; /** initial `v` node */
       
     /** find j: `Ht->p[iv]` <= `j` < `Ht->p[iv+1]` s.t. `Ht->i[j]`==`ic` */
@@ -220,8 +234,14 @@ int do_parallel_BP(qllr_t * outLLR, const mzd_t * const srow,
 
   for (int istep=1; istep <= p->steps  ; istep++){ /** main decoding cycle */
     /** C -> V messages */
+#if 1 
     for(int iv=0; iv<nvar; iv++) /** target `variable` node index */
       bp_do_CVv(iv, mesVtoC, mesCtoV, H, Ht, srow);
+#else
+    /*  WARNING: error is here! */
+    for(int ic=0; ic<nchk; ic++) /** target `variable` node index */
+      bp_do_CVc(ic, mesVtoC, mesCtoV, H, Ht, mzd_read_bit(srow,0,ic));
+#endif     
             
     for(int iv = 0; iv< nvar; iv++) /** calculate expected LLR for variable nodes */
       xLLR[iv] = bp_do_LLR(iv,mesCtoV,Ht,LLR[iv]);
@@ -255,7 +275,7 @@ int do_parallel_BP(qllr_t * outLLR, const mzd_t * const srow,
 
     /* V -> C messages */ 
     for(int ic=0; ic<nchk; ic++) /** target `check` node */
-      bp_do_VCc(ic, mesVtoC, mesCtoV, xLLR, H, Ht, LLR);
+      bp_do_VCc_opt(ic, mesVtoC, mesCtoV, xLLR, H, Ht);
     
   }
   
@@ -330,9 +350,9 @@ int do_serialC_BP(qllr_t * outLLR, const mzd_t * const srow,
       for(int ii=0; ii<nchk; ii++){      
 	int ic = perm->values[ii]; /** use the random permutation */
 	int sbit = mzd_read_bit(srow,0,ic); /** syndrome bit at `ic` */
-	//! send all V->C messages into `ic`;
-	bp_do_VCc(ic, mesVtoC, mesCtoV, xLLR, H, Ht, LLR);
-	//! send all C->V messages from `ic`;      
+	//! compute  all V->C messages into `ic`;
+	bp_do_VCc(ic, mesVtoC, mesCtoV, H, Ht, LLR);
+	//! compute all C->V messages from `ic`;      
 	bp_do_CVc(ic, mesVtoC, mesCtoV, H, Ht, sbit);
       }
 
