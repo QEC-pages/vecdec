@@ -23,9 +23,8 @@ extern "C"{
 #include  "qllr.h" 
 
 
-  typedef enum EXTR_T { TOTAL, CONV_TRIVIAL, CONV_BP, CONV_BP_AVG,
-    SUCC_TRIVIAL, SUCC_BP, SUCC_OSD0, SUCC_OSD1, SUCC_OSD2,
-    SUCC_TOT, EXTR_MAX } extr_t;
+  typedef enum EXTR_T { TOTAL, CONV_TRIVIAL, CONV_BP, CONV_BP_AVG, CONV_BP_TOT,
+    SUCC_TRIVIAL, SUCC_BP, SUCC_OSD, SUCC_TOT, EXTR_MAX } extr_t;
   
   /** various success counters */
   extern long long int cnt[EXTR_MAX];
@@ -55,6 +54,7 @@ extern "C"{
     int debug; /** `debug` information */ 
     char *finH; /** `input file` name for Hx=H (if input separately or a classical code) */
     char *finL; /** `input file` name for Lx=L (if input separately or a classical code) */
+    char *finK; /** `input file` name for Lz=K (not used much) */
     char *finG; /** `input file` name for Hz=G (must use separate input) */
     char *finP; /** `input file` name for P (if input separately or a classical code) */
     char *finC; /** `input file` name for `C` (list of non-trivial CWs for decoding) */
@@ -71,13 +71,18 @@ extern "C"{
     double *vP; /** probability vector (total of `n`) */
     qllr_t *vLLR; /** vector of LLRs (total of `n`) */
     int nzH, nzL; /** count of non-zero entries in `H` and `L` */
-    csr_t *mH; /** sparse version of H (by rows) */
+    csr_t *mH; /** sparse version of `H`=`Hx` (by rows) */
     csr_t *mHt; /** sparse version of H (by columns) */
-    csr_t *mL; /** sparse version of L (by rows) */
-    csr_t *mLt; /** sparse version of L (by columns) */
-    csr_t *mG; /** sparse version of generator matrix `G` (by rows) */
+    csr_t *mL; /** sparse version of `L`=`Lx` (by rows) */
+    csr_t *mK; /** sparse version of `K`=`Lz` (by rows) */
+    csr_t *mLt; /** sparse version of `L` (by columns) */
+    csr_t *mG; /** sparse version of generator matrix `G=Hz` (by rows) */
     /** rows of `G` orthogonal to rows of both `H` and `L` */
-    //    int maxJ;  /** memory to initially allocate for local storage */
+    /** rows of `H` orthogonal to rows of both `G` and `K` */
+    /** `rank L` = `rank K` = `k`, the number of encoded qubits.  Any non-zero linear combination of rows of `L` 
+	gives a non-zero product with (some) rows of `K` and similarly, any such combination of rows of `K` 
+	gives a non-zero product with some rows of `L` (we do not require `L Kt=Identity`) */
+    //    int maxJ;	/** memory to initially allocate for local storage */
     qllr_t LLRmin;
     qllr_t LLRmax;
     one_vec_t *codewords; /** `hash table` with found codewords */
@@ -164,6 +169,7 @@ extern "C"{
   "\t finH=[string]\t: file with parity check matrix Hx (mm or alist)\n"	\
   "\t finG=[string]\t: file with dual check matrix Hz (mm or alist)\n"	\
   "\t finL=[string]\t: file with logical dual check matrix Lx (mm or alist)\n" \
+  "\t finK=[string]\t: file with logical check matrix Lz (mm or alist)\n" \
   "\t finP=[string]\t: input file for probabilities (mm or a column of doubles)\n" \
   "\t finC=[string]\t: input file name for codewords in `nzlist` format\n" \
   "\t outC=[string]\t: output file name for codewords in `nzlist` format\n" \
@@ -219,9 +225,9 @@ extern "C"{
   "\t\t\t If 'outC' is set, write full list of CWs to this file.\n"	\
   "\t\t\t If 'finC' is set, read initial set of CWs from this file.\n"	\
   "\t\t* 3: Read in the DEM file and output the corresponding \n"	\
-  "\t\t\t H, G, and L matrices and the probability vector P.\n"		\
+  "\t\t\t H, G, L, and K matrices and the probability vector P.\n"		\
   "\t\t\t Use 'fout=' command line argument to generate file names\n"	\
-  "\t\t\t ${fout}H.mmx, ${fout}G.mmx, ${fout}L.mmx, and ${fout}P.mmx\n"	\
+  "\t\t\t ${fout}H.mmx, ${fout}G.mmx, ${fout}L.mmx, ${fout}K.mmx, and ${fout}P.mmx\n" \
   "\t\t\t with 'fout=stdout' all output is sent to 'stdout'\n"		\
   "\t debug=[integer]\t: bitmap for aux information to output (default: 1)\n" \
   "\t\t*   0: clear the entire debug bitmap to 0.\n"                    \

@@ -31,7 +31,7 @@ params_t prm={ .nchk=0, .nvar=0, .ncws=0, .steps=50,
   .debug=1, .fdem=NULL, .fdet=NULL, .fobs=NULL, .fout="tmp", .ferr=NULL,
   .mode=0, .submode=0, .use_stdout=0, 
   .LLRmin=0, .LLRmax=0, .codewords=NULL, .num_cws=0,
-  .finH=NULL, .finL=NULL, .finG=NULL, .finP=NULL,
+  .finH=NULL, .finL=NULL, .finG=NULL, .finK=NULL, .finP=NULL,
   .finC=NULL, .outC=NULL, 
   .vP=NULL, .vLLR=NULL, .mH=NULL, .mHt=NULL,
   .mL=NULL, .mLt=NULL, .internal=0, 
@@ -976,6 +976,14 @@ int var_init(int argc, char **argv, params_t *p){
       if (p->debug&1)
 	printf("# read %s, finL=%s\n",argv[i],p->finL);
     }
+    else if (0==strncmp(argv[i],"finK=",5)){ /** `finK` logical */
+      if(strlen(argv[i])>5)
+        p->finK = argv[i]+5;
+      else
+        p->finK = argv[++i]; /**< allow space before file name */
+      if (p->debug&1)
+	printf("# read %s, finK=%s\n",argv[i],p->finK);
+    }
     else if (0==strncmp(argv[i],"finC=",5)){ /** `finC` in low-weight codeword list */
       if(strlen(argv[i])>5)
         p->finC = argv[i]+5;
@@ -1102,6 +1110,21 @@ int var_init(int argc, char **argv, params_t *p){
 	    p->mL->rows, p->mL->cols, p->mH->rows, p->mH->cols);
   }  
 
+  if(p->finK){
+    p->mK=csr_mm_read(p->finK, p->mK, 0, p->debug);
+    int ncws = p->mK->rows;
+    if(p->ncws){
+      if (ncws != p->ncws)
+	ERROR("number of codewords mismatch: K[%d,%d] and L[%d,%d]\n",
+	      p->mK->rows, p->mK->cols, p->mL->rows, p->mL->cols);
+    }
+    else
+      p->ncws = ncws;  
+    if(p->mK->cols != p->nvar)
+      ERROR("column number mismatch K[%d,%d] and H[%d,%d]\n",
+	    p->mK->rows, p->mK->cols, p->mH->rows, p->mH->cols);
+  }  
+
   if(p->finG){
     p->mG=csr_mm_read(p->finG, p->mG, 0, p->debug);
     if(p->mG->cols != p->nvar)
@@ -1154,12 +1177,14 @@ int var_init(int argc, char **argv, params_t *p){
 	     p->submode & 4 ? (p->submode & 8 ? "serial-V" : "serial-C") : "parallel",
 	     (((p->submode & 3)==3) || ((p->submode & 3)==0)) ? "both regular and average" :
 	     p->submode & 2 ? "average" : "instantaneous");
+      if(((p->submode & 4)==0) && (p->submode & 8))
+	ERROR("mode=%d submode=%d invalid (add 4 to submode ->%d for serial-V)",p->mode,p->submode,p->submode | 4);
       if(((p->submode & 2)) || ((p->submode & 3)==0))
 	printf("# use average LLR: aLLR = %g * aLLR + %g * LLR\n",p->bpalpha,1-p->bpalpha);
       if((p->submode & 4) && (p->submode & 16))
 	printf("# randomize node order at each step");
     }
-    if ((p->submode>=32) || (p->submode & 8))
+    if ((p->submode>=32))
       ERROR(" mode=%d BP : submode='%d' currently unsupported\n", p->mode, p->submode);    
     /* fall through */
   case 0:
@@ -1452,7 +1477,7 @@ int main(int argc, char **argv){
       p->mLeT = mzd_transpose(p->mLeT,p->mLe);
       for(long long int ierr = 0; ierr < ierr_tot; ierr++){ /** cycle over errors */
 	cnt[TOTAL]++;
-	long long int succ_BP = 0;
+	int succ_BP = 0, succ_OSD = 0;
 	if(mzd_row_is_zero(p->mHeT,ierr)){
 	  //	  printf("ierr=%d of tot=%d\n",ierr,ierr_tot);
 
@@ -1480,7 +1505,7 @@ int main(int argc, char **argv){
 	  mzd_t * const srow = mzd_init_window(p->mHeT, ierr,0, ierr+1,p->nchk); /* syndrome row */
 	  if(p->submode&4){ /** bit 2 is set, use serial schedule */
 	    if(p->submode&8)
-	      ERROR("serial-V schedule not implemented");
+	      succ_BP = do_serialV_BP(ans, srow, p->mH, p->mHt, p->vLLR, p);
 	    else
 	      succ_BP = do_serialC_BP(ans, srow, p->mH, p->mHt, p->vLLR, p);
 	  }
@@ -1491,22 +1516,24 @@ int main(int argc, char **argv){
 	      if(p->debug&128)
 		printf("ierr=%lld starting OSD lerr=%d maxosd=%d\n",ierr,p->lerr, p->maxosd);
 	      do_osd_start(ans,srow,p->mH,p);
-	      succ_BP=1;
+	      succ_OSD=1;
 	    }
 
-	  if(succ_BP){              /** `convergence success`  */
+	  if((succ_BP)||(succ_OSD)){              /** `convergence success`  */
 	    mzd_t * const obsrow = mzd_init_window(p->mLeT, ierr,0, ierr+1,p->mLeT->ncols);
 	    if(syndrome_check(ans, obsrow, p->mL, p)){
-	      cnt[SUCC_BP]++;
 	      cnt[SUCC_TOT]++;
+	      if(succ_BP)
+		cnt[SUCC_BP]++;
+	      else
+		cnt[SUCC_OSD]++;
 	    }
 	    mzd_free(obsrow);
 	  }
 	  mzd_free(srow);
-	  //#endif 
 	  
 	  if(p->debug&16)
-	    printf("i=%lld of %lld succ=%lld\n",ierr,ierr_tot,succ_BP);
+	    printf("i=%lld of %lld succ=%d\n",ierr,ierr_tot,succ_BP);
 	}
 	if((p->nfail) && cnt[TOTAL]-cnt[SUCC_TOT] >= p->nfail)
 	  break;
@@ -1531,14 +1558,15 @@ int main(int argc, char **argv){
     
   case 3: /** read in DEM file and output the H, L, G matrices and P vector */
     size = snprintf(NULL, 0, "H matrix from DEM file %s", p->fdem);
-    comment = malloc(size + 1);
+    if(!(comment = malloc(size + 1)))
+      ERROR("memory allocation");
     sprintf(comment, "H matrix from DEM file %s", p->fdem);
     if(p->debug&1)
-      printf("# writing H matrix [ %d x %d ] to \t%s%s\n",
+      printf("# writing H=Hx matrix [ %d x %d ] to \t%s%s\n",
 	     p->mH->rows, p->mH->cols, p->fout, p->use_stdout ? "\n" :"H.mmx");
     csr_mm_write(p->fout,"H.mmx",p->mH,comment);
     if(p->debug&1)
-      printf("# writing L matrix [ %d x %d ] to \t%s%s\n",
+      printf("# writing L=Lx matrix [ %d x %d ] to \t%s%s\n",
 	     p->mL->rows, p->mL->cols, p->fout, p->use_stdout ? "\n" :"L.mmx");
     comment[0]='L';
     csr_mm_write(p->fout,"L.mmx",p->mL,comment);
@@ -1552,19 +1580,37 @@ int main(int argc, char **argv){
 
     if(!p->mG){
       if(p->debug&1)
-	printf("# creating G matrix and writing to\t%s%s\n",
+	printf("# creating G=Hz matrix and writing to\t%s%s\n",
 	       p->fout, p->use_stdout ? "\n" :"G.mmx");
       p->mG = do_G_matrix(p->mHt,p->mLt,p->vLLR, p->debug);
       comment[0]='G';
     }
     else{
       size_t size2 = snprintf(NULL, 0, "G matrix from file %s", p->finG);
-      if(size2>size)
+      if(size2>size){
 	comment = realloc(comment, size2 + 1);
+	size=size2;
+      }    
       assert(comment);
       sprintf(comment, "G matrix from file %s", p->finG);
     }
     csr_mm_write(p->fout,"G.mmx",p->mG,comment);
+
+    if(!p->mK){ /** create `Lz` */
+      if(p->debug&1)
+	printf("# creating K=Lz matrix and writing to\t%s%s\n",
+	       p->fout, p->use_stdout ? "\n" :"K.mmx");
+      p->mK=Lx_for_CSS_code(p->mG,p->mH);
+      comment[0]='K';
+    }
+    else{
+      size_t size2 = snprintf(NULL, 0, "K matrix from file %s", p->finK);
+      if(size2>size)
+	if(!(comment = realloc(comment, size2 + 1)))
+	  ERROR("memory allocation");
+      sprintf(comment, "K matrix from file %s", p->finK);
+    }
+    csr_mm_write(p->fout,"K.mmx",p->mK,comment);
     
     free(comment);
     break;

@@ -161,7 +161,64 @@ generated errors, e.g., using the command-line arguments
 
 ## BP decoder 
 
-Activate it with the command-line parameters `mode=1`.
+Activate it with the command-line parameters `mode=1`.  Several
+variants of the BP decoder are implemented; these are controlled by
+the `submode` bitmap, and also by parameters `bpalpha`, `bpretry`,
+`lerr`, and `maxosd`.
+
+### submode bitmap values 
+
+The `submode` bitmap is specified after a decimal point in the mode
+parameter, e.g., `mode=1.12` has `submode=12=2+4+8`, which corresponds
+to set bits `1`, `2`, and `3`.  As detailed below, this gives `serial-V`
+BP schedule based on `average LLR`.
+
+- bit `0` in the bitmap controls the use of regular (instantaneous)
+  LLR to check the convergence.  Namely, when bit `0` is set,
+  instantaneous LLR will be used.
+  
+- bit `1` controls the use of average LLR to check the convergence.
+
+  When both bit `0` and bit `1` are sets, both sets of LLR values will
+  be computed and used sequentially after every round of BP to check
+  the convergence.  For convenience, when `neither` bit `0` nor bit
+  `1` is set, both sets of LLR values will be computed and used.
+  
+- when bit `2` is set, `serial` BP update schedule is used, otherwise
+  `parallel` schedule.  Additional options for `serial` schedule are
+  set by bits `3` and `4` (these only have effect with serial BP
+  schedule, i.e., when bit `2` is set):
+  - when bit `3` is set, `serial-V` order is selected, otherwise `serial-C`
+  - when bit `4` is set, node randomization is done at every round, as
+    opposed to once per run with a given syndrome vector.
+	
+### additional parameters affecting BP 
+
+- parameter `bpalpha` (allowed range from 0.0 to 1.0; the default
+  value is `0.5`) sets the coefficient for calculating average LLR
+  values.  Smaller values correspond to shorter memory; setting
+  `bpalpha=0` gives the same result at instantaneous LLR.
+
+- parameter `bpretry` (integer, default value `1`, do not retry)
+  allows to repeat BP several times using different node permutation.
+  The prescribed number of attempts is made until a solution which
+  satisfies the syndrome is found.  This is useless with the
+  `parallel` schedule (TODO: randomization of prior probabilities).
+  
+- the use of optional ordered-statistics decoding (OSD) after BP
+  failed to converge is controlled by the parameters `lerr` (default
+  `-1`) and `maxosd` (default `100`).  With OSD, the variable nodes
+  are sorted by decreasing error probability (according to BP), and
+  Gauss elimination is used to find valid error vectors.  With
+  `lerr=0`, the unique solution corresponds to all-zero information
+  set, with `lerr=1`, in addition to all-zero information set,
+  information sets with a single non-zero bit are also checked, and
+  the minimum-weight vector is selected; with `lerr=2` up to two
+  non-zero bits are selected, etc.  When `maxosd` parameter is
+  non-zero, the search with multiple non-zero information bits is
+  restricted to this range of columns.
+
+### Quantized LLR and `min-sum` vs. `sum-product` BP updates
 
 When the program is compiled with `USE_QLLR` (the default), parameters
 of integer-based Quantized LLR module can be set using `qllr#=ubt`,
@@ -169,12 +226,13 @@ where `#` can be 1, 2, or 3.  By default, the recommended values
 `qllr1=12 qllr2=300 qllr3=7` are used.
 
 The power `1<<qllr1` determines how integral LLRs relate to real LLRs
-(`to_double=(1<<qllr1)*int_llr`).  Table resolution is `2^(-(qllr1-qllr3))`.
-The parameter `qllr2` is the number of entries in a table for LLR
-operations.  With `qllr2=0` (no table), a `Min-Sum` algorithm is used,
-otherwise a `Sum-Product` algorithm.
+(`to_double=(1<<qllr1)*int_llr`).  Table resolution is
+`2^(-(qllr1-qllr3))`.  The parameter `qllr2` is the number of entries
+in a table for LLR operations.  With `qllr2=0` (no table), the
+`Sum-Product` algorithm used in the program effectively reduces to a
+`Min-Sum` algorithm.
 
-## LER estimator
+## LER and code distance estimator
 
 This section describes operation with the command-line switch `mode=2`.
 
@@ -188,6 +246,10 @@ is not too large.
 In fact, right now it just tries to find the single most likely codeword $c$ and
 outputs an estimate of the corresponding contribution to the logical error
 probability, $$\prod_{i\in \mathop{\rm supp}c} 2[ p_i(1-p_i)]^{1/2}.$$
+
+The third column in the output is the (upper bound on the) code
+distance.  This is particularly useful if you want to compare the
+circuit distance with that of the original code.
 
 To speed up the distance calculation, you can use the parameter `dmin`
 (by default, `dmin=0`).  When non-zero, if a code word of weight `w`
@@ -232,70 +294,82 @@ You can generate the list of supported command line arguments by running
 ```bash
 ./vecdec:  vecdec - vectorized decoder and LER estimator
   usage: ./vecdec param=value [[param=value] ... ]
-         Command line arguments are processed in the order given.
-         Supported parameters:
-         --help         : give this help (also '-h' or just 'help')
-         --morehelp     : give more help
-         fdem=[string]  : name of the input file with detector error model
-         finH=[string]  : file with parity check matrix Hx (mm or alist)
-         finG=[string]  : file with dual check matrix Hz (mm or alist)
-         finL=[string]  : file with logical dual check matrix Lx (mm or alist)
-         finP=[string]  : input file for probabilities (mm or a column of doubles)
-         finC=[string]  : input file name for codewords in `nzlist` format
-         outC=[string]  : output file name for codewords in `nzlist` format
-                         (if same as finC, the file will be updated)
-         useP=[double]  : fixed probability value (override values in DEM file)
-                 for a quantum code specify 'fdem' OR 'finH' and ( 'finL' OR 'finG' );
-                 for classical just 'finH' (and optionally the dual matrix 'finL')
-         ferr=[string]  : input file with error vectors (01 format)
-         fdet=[string]  : input file with detector events (01 format)
-         fobs=[string]  : input file with observables (01 matching lines in fdet)
-                 specify either 'ferr' OR a pair of 'ferr' and 'fdet' (or none for internal)
-         fout=[string]  : header for output file names ('tmp', see 'mode=3')
-                 (space is OK in front of file names to enable shell completion)
-         steps=[integer]        : num of RIS or BP decoding steps (default: 50)
-         lerr =[integer]        : OSD search level (0, only implemented with `mode=0`)
-         swait=[integer]        : Gauss steps w/o new errors to stop (0, do not stop)
-         nvec =[integer]        : max vector size for decoding (default: 1024)
-                         (list size for distance or energy calculations)
-         ntot =[integer]        : total syndromes to generate (default: 1)
-         nfail=[integer]        : total fails to terminate (0, do not terminate)
-         seed= [integer]        : RNG seed or use time(NULL) if 0 (default)
-         qllr1=[integer]        : if 'USE_QLLR' is set, parameter 'd1' (12)
-         qllr2=[integer]        : if 'USE_QLLR' is set, parameter 'd2' (300)
-         qllr3=[integer]        : if 'USE_QLLR' is set, parameter 'd3' (7)
-                 These are used to speed-up LLR calculations, see 'qllr.h'
-                 Use 'qllr2=0' for min-sum.
-         mode=int[.int] : operation mode[.submode] (default: 0.0)
-                * 0: use basic vectorized (random information set) decoder
-                         read detector events from file 'fdet' if given, otherwise
-                         generate 'ntot' detector events and matching observable flips;
-                         decode in chunks of size 'nvec'.
-                         Read observable flips from file 'fobs' if given
-                * 1: Belief Propagation decoder
-                         .0 parallel BP using LLR and average LLR
-                         .1 parallel BP using only LLR
-                * 2: generate most likely fault vectors, estimate Prob(Fail).
-                         Use up to 'steps' random information set (RIS) decoding steps
-                         unless no new fault vectors have been found for 'swait' steps.
-                         Keep vectors of weight up to 'nfail' above min weight found.
-                         Generate up to 'ntot' unique min-energy fault vectors.
-                         (if the corresponding parameters are set to non-zero values)
-                         If 'outC' is set, write full list of CWs to this file.
-                         If 'finC' is set, read initial set of CWs from this file.
-                * 3: Read in the DEM file and output the corresponding
-                         H, G, and L matrices and the probability vector P.
-                         Use 'fout=' command line argument to generate file names
-                         ${fout}H.mmx, ${fout}G.mmx, ${fout}L.mmx, and ${fout}P.mmx
-                         with 'fout=stdout' all output is sent to 'stdout'
-         debug=[integer]        : bitmap for aux information to output (default: 1)
-                *   0: clear the entire debug bitmap to 0.
-                *   1: output misc general info (on by default)
-                *   2: output matrices for verification
-                         see the source code for more options
-         See program documentation for input file syntax.
-         Multiple `debug` parameters are XOR combined except for 0.
-         Use debug=0 as the 1st argument to suppress all debug messages.
+	 Command line arguments are processed in the order given.
+	 Supported parameters:
+	 --help		: give this help (also '-h' or just 'help')
+	 --morehelp	: give more help
+	 fdem=[string]	: name of the input file with detector error model
+	 finH=[string]	: file with parity check matrix Hx (mm or alist)
+	 finG=[string]	: file with dual check matrix Hz (mm or alist)
+	 finL=[string]	: file with logical dual check matrix Lx (mm or alist)
+	 finK=[string]	: file with logical check matrix Lz (mm or alist)
+	 finP=[string]	: input file for probabilities (mm or a column of doubles)
+	 finC=[string]	: input file name for codewords in `nzlist` format
+	 outC=[string]	: output file name for codewords in `nzlist` format
+			 (if same as finC, the file will be updated)
+	 useP=[double]	: fixed probability value (override values in DEM file)
+		 for a quantum code specify 'fdem' OR 'finH' and ( 'finL' OR 'finG' );
+		 for classical just 'finH' (and optionally the dual matrix 'finL')
+	 ferr=[string]	: input file with error vectors (01 format)
+	 fdet=[string]	: input file with detector events (01 format)
+	 fobs=[string]	: input file with observables (01 matching lines in fdet)
+		 specify either 'ferr' OR a pair of 'ferr' and 'fdet' (or none for internal)
+	 fout=[string]	: header for output file names ('tmp', see 'mode=3')
+		 (space is OK in front of file names to enable shell completion)
+	 steps=[integer]	: num of RIS or BP decoding steps (default: 50)
+	 lerr =[integer]	: OSD search level (-1, only implemented with `mode=0`, `1`)
+	 maxosd=[integer]	: max column for OSD2 and above (100)
+	 bpalpha=[float]	: average LLR scaling coefficient for BP (default 0.5)
+	 bpretry=[integer]	: retry BP up to this many times per syndrome (1)
+	 swait=[integer]	: Gauss steps w/o new errors to stop (0, do not stop)
+	 nvec =[integer]	: max vector size for decoding (default: 1024)
+			 (list size for distance or energy calculations)
+	 ntot =[long long int]	: total syndromes to generate (default: 1)
+	 nfail=[long long int]	: total fails to terminate (0, do not terminate)
+	 dmin=[integer]	: terminate distance calculation immediately when
+			 a vector of weight w<=dmin is found, return '-w' (default: 0)
+	 seed= [long long int]	: RNG seed or use time(NULL) if 0 (default)
+	 qllr1=[integer]	: if 'USE_QLLR' is set, parameter 'd1' (12)
+	 qllr2=[integer]	: if 'USE_QLLR' is set, parameter 'd2' (300)
+	 qllr3=[integer]	: if 'USE_QLLR' is set, parameter 'd3' (7)
+		 These are used to speed-up LLR calculations, see 'qllr.h'
+		 Use 'qllr2=0' for min-sum.
+	 mode=int[.int]	: operation mode[.submode] (default: 0.0)
+		* 0: use basic vectorized (random information set) decoder
+			 read detector events from file 'fdet' if given, otherwise
+			 generate 'ntot' detector events and matching observable flips;
+			 decode in chunks of size 'nvec'. 
+			 Read observable flips from file 'fobs' if given
+		* 1: Belief Propagation decoder.  By default (no submode specified)
+			   parallel BP using both regular and average LLRs.
+			   Other options are selected by 'submode' bitmap: 
+			 .1 (bit 0) use regular LLR
+			 .2 (bit 1) use average LLR - these take precendence
+			 .4 (bit 2) use serial BP schedule (not parallel)
+			 .8 (bit 3) with serial, use V-based order (not C-based)
+			 .16 (bit 4) with serial, randomize node order in each round 
+			     (by default randomize only once per run)
+		* 2: generate most likely fault vectors, estimate Prob(Fail).
+			 Use up to 'steps' random information set (RIS) decoding steps
+			 unless no new fault vectors have been found for 'swait' steps.
+			 Keep vectors of weight up to 'nfail' above min weight found.
+			 Generate up to 'ntot' unique min-energy fault vectors.
+			 (if the corresponding parameters are set to non-zero values)
+			 If 'outC' is set, write full list of CWs to this file.
+			 If 'finC' is set, read initial set of CWs from this file.
+		* 3: Read in the DEM file and output the corresponding 
+			 H, G, L, and K matrices and the probability vector P.
+			 Use 'fout=' command line argument to generate file names
+			 ${fout}H.mmx, ${fout}G.mmx, ${fout}L.mmx, ${fout}K.mmx, and ${fout}P.mmx
+			 with 'fout=stdout' all output is sent to 'stdout'
+	 debug=[integer]	: bitmap for aux information to output (default: 1)
+		*   0: clear the entire debug bitmap to 0.
+		*   1: output misc general info (on by default)
+		*   2: output matrices for verification
+			 see the source code for more options
+	 See program documentation for input file syntax.
+	 Multiple 'debug' parameters are XOR combined except for 0.
+	 Use debug=0 as the 1st argument to suppress all debug messages.
 ```
 
 ## Libraries 
