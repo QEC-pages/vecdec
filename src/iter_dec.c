@@ -456,7 +456,7 @@ int do_serialV_BP(qllr_t * outLLR, const mzd_t * const srow,
   int succ_BP=0;
   /** convenience setting: by default, use both LLR and average LLR */
   const int submode = ((p->submode & 3) == 0) ? (p->submode | 3) : p->submode;
-
+ 
   if((submode & 3) == 1) /** use xLLR only */
     xLLR = outLLR; /** return soft vector of LLR here */
   else{                /** use aLLR or both LLR and aLLR */

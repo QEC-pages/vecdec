@@ -54,7 +54,7 @@ extern "C"{
     int debug; /** `debug` information */ 
     char *finH; /** `input file` name for Hx=H (if input separately or a classical code) */
     char *finL; /** `input file` name for Lx=L (if input separately or a classical code) */
-    char *finK; /** `input file` name for Lz=K */
+    char *finK; /** `input file` name for Lz=K (not used much) */
     char *finG; /** `input file` name for Hz=G (must use separate input) */
     char *finP; /** `input file` name for P (if input separately or a classical code) */
     char *finC; /** `input file` name for `C` (list of non-trivial CWs for decoding) */
@@ -75,7 +75,7 @@ extern "C"{
     csr_t *mHt; /** sparse version of H (by columns) */
     csr_t *mL; /** sparse version of `L`=`Lx` (by rows) */
     csr_t *mK; /** sparse version of `K`=`Lz` (by rows) */
-    csr_t *mLt; /** sparse version of L (by columns) */
+    csr_t *mLt; /** sparse version of `L` (by columns) */
     csr_t *mG; /** sparse version of generator matrix `G=Hz` (by rows) */
     /** rows of `G` orthogonal to rows of both `H` and `L` */
     /** rows of `H` orthogonal to rows of both `G` and `K` */
@@ -225,9 +225,9 @@ extern "C"{
   "\t\t\t If 'outC' is set, write full list of CWs to this file.\n"	\
   "\t\t\t If 'finC' is set, read initial set of CWs from this file.\n"	\
   "\t\t* 3: Read in the DEM file and output the corresponding \n"	\
-  "\t\t\t H, G, and L matrices and the probability vector P.\n"		\
+  "\t\t\t H, G, L, and K matrices and the probability vector P.\n"		\
   "\t\t\t Use 'fout=' command line argument to generate file names\n"	\
-  "\t\t\t ${fout}H.mmx, ${fout}G.mmx, ${fout}L.mmx, and ${fout}P.mmx\n"	\
+  "\t\t\t ${fout}H.mmx, ${fout}G.mmx, ${fout}L.mmx, ${fout}K.mmx, and ${fout}P.mmx\n" \
   "\t\t\t with 'fout=stdout' all output is sent to 'stdout'\n"		\
   "\t debug=[integer]\t: bitmap for aux information to output (default: 1)\n" \
   "\t\t*   0: clear the entire debug bitmap to 0.\n"                    \
