@@ -23,7 +23,7 @@ extern "C"{
 #include  "qllr.h" 
 
 
-  typedef enum EXTR_T { TOTAL, CONV_TRIVIAL, CONV_BP, CONV_BP_AVG,
+  typedef enum EXTR_T { TOTAL, CONV_TRIVIAL, CONV_BP, CONV_BP_AVG, CONV_BP_TOT,
     SUCC_TRIVIAL, SUCC_BP, SUCC_OSD, SUCC_TOT, EXTR_MAX } extr_t;
   
   /** various success counters */

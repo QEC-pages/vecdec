@@ -1177,12 +1177,14 @@ int var_init(int argc, char **argv, params_t *p){
 	     p->submode & 4 ? (p->submode & 8 ? "serial-V" : "serial-C") : "parallel",
 	     (((p->submode & 3)==3) || ((p->submode & 3)==0)) ? "both regular and average" :
 	     p->submode & 2 ? "average" : "instantaneous");
+      if(((p->submode & 4)==0) && (p->submode & 8))
+	ERROR("mode=%d submode=%d invalid (add 4 to submode ->%d for serial-V)",p->mode,p->submode,p->submode | 4);
       if(((p->submode & 2)) || ((p->submode & 3)==0))
 	printf("# use average LLR: aLLR = %g * aLLR + %g * LLR\n",p->bpalpha,1-p->bpalpha);
       if((p->submode & 4) && (p->submode & 16))
 	printf("# randomize node order at each step");
     }
-    if ((p->submode>=32) || (p->submode & 8))
+    if ((p->submode>=32))
       ERROR(" mode=%d BP : submode='%d' currently unsupported\n", p->mode, p->submode);    
     /* fall through */
   case 0:
@@ -1475,7 +1477,7 @@ int main(int argc, char **argv){
       p->mLeT = mzd_transpose(p->mLeT,p->mLe);
       for(long long int ierr = 0; ierr < ierr_tot; ierr++){ /** cycle over errors */
 	cnt[TOTAL]++;
-	long long int succ_BP = 0;
+	int succ_BP = 0, succ_OSD = 0;
 	if(mzd_row_is_zero(p->mHeT,ierr)){
 	  //	  printf("ierr=%d of tot=%d\n",ierr,ierr_tot);
 
@@ -1503,7 +1505,7 @@ int main(int argc, char **argv){
 	  mzd_t * const srow = mzd_init_window(p->mHeT, ierr,0, ierr+1,p->nchk); /* syndrome row */
 	  if(p->submode&4){ /** bit 2 is set, use serial schedule */
 	    if(p->submode&8)
-	      ERROR("serial-V schedule not implemented");
+	      succ_BP = do_serialV_BP(ans, srow, p->mH, p->mHt, p->vLLR, p);
 	    else
 	      succ_BP = do_serialC_BP(ans, srow, p->mH, p->mHt, p->vLLR, p);
 	  }
@@ -1514,22 +1516,24 @@ int main(int argc, char **argv){
 	      if(p->debug&128)
 		printf("ierr=%lld starting OSD lerr=%d maxosd=%d\n",ierr,p->lerr, p->maxosd);
 	      do_osd_start(ans,srow,p->mH,p);
-	      succ_BP=1;
+	      succ_OSD=1;
 	    }
 
-	  if(succ_BP){              /** `convergence success`  */
+	  if((succ_BP)||(succ_OSD)){              /** `convergence success`  */
 	    mzd_t * const obsrow = mzd_init_window(p->mLeT, ierr,0, ierr+1,p->mLeT->ncols);
 	    if(syndrome_check(ans, obsrow, p->mL, p)){
-	      cnt[SUCC_BP]++;
 	      cnt[SUCC_TOT]++;
+	      if(succ_BP)
+		cnt[SUCC_BP]++;
+	      else
+		cnt[SUCC_OSD]++;
 	    }
 	    mzd_free(obsrow);
 	  }
 	  mzd_free(srow);
-	  //#endif 
 	  
 	  if(p->debug&16)
-	    printf("i=%lld of %lld succ=%lld\n",ierr,ierr_tot,succ_BP);
+	    printf("i=%lld of %lld succ=%d\n",ierr,ierr_tot,succ_BP);
 	}
 	if((p->nfail) && cnt[TOTAL]-cnt[SUCC_TOT] >= p->nfail)
 	  break;

@@ -28,21 +28,24 @@
 
 void cnt_out(int print_banner){
   if(print_banner)
-    printf("# FAIL_FRAC TOTAL CONV_TRIVIAL CONV_BP CONV_BP_AVG SUCC_TRIVIAL SUCC_BP SUCC_TOT\n");
-  printf(" %g %lld %lld %lld %lld %lld %lld %lld\n",
-	 (double ) (cnt[TOTAL]-cnt[SUCC_TOT])/cnt[TOTAL],
-	 cnt[TOTAL], cnt[CONV_TRIVIAL],cnt[CONV_BP], cnt[CONV_BP_AVG],
-	 cnt[SUCC_TRIVIAL], cnt[SUCC_BP], cnt[SUCC_TOT]);
+    printf("# FAIL_FRAC TOTAL  C_TRIVIAL S_TRIVIAL  C_BP C_BP_AVG C_BP_TOT S_BP   S_OSD S_TOT\n");
+  printf(" %10g %lld  %lld %lld      %lld %lld %lld %lld  %lld %lld\n",
+	 (double ) (cnt[TOTAL]-cnt[SUCC_TOT])/cnt[TOTAL],cnt[TOTAL],
+	 cnt[CONV_TRIVIAL], cnt[SUCC_TRIVIAL],
+	 cnt[CONV_BP], cnt[CONV_BP_AVG], cnt[CONV_BP_TOT], cnt[SUCC_BP],
+	 cnt[SUCC_OSD], cnt[SUCC_TOT]);
 }
 
-void cnt_update(extr_t which, int iteration){
+void cnt_update(extr_t which, int istep){
   const long long int max = (LLONG_MAX >> 3);
   cnt[which]++;
-  iter1[which]+=iteration;
-  iter2[which]+=iteration*iteration;
+  if((which == CONV_BP) || (which == CONV_BP_AVG))
+    cnt[CONV_BP_TOT]++;
+  iter1[which]+=abs(istep);
+  iter2[which]+=istep*istep;
   if((cnt[which] > max) ||(iter1[which] > max) || (iter2[which]>max)){
     cnt_out(1);
-    ERROR("too many iterations\n"); 
+    ERROR("too many steps\n"); 
   }
 }
 
@@ -115,6 +118,29 @@ static inline void bp_do_VCc(const int ic, qllr_t * const mVtoC, const qllr_t * 
     mVtoC[j] = msg;
   }
 }
+
+/** @brief for given `iv` compute V to C messages.  
+    This version only uses bare LLR values */
+static inline void bp_do_VCv(const int iv, qllr_t * const mVtoC, const qllr_t * const mCtoV,
+			     const csr_t * const H, const csr_t * const Ht, const qllr_t LLR){
+  for(int jv = Ht->p[iv]; jv < Ht->p[iv+1]; jv++){
+    const int ic = Ht->i[jv]; /** destination `check` node index */
+
+    const int j0 = H->p[ic];
+    const int *beg = &(H->i[j0]);
+    const int *pos = (int *) bsearch (& iv, beg, H->p[ic+1] - j0, sizeof(int), cmpfunc);
+    int j = (pos-beg) + j0;
+    assert((iv == H->i[j]) && (j< H->p[ic+1]));    
+    qllr_t msg = LLR; /** `bare LLR` at `iv` need an extra parameter */
+    for(int j1 = Ht->p[iv]; j1 < Ht->p[iv+1] ; j1++){
+      const int ic1 = Ht->i[j1];/** aux `check` node index */
+      if(ic1 != ic)
+	msg += mCtoV[j1];
+    }
+    mVtoC[j] = msg;
+  }
+}
+
 
 /** @brief init all V->C messages to bare LLR */
 static inline void bp_init_VC(qllr_t mesVtoC[], const csr_t * const H, const qllr_t LLR[]){
@@ -210,7 +236,7 @@ int do_parallel_BP(qllr_t * outLLR, const mzd_t * const srow,
 		   const csr_t * const H, const csr_t * const Ht,
 		   const qllr_t LLR[], const params_t * const p){
   assert(outLLR != NULL);
-  const int nchk = p->nchk; /** number of check nodes */
+  _maybe_unused const int nchk = p->nchk; /** number of check nodes */
   const int nvar = p->nvar;     /** number of variable nodes */
   const int nz = p->mH->p[p->nchk]; /** number of messages */
   qllr_t *mesVtoC = malloc(nz*sizeof(qllr_t));
@@ -238,8 +264,7 @@ int do_parallel_BP(qllr_t * outLLR, const mzd_t * const srow,
     for(int iv=0; iv<nvar; iv++) /** target `variable` node index */
       bp_do_CVv(iv, mesVtoC, mesCtoV, H, Ht, srow);
 #else
-    /*  WARNING: error is here! */
-    for(int ic=0; ic<nchk; ic++) /** target `variable` node index */
+    for(int ic=0; ic<nchk; ic++) /** source `check` node index */
       bp_do_CVc(ic, mesVtoC, mesCtoV, H, Ht, mzd_read_bit(srow,0,ic));
 #endif     
             
@@ -272,10 +297,14 @@ int do_parallel_BP(qllr_t * outLLR, const mzd_t * const srow,
 	  outLLR[iv] = xLLR[iv];
       break;
     }
-
     /* V -> C messages */ 
+#if 0
     for(int ic=0; ic<nchk; ic++) /** target `check` node */
       bp_do_VCc_opt(ic, mesVtoC, mesCtoV, xLLR, H, Ht);
+#else 
+    for(int iv=0; iv<nvar; iv++) /** source  `variable` node */
+      bp_do_VCv(iv, mesVtoC, mesCtoV, H, Ht, LLR[iv]);
+#endif     
     
   }
   
@@ -344,7 +373,6 @@ int do_serialC_BP(qllr_t * outLLR, const mzd_t * const srow,
       if(p->submode & 16){
 	pivots = mzp_rand(pivots); /* LAPAC-style random node permutation */
 	perm   = perm_p(perm, pivots,0); /* actual permutation */    
-	//      if(p->debug &1)	printf("step = %d, randomizing order\n",istep);	//	mzp_out(perm);	
       }
       
       for(int ii=0; ii<nchk; ii++){      
@@ -401,6 +429,115 @@ int do_serialC_BP(qllr_t * outLLR, const mzd_t * const srow,
 
   return succ_BP;
 }
+
+
+/** @brief serial-V BP algorithm (sum-product or max-product depending on LLRs used).  
+ * 
+ * Same as `do_serialC_BP()` function above but using `variable-based` serial order: 
+ * for each `iv` do:
+ *    update C->V messages to `iv`.
+ *    update V->C messages from `iv`;
+ * 
+ * @param[out] outLLR the resulting LLR (whether converged or not)
+ * @return 0 if failed to converge or (+/- the number of steps) if converged successfully. 
+ *  
+ */
+int do_serialV_BP(qllr_t * outLLR, const mzd_t * const srow,
+		  const csr_t * const H, const csr_t * const Ht,
+		  const qllr_t LLR[], const params_t * const p){
+  assert(outLLR != NULL);
+  //  const int nchk = p->nchk; /** number of check nodes */
+  const int nvar = p->nvar;     /** number of variable nodes */
+  const int nz = p->mH->p[p->nchk]; /** number of messages */
+  qllr_t *mesVtoC = malloc(nz*sizeof(qllr_t));
+  qllr_t *mesCtoV = malloc(nz*sizeof(qllr_t));
+  if((!mesVtoC)||(!mesCtoV)) ERROR("memory allocation failed");
+  qllr_t * xLLR=NULL, *aLLR=NULL;
+  int succ_BP=0;
+  /** convenience setting: by default, use both LLR and average LLR */
+  const int submode = ((p->submode & 3) == 0) ? (p->submode | 3) : p->submode;
+
+  if((submode & 3) == 1) /** use xLLR only */
+    xLLR = outLLR; /** return soft vector of LLR here */
+  else{                /** use aLLR or both LLR and aLLR */
+    aLLR = outLLR; 
+    xLLR = calloc(nvar,sizeof(qllr_t)); /** needed for calculations in any case */
+    if(!xLLR) ERROR("memory allocation failed");
+  }
+
+  mzp_t *pivots = mzp_init(nvar); 
+  mzp_t *perm   = perm_p(NULL, pivots,0); /* actual permutation */
+
+  for (int itry=0; itry<p->bpretry; itry++){
+
+    //  if(p->debug &1)    printf("randomizing initial node order\n");
+    pivots = mzp_rand(pivots); /* LAPAC-style random node permutation */
+    perm   = perm_p(perm, pivots,0); /* actual permutation */
+    
+    /** init V->C messages to bare LLR */
+    bp_init_VC(mesVtoC,H,LLR);
+
+    for (int istep=1; istep <= p->steps  ; istep++){ /** main decoding cycle */
+      if(p->submode & 16){
+	pivots = mzp_rand(pivots); /* LAPAC-style random node permutation */
+	perm   = perm_p(perm, pivots,0); /* actual permutation */    
+      }
+      
+      for(int ii=0; ii<nvar; ii++){      
+	int iv = perm->values[ii]; /** use the random permutation */
+	
+	//! compute  all C->V messages into `iv`;
+	bp_do_CVv(iv, mesVtoC, mesCtoV, H, Ht, srow);
+	//! compute all V->C messages from `iv`;      
+	bp_do_VCv(iv, mesVtoC, mesCtoV, H, Ht, LLR[iv]);
+      }
+
+      for(int iv = 0; iv< nvar; iv++) /** calculate expected LLR for variable nodes */
+	xLLR[iv] = bp_do_LLR(iv,mesCtoV,Ht,LLR[iv]);
+    
+      if(submode&2) /** use average LLR */
+	for(int iv = 0; iv< nvar; iv++)
+	  aLLR[iv] = llr_from_dbl(p->bpalpha * dbl_from_llr(aLLR[iv]) +(1.0 - p->bpalpha) * dbl_from_llr(xLLR[iv])); 
+
+#ifndef NDEBUG    
+      if(p->debug & 8){
+	if(submode&1) /** use regular LLR */
+	  out_llr("x",p->nvar, xLLR);
+	if(submode&2)
+	  out_llr("a",p->nvar, aLLR);
+      }
+#endif
+      /** do convergence check */
+      if((submode&2) && syndrome_check(aLLR, srow,p->mH, p)){ 
+	cnt_update(CONV_BP_AVG, istep);
+	succ_BP=-istep;
+	break;
+      }
+      else if((submode&1) && syndrome_check(xLLR,srow,p->mH, p)){
+	cnt_update(CONV_BP, istep);
+	succ_BP=istep;
+	if(submode&2) /** need to copy */
+	  for(int iv=0; iv < p->nvar; iv++)
+	    outLLR[iv] = xLLR[iv];
+	break;
+      }
+    }
+    if (succ_BP)
+      break; /* from the re-try loop TODO: fix retry counters!!!!! */
+  }
+  /** clean up ********************/
+  if(submode&2)
+    free(xLLR);
+  free(mesVtoC);
+  free(mesCtoV);
+  mzp_free(perm);
+  mzp_free(pivots);
+
+  /** default value is returned */
+
+  return succ_BP;
+}
+
 
 
 /** @brief recursive part of OSD */
