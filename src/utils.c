@@ -68,7 +68,7 @@ int nzlist_w_append(FILE *f, const one_vec_t * const vec){
 }
 
 /** @brief prepare to read from an `NZLIST` file */
-FILE * nzlist_r_open(const char fnam[], long int *lineno){
+FILE * nzlist_r_open(const char fnam[], long long int *lineno){
   int cnt;
   FILE *f=fopen(fnam,"r");
   if(!f)
@@ -99,14 +99,14 @@ FILE * nzlist_r_open(const char fnam[], long int *lineno){
  * @param fnam file name for debugging purposes
  * @param[in,out] lineno pointer to current line number in the file
  * @return the pointer to the structure containing the data or NULL. */
-one_vec_t * nzlist_r_one(FILE *f, one_vec_t * vec, const char fnam[], long int *lineno){
+one_vec_t * nzlist_r_one(FILE *f, one_vec_t * vec, const char fnam[], long long int *lineno){
   assert(f!=NULL);
   if ( ferror (f)|| feof(f) )
     return NULL; /** not an actuall error */
   //  printf("%s:%ld: start nzlist_r_one() here\n", fnam, *lineno);
   int w;
   if(!fscanf(f," %d",&w)){
-    printf("%s:%ld: invalid NZLIST entry\n", fnam, *lineno);
+    printf("%s:%lld: invalid NZLIST entry\n", fnam, *lineno);
     ERROR("expected an integer");
   }
   //  printf("read w=%d from line %ld\n",w,*lineno);
@@ -123,7 +123,7 @@ one_vec_t * nzlist_r_one(FILE *f, one_vec_t * vec, const char fnam[], long int *
   vec->cnt = 1;
   for(int i=0; i<w; i++){
     if(!fscanf(f," %d ",vec->arr + i)){
-      printf("%s:%ld: invalid entry of weight w=%d\n",fnam, *lineno, w);
+      printf("%s:%lld: invalid entry of weight w=%d\n",fnam, *lineno, w);
       ERROR("expected an integer i=%d of %d",i,w);
     }    
     vec->arr[i]--; /** store as zero-based index */
@@ -131,7 +131,7 @@ one_vec_t * nzlist_r_one(FILE *f, one_vec_t * vec, const char fnam[], long int *
 
   for(int i=1; i<w; i++){ /** verify entry just read */
     if((vec->arr[i-1] < 0) || (vec->arr[i-1] >= vec->arr[i])){
-      printf("%s:%ld: invalid entry of weight w=%d\n",fnam, *lineno, w);
+      printf("%s:%lld: invalid entry of weight w=%d\n",fnam, *lineno, w);
       ERROR("expected strictly increasing positive entries");
     }   
   }

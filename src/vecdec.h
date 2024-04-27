@@ -41,6 +41,7 @@ extern "C"{
     int nvec;  /** max number of syndromes to process in one bunch (default: `16`) */
     long long int ntot;  /** total number of syndromes to generate (default: `1`) */
     long long int nfail; /** when non-zero, num of fails to terminate the run (default: `0`, do not terminate) */
+    long long int maxC; /** when non-zero, max number of codewords (default: `0`, no maximum) */
     int dmin; /** if non-zero, terminate distance calculation immediately when a vector of weight `d`<=`dmin` is found, return `-d` (default: 0) */
     int swait; /** gauss decoding steps with no vectors changed to stop (default: `0`, do not stop) */
     int lerr;  /** local search after gauss up to this weight (default: `-1`, no OSD) */
@@ -174,6 +175,7 @@ extern "C"{
   "\t finC=[string]\t: input file name for codewords in `nzlist` format\n" \
   "\t outC=[string]\t: output file name for codewords in `nzlist` format\n" \
   "\t\t\t (if same as finC, the file will be updated)\n"		\
+  "\t maxC=[long long int]\t: max number of codewords to read/write/store\n" \
   "\t useP=[double]\t: fixed probability value (override values in DEM file)\n"	\
   "\t\t for a quantum code specify 'fdem' OR 'finH' and ( 'finL' OR 'finG' );\n" \
   "\t\t for classical just 'finH' (and optionally the dual matrix 'finL')\n" \
@@ -220,8 +222,7 @@ extern "C"{
   "\t\t\t Use up to 'steps' random information set (RIS) decoding steps\n" \
   "\t\t\t unless no new fault vectors have been found for 'swait' steps.\n" \
   "\t\t\t Keep vectors of weight up to 'nfail' above min weight found.\n" \
-  "\t\t\t Generate up to 'ntot' unique min-energy fault vectors.\n"	\
-  "\t\t\t (if the corresponding parameters are set to non-zero values)\n" \
+  "\t\t\t When 'maxC' is non-zero, generate up to 'maxC' unique codewords.\n"	\
   "\t\t\t If 'outC' is set, write full list of CWs to this file.\n"	\
   "\t\t\t If 'finC' is set, read initial set of CWs from this file.\n"	\
   "\t\t* 3: Read in the DEM file and output the corresponding \n"	\

@@ -555,7 +555,7 @@ int do_osd_recurs(const int minrow, const rci_t jstart, const int lev, qllr_t vE
     if((p->nvar <= 256)&&(p->debug &512))   mzd_print_row(mE,minrow);
     for(int i=0; i<lev; i++){
       printf("E[%d]=%g  ",i,dbl_from_llr(vE[i]));
-      if((p->nvar <= 256)&&(p->debug &512))   mzd_print_row(mE,minrow);
+      if((p->nvar <= 256)&&(p->debug &512))   mzd_print_row(mE,i);
     }
     printf("\n");
   }
