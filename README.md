@@ -243,13 +243,21 @@ while the associate log-likelihood probability ratio (LLR)
 $\sum_i c_i \ln(1/p_i-1)$
 is not too large. 
 
-In fact, right now it just tries to find the single most likely codeword $c$ and
-outputs an estimate of the corresponding contribution to the logical error
-probability, $$\prod_{i\in \mathop{\rm supp}c} 2[ p_i(1-p_i)]^{1/2}.$$
-
-The third column in the output is the (upper bound on the) code
-distance.  This is particularly useful if you want to compare the
-circuit distance with that of the original code.
+To this end, it stores the list of codewords found in a hash, and
+outputs four numbers: 
+- The sum of estimated contributions to the logical error probability
+  from all codewords found, $\displaystyle\sum_c\prod_{i\in
+  \mathop{\rm supp}c} 2[ p_i(1-p_i)]^{1/2}$.  If the list of codewords
+  is large enough, this gives an upper bound on the fail probability.
+- Maximum fail probability from a single codeword (maximum term
+  contributing to the sum above).  Up to a prefactor, this gives a
+  lower bound on the fail probability.
+- Minimum weight of the codeword found.  This gives the code distance
+  (`Z`-distance for a CSS code with `H=Hx`, `G=Hz`).  This is
+  particularly useful if you want to compare the circuit distance with
+  that of the original code.
+- Number of codewords contributing to the total.  With `dW=0`, this
+  gives the total number of distinct minimum-weight codewords found.
 
 To speed up the distance calculation, you can use the parameter `dmin`
 (by default, `dmin=0`).  When non-zero, if a code word of weight `w`
@@ -263,13 +271,20 @@ that a different circuit can be studied.
 
 Additional parameters relevant for this mode: 
 
-- `finC` optional filename to read the list of codewords from (default: empty, do not read)
-- `outC` optional filename t write the full list of codewords to (default: empty, do not write)
-- `maxC` maximum number of codewords to read/write/create (default: 0, no limit)
-- `nfail` maximum weight of codewords above the minimum weight
-  (default: 0, just keep the minimum weight codewords).  **TODO:
-  rename this parameter -- right now it is shared with mode=0 and
-  mode=1 but has different meaning!**
+- `finC` optional filename to read the list of codewords from
+  (default: empty, do not read).  Notice that the energy of the
+  codewords is not stored in the file, it will be recomputed.  The
+  codewords read are verified after reading; error will result if any
+  codeword does not satisfy the orthogonality conditions, `H*c=0`,
+  `L*c!=0` (this may happen, e.g., if an incorrect file was specified).
+- `outC` optional filename t write the full list of codewords to
+  (default: empty, do not write).
+- `maxC` maximum number of codewords to read/write/create (default: `0`, no limit).
+- `dW` maximum weight of codewords above the minimum weight (default:
+  `0`, just keep the minimum weight codewords).  Setting `dW=-1`
+  suppresses the upper limit on the weight of codewords stored.
+- `dE` maximum energy of codewords above the minimum energy (default:
+  `-1`, no limit on the energy of codewords found).
 
 ## Export the matrices 
 

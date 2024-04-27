@@ -71,6 +71,10 @@ extern "C"{
     double useP; /** global error probability `overriding` values in the `DEM` file (default: 0, no override) */
     double *vP; /** probability vector (total of `n`) */
     qllr_t *vLLR; /** vector of LLRs (total of `n`) */
+    int minW; /** minimum weight of a codeword or error vector found */
+    int dW; /** weight over `minW` to keep the CW or error vector in a hash (-1: no limit; default `0`) */
+    qllr_t minE; /** minimum energy of a codeword or error vector found */
+    qllr_t dE; /** energy over `minE` to keep the CW or error vector in a hash (default: -1, no limit on `E`) */
     int nzH, nzL; /** count of non-zero entries in `H` and `L` */
     csr_t *mH; /** sparse version of `H`=`Hx` (by rows) */
     csr_t *mHt; /** sparse version of H (by columns) */
@@ -195,8 +199,11 @@ extern "C"{
   "\t\t\t (list size for distance or energy calculations)\n"		\
   "\t ntot =[long long int]\t: total syndromes to generate (default: 1)\n"	\
   "\t nfail=[long long int]\t: total fails to terminate (0, do not terminate)\n" \
+  "\t dW=[integer]\t: if 'dW>=0', may keep vectors of weight up to 'minW+dW' (0)\n" \
+  "\t dW=[double]\t: if 'dE>=0', may keep vectors of energy up to 'minE+dE'\n" \
+  "\t\t\t (default value: -1, no upper limit on energy)\n"		\
   "\t dmin=[integer]\t: terminate distance calculation immediately when\n" \
-  "\t\t\t a vector of weight w<=dmin is found, return '-w' (default: 0)\n" \
+  "\t\t\t a vector of weight 'W<=dmin' is found, return '-w' (default: 0)\n" \
   "\t seed= [long long int]\t: RNG seed or use time(NULL) if 0 (default)\n"	\
   "\t qllr1=[integer]\t: if 'USE_QLLR' is set, parameter 'd1' (12)\n"	\
   "\t qllr2=[integer]\t: if 'USE_QLLR' is set, parameter 'd2' (300)\n"	\
@@ -221,7 +228,8 @@ extern "C"{
   "\t\t* 2: generate most likely fault vectors, estimate Prob(Fail).\n"  \
   "\t\t\t Use up to 'steps' random information set (RIS) decoding steps\n" \
   "\t\t\t unless no new fault vectors have been found for 'swait' steps.\n" \
-  "\t\t\t Keep vectors of weight up to 'nfail' above min weight found.\n" \
+  "\t\t\t Keep vectors of weight up to 'dW' above min weight found.\n"	\
+  "\t\t\t       and energy up to 'dE' above min E found.\n"		\
   "\t\t\t When 'maxC' is non-zero, generate up to 'maxC' unique codewords.\n"	\
   "\t\t\t If 'outC' is set, write full list of CWs to this file.\n"	\
   "\t\t\t If 'finC' is set, read initial set of CWs from this file.\n"	\

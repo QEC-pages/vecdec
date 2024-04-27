@@ -27,6 +27,7 @@
 
 params_t prm={ .nchk=0, .nvar=0, .ncws=0, .steps=50,
   .lerr=-1, .maxosd=100, .bpalpha=0.5, .bpretry=1, .swait=0, .maxC=0,
+  .dW=0, .minW=INT_MAX, .dE=-1, .minE=INT_MAX,
   .nvec=1024, .ntot=1, .nfail=0, .seed=0, .useP=0, .dmin=0,
   .debug=1, .fdem=NULL, .fdet=NULL, .fobs=NULL, .fout="tmp", .ferr=NULL,
   .mode=0, .submode=0, .use_stdout=0, 
@@ -264,6 +265,54 @@ long long int nzlist_write(const char fnam[], const char comment[], params_t *p)
   return count;
 }
 
+/** @brief update minE and minW values using vectors from hash */
+int do_hash_min(params_t * const p){
+  /** TODO: do we want to drop codewords not satisfying the W and E bounds? */
+  for(one_vec_t *pvec = p->codewords; pvec != NULL; pvec=(one_vec_t *)(pvec->hh.next)){
+    if(p->minE > pvec->energ)
+      p->minE = pvec->energ;
+    if(p->minW > pvec->weight)
+      p->minW = pvec->weight;
+  }
+  return p->minW;
+}
+
+/** @brief Verify codewords in the hash */
+int do_hash_verify_CW(const csr_t * const mHt, const csr_t * const mLt, const params_t * const p){
+  const int k=mLt->cols;
+  const int r=mHt->cols;
+  assert(mHt->rows == mLt->rows);
+  mzd_t *vHt = mzd_init(1, r);
+  mzd_t *vLt = mzd_init(1, k);
+  one_vec_t *pvec;
+  long long int count=0;
+
+  for(pvec = p->codewords; pvec != NULL; pvec=(one_vec_t *)(pvec->hh.next)){
+    mzd_set_ui(vHt,0);
+    for(int i=0; i < pvec->weight; i++){
+      const int pos = pvec->arr[i];
+      for(int j=mHt->p[pos]; j < mHt->p[pos+1] ; j++)
+	mzd_flip_bit(vHt,0,mHt->i[j]);
+    }
+    mzd_set_ui(vLt,0);
+    for(int i=0; i < pvec->weight; i++){
+      const int pos = pvec->arr[i];
+      for(int j=mLt->p[pos]; j < mLt->p[pos+1] ; j++)
+	mzd_flip_bit(vLt,0,mLt->i[j]);
+    }
+    if((!mzd_is_zero(vHt))||(mzd_is_zero(vLt))){
+      printf("v=");
+      print_one_vec(pvec);
+      printf("v*Ht=");
+      mzd_print(vHt);
+      printf("v*Lt=");
+      mzd_print(vLt);
+      ERROR("invalid hash vector[%lld]\n",count);
+    }
+    count++;
+  }
+  return 0;
+}
 
 /** @brief using codewords in the hash, estimate fail probability */
 double do_hash_fail_prob( params_t * const p){
@@ -276,6 +325,7 @@ double do_hash_fail_prob( params_t * const p){
       print_one_vec(pvec);
   }
   /** finally calculate and output fail probability here */
+  /** TODO: use the limit on `W` and `E` (just ignore codewords outside the limit) */
   double pfail=0, pmax=0;
   int minW=p->nvar + 1;
   for(pvec = p->codewords; pvec != NULL; pvec=(one_vec_t *)(pvec->hh.next)){
@@ -319,21 +369,20 @@ one_vec_t * do_hash_check(const int ee[], int weight, params_t * const p){
     qllr_t energ=0;
     for(int i=0; i<weight; i++) 
       energ += p->vLLR[ee[i]];
-    if(p->debug & 16){
-      printf("# new vec=[");
-      for(int i=0;i<weight; i++)
-	printf("%d%s",ee[i],i+1==weight ? "]\n" : ", ");
+    if((p->dE>=0) && (energ <= p->minE + p->dE)){      
+      pvec = (one_vec_t *) malloc(sizeof(one_vec_t)+keylen);
+      if(!pvec)
+	ERROR("memory allocation failed!\n");
+      pvec->energ = energ; /** energy value */
+      pvec->weight = weight;
+      pvec->cnt = 1; /** encountered `1`st time */
+      memcpy(pvec->arr, ee, keylen);
+      HASH_ADD(hh, p->codewords, arr, keylen, pvec); /** store in the `hash` */
+      ++(p->num_cws);     /** update the counter */
     }
-    pvec = (one_vec_t *) malloc(sizeof(one_vec_t)+keylen);
-    if(!pvec)
-      ERROR("memory allocation failed!\n");
-    pvec->energ = energ; /** energy value */
-    pvec->weight = weight;
-    pvec->cnt = 1; /** encountered `1`st time */
-    memcpy(pvec->arr, ee, keylen);
-    HASH_ADD(hh, p->codewords, arr, keylen, pvec); /** store in the `hash` */
-
-    ++(p->num_cws);     /** update the counter */
+    else{
+      /** silently ignore */
+    }
   }
   return pvec;
 }
@@ -349,7 +398,9 @@ one_vec_t * do_hash_check(const int ee[], int weight, params_t * const p){
  * @param p pointer to global parameters structure
  * @return minimum `weight` of a CW found (or `-weigt` if early termination condition is reached). 
  */
-int do_LLR_dist(int dW, params_t  * const p){
+int do_LLR_dist(params_t  * const p){
+  const int dW=p->dW;
+  //  qllr_t dE=p->dE;
   /** whether to verify logical ops as a vector or individually */
   const int use_vector = p->mLt->cols >= 16 ? 1 : 0;
   if(p->nvec == 16) /** default value */
@@ -363,8 +414,6 @@ int do_LLR_dist(int dW, params_t  * const p){
   else /** just one logical op */
     mL = mzd_from_csr(NULL, p->mL);
     
-  int minW = p->nvar+1;                         /** min `weight` */ 
-  qllr_t minE = minW * p->LLRmax;            /** min `energy` */
   rci_t *ee = malloc(p->mH->cols*sizeof(rci_t)); /** actual `vector` */
   
   if((!mH) || (!ee))
@@ -436,22 +485,22 @@ int do_LLR_dist(int dW, params_t  * const p){
         /** TODO: try local search to `lerr` (if 2 or larger) */
         /** calculate the energy and compare */
         /** at this point we have `cnt` codeword indices in `ee`, and its `energ` */
-        if (cnt < minW){
-          minW=cnt;
-	  if (minW <= p->dmin){ /** early termination condition */
-	    minW = -minW; /** this distance value is of little interest; */
+        if (cnt < p->minW){
+          p->minW=cnt;
+	  if (p->minW <= p->dmin){ /** early termination condition */
+	    p->minW = - p->minW; /** this distance value is of little interest; */
 	  }
 	}
-        if (cnt <= abs(minW) + dW){ /** try to add to hashing storage */
+        if((dW>=0) && (cnt <= abs(p->minW) + dW)){ /** try to add to hashing storage */
 	  one_vec_t *ptr=do_hash_check(ee,cnt,p); 
 	  if(ptr->cnt == 1){ /** new codeword just added to hash */
 	    ichanged++; 
-	    if (ptr->energ < minE){  /** legacy code */
+	    if (ptr->energ < p->minE){  /** legacy code */
 	      if(p->debug&1)
 		printf("nz=%d cnt=%d energ=%g\n",nz,cnt,dbl_from_llr(ptr->energ));
-	      minE=ptr->energ;
+	      p->minE=ptr->energ;
 	    }
-	    if (minW<0)
+	    if (p->minW<0)
 	      goto alldone; 
           }
         }
@@ -459,7 +508,7 @@ int do_LLR_dist(int dW, params_t  * const p){
     } /** end of the dual matrix rows loop */
     if(p->debug & 16)
       printf(" round=%d of %d minE=%g minW=%d num_cws=%lld ichanged=%d iwait=%d\n",
-             ii+1, p->steps, dbl_from_llr(minE), minW, p->num_cws, ichanged, iwait);
+             ii+1, p->steps, dbl_from_llr(p->minE), p->minW, p->num_cws, ichanged, iwait);
     
     mzp_free(skip_pivs);
     
@@ -491,7 +540,7 @@ int do_LLR_dist(int dW, params_t  * const p){
     mzd_free(mL);
   mzd_free(mH);
   
-  return minW;
+  return p->minW;
 }
 
 int do_energ_verify(const qllr_t * const vE, const mzd_t * const mE, const params_t * const p){
@@ -979,6 +1028,26 @@ int var_init(int argc, char **argv, params_t *p){
       p -> useP = val;
       if (p->debug&1)
 	printf("# read %s, useP=%g\n",argv[i],p-> useP);
+    }
+    else if (sscanf(argv[i],"dE=%lg",&val)==1){ /** `dE` */
+      p -> dE = llr_from_dbl(val);
+      if (p->debug&1){
+	printf("# read %s, dE=%g\n",argv[i],dbl_from_llr(p-> dE));
+	if (p->dE < 0)
+	  printf("# no limit on error/codeword energies to store\n");
+	else
+	  printf("# setting upper limit on error/codeword energies to store\n");
+      }
+    }
+    else if (sscanf(argv[i],"dW=%d",&dbg)==1){ /** `dW` */
+      p -> dW = dbg;
+      if (p->debug&1){
+	printf("# read %s, dW=%d\n",argv[i],p-> dW);
+	if (p->dW < 0)
+	  printf("# no limit on error/codeword weight to store\n");
+	else
+	  printf("# setting upper limit 'minW+%d' on error/codeword weight to store\n",p->dW);
+      }	
     }
     else if (0==strncmp(argv[i],"fout=",5)){ /** `fout` */
       if(strlen(argv[i])>5){
@@ -1601,11 +1670,14 @@ int main(int argc, char **argv){
     if(p->finC){
       p->num_cws = nzlist_read(p->finC,p);
       if(p->debug&1)
-	printf("# %lld codewords read from %s\n",p->num_cws, p->finC);
+	printf("# %lld codewords read from %s ...",p->num_cws, p->finC);
+      do_hash_verify_CW(p->mHt, p->mLt, p);
+      if(p->debug&1)
+	printf("all verified\n");
+      do_hash_min(p); /** set values `minE` and `minW` from stored CWs */
     }
-    /** TODO: verify the codewords for validity */
-    do_LLR_dist(p->nfail, p);
-    do_hash_fail_prob(p);
+    do_LLR_dist(p);
+    do_hash_fail_prob(p); /** output results */
     if(p->outC){
       char * name;
       if(p->fdem)
