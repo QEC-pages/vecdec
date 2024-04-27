@@ -27,7 +27,7 @@
 
 params_t prm={ .nchk=0, .nvar=0, .ncws=0, .steps=50,
   .lerr=-1, .maxosd=100, .bpalpha=0.5, .bpretry=1, .swait=0, .maxC=0,
-  .dW=0, .minW=INT_MAX, .dE=-1, .minE=INT_MAX,
+  .dW=0, .minW=INT_MAX, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
   .nvec=1024, .ntot=1, .nfail=0, .seed=0, .useP=0, .dmin=0,
   .debug=1, .fdem=NULL, .fdet=NULL, .fobs=NULL, .fout="tmp", .ferr=NULL,
   .mode=0, .submode=0, .use_stdout=0, 
@@ -277,14 +277,19 @@ int do_hash_min(params_t * const p){
   return p->minW;
 }
 
-/** @brief Verify codewords in the hash */
+/** @brief Verify codewords `cz` in the hash.  Valid `c` satisfies `c*Ht=0` and `c*Lt!=0`.
+ * @param mHt matrix `H=Hx` (transposed)
+ * @param mLt matrix `L=Lx` (transposed) or `NULL` to skip the second part of the check.
+ *  
+ */
 int do_hash_verify_CW(const csr_t * const mHt, const csr_t * const mLt, const params_t * const p){
-  const int k=mLt->cols;
+  const int k= mLt!=NULL ? mLt->cols : 0;
   const int r=mHt->cols;
-  assert(mHt->rows == mLt->rows);
+  if (k) assert(mHt->rows == mLt->rows);
   mzd_t *vHt = mzd_init(1, r);
-  mzd_t *vLt = mzd_init(1, k);
+  mzd_t *vLt = k>0 ? mzd_init(1, k) : NULL;
   one_vec_t *pvec;
+  int not_cw = 0; 
   long long int count=0;
 
   for(pvec = p->codewords; pvec != NULL; pvec=(one_vec_t *)(pvec->hh.next)){
@@ -294,23 +299,33 @@ int do_hash_verify_CW(const csr_t * const mHt, const csr_t * const mLt, const pa
       for(int j=mHt->p[pos]; j < mHt->p[pos+1] ; j++)
 	mzd_flip_bit(vHt,0,mHt->i[j]);
     }
-    mzd_set_ui(vLt,0);
-    for(int i=0; i < pvec->weight; i++){
-      const int pos = pvec->arr[i];
-      for(int j=mLt->p[pos]; j < mLt->p[pos+1] ; j++)
-	mzd_flip_bit(vLt,0,mLt->i[j]);
-    }
-    if((!mzd_is_zero(vHt))||(mzd_is_zero(vLt))){
+    if(k){
+      mzd_set_ui(vLt,0);
+      for(int i=0; i < pvec->weight; i++){
+	const int pos = pvec->arr[i];
+	for(int j=mLt->p[pos]; j < mLt->p[pos+1] ; j++)
+	  mzd_flip_bit(vLt,0,mLt->i[j]);
+      }
+      not_cw = mzd_is_zero(vLt); 
+    }    
+    if((!mzd_is_zero(vHt))||(not_cw)){
       printf("v=");
       print_one_vec(pvec);
       printf("v*Ht=");
       mzd_print(vHt);
-      printf("v*Lt=");
-      mzd_print(vLt);
+      if(k){
+	printf("v*Lt=");
+	mzd_print(vLt);
+      }
       ERROR("invalid hash vector[%lld]\n",count);
     }
     count++;
   }
+
+  mzd_free(vHt);
+  if (vLt) 
+    mzd_free(vLt);
+
   return 0;
 }
 
@@ -369,7 +384,7 @@ one_vec_t * do_hash_check(const int ee[], int weight, params_t * const p){
     qllr_t energ=0;
     for(int i=0; i<weight; i++) 
       energ += p->vLLR[ee[i]];
-    if((p->dE>=0) && (energ <= p->minE + p->dE)){      
+    if((p->dE < 0) || (energ <= p->minE + p->dE)){      
       pvec = (one_vec_t *) malloc(sizeof(one_vec_t)+keylen);
       if(!pvec)
 	ERROR("memory allocation failed!\n");
@@ -491,7 +506,7 @@ int do_LLR_dist(params_t  * const p){
 	    p->minW = - p->minW; /** this distance value is of little interest; */
 	  }
 	}
-        if((dW>=0) && (cnt <= abs(p->minW) + dW)){ /** try to add to hashing storage */
+        if((dW<0) || (cnt <= abs(p->minW) + dW)){ /** try to add to hashing storage */
 	  one_vec_t *ptr=do_hash_check(ee,cnt,p); 
 	  if(ptr->cnt == 1){ /** new codeword just added to hash */
 	    ichanged++; 
@@ -526,7 +541,7 @@ int do_LLR_dist(params_t  * const p){
 
   /** TODO: prefactor calculation */
 
- alldone: 
+ alldone: /** early termination label */
 
   /** clean up */
   mzp_free(perm);
@@ -1025,19 +1040,20 @@ int var_init(int argc, char **argv, params_t *p){
 	printf("# read %s, bpretry=%d\n",argv[i],p-> bpretry);
     }
     else if (sscanf(argv[i],"useP=%lg",&val)==1){ /** `useP` */
-      p -> useP = val;
+      p->useP = val;
       if (p->debug&1)
 	printf("# read %s, useP=%g\n",argv[i],p-> useP);
     }
     else if (sscanf(argv[i],"dE=%lg",&val)==1){ /** `dE` */
-      p -> dE = llr_from_dbl(val);
+      p -> dEdbl = val;
       if (p->debug&1){
-	printf("# read %s, dE=%g\n",argv[i],dbl_from_llr(p-> dE));
-	if (p->dE < 0)
+	printf("# read %s, dE=%g\n", argv[i], p->dEdbl);
+	if (p->dEdbl < 0)
 	  printf("# no limit on error/codeword energies to store\n");
 	else
 	  printf("# setting upper limit on error/codeword energies to store\n");
       }
+
     }
     else if (sscanf(argv[i],"dW=%d",&dbg)==1){ /** `dW` */
       p -> dW = dbg;
@@ -1285,6 +1301,8 @@ int var_init(int argc, char **argv, params_t *p){
     
   LLR_table = init_LLR_tables(p->d1,p->d2,p->d3);
 
+  p->dE = llr_from_dbl(p->dEdbl);
+  
   if(!p->mL){
     p->mL=csr_identity(p->nvar, p->nvar);
     p->ncws = p->nvar;

@@ -75,6 +75,7 @@ extern "C"{
     int dW; /** weight over `minW` to keep the CW or error vector in a hash (-1: no limit; default `0`) */
     qllr_t minE; /** minimum energy of a codeword or error vector found */
     qllr_t dE; /** energy over `minE` to keep the CW or error vector in a hash (default: -1, no limit on `E`) */
+    double dEdbl; /** temp value */
     int nzH, nzL; /** count of non-zero entries in `H` and `L` */
     csr_t *mH; /** sparse version of `H`=`Hx` (by rows) */
     csr_t *mHt; /** sparse version of H (by columns) */
@@ -200,7 +201,7 @@ extern "C"{
   "\t ntot =[long long int]\t: total syndromes to generate (default: 1)\n"	\
   "\t nfail=[long long int]\t: total fails to terminate (0, do not terminate)\n" \
   "\t dW=[integer]\t: if 'dW>=0', may keep vectors of weight up to 'minW+dW' (0)\n" \
-  "\t dW=[double]\t: if 'dE>=0', may keep vectors of energy up to 'minE+dE'\n" \
+  "\t dE=[double]\t: if 'dE>=0', may keep vectors of energy up to 'minE+dE'\n" \
   "\t\t\t (default value: -1, no upper limit on energy)\n"		\
   "\t dmin=[integer]\t: terminate distance calculation immediately when\n" \
   "\t\t\t a vector of weight 'W<=dmin' is found, return '-w' (default: 0)\n" \
