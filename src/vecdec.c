@@ -235,6 +235,10 @@ long long int nzlist_read(const char fnam[], params_t *p){
     if((p->maxC) && (count >= p->maxC))
       ERROR("number of entries in file %s exceeds maxC=%lld\n", p->finC, p->maxC);
 
+    qllr_t energ=0;
+    for(int i=0; i < entry->weight; i++) 
+      energ += p->vLLR[entry -> arr[i]];
+    entry->energ=energ;
       /** `assume` unique vectors stored in the file */
     const size_t keylen = entry->weight * sizeof(rci_t);
     HASH_ADD(hh, p->codewords, arr, keylen, entry); /** store in the `hash` */
@@ -429,7 +433,7 @@ int do_LLR_dist(int dW, params_t  * const p){
 	}
       }
       if(nz){ /** we got non-trivial codeword! */
-        /** TODO: try local search to `lerr` */
+        /** TODO: try local search to `lerr` (if 2 or larger) */
         /** calculate the energy and compare */
         /** at this point we have `cnt` codeword indices in `ee`, and its `energ` */
         if (cnt < minW){
