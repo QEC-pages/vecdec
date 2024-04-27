@@ -261,6 +261,16 @@ distance `d` of the original code.  In this case, if we specify
 `dmin=(d-1)`, distance calculation will be terminated immediately so
 that a different circuit can be studied.
 
+Additional parameters relevant for this mode: 
+
+- `finC` optional filename to read the list of codewords from (default: empty, do not read)
+- `outC` optional filename t write the full list of codewords to (default: empty, do not write)
+- `maxC` maximum number of codewords to read/write/create (default: 0, no limit)
+- `nfail` maximum weight of codewords above the minimum weight
+  (default: 0, just keep the minimum weight codewords).  **TODO:
+  rename this parameter -- right now it is shared with mode=0 and
+  mode=1 but has different meaning!**
+
 ## Export the matrices 
 
 This section describes operation with the command-line switch
