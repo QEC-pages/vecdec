@@ -111,7 +111,7 @@ static inline int by_energy(void *a, void *b){
   int nzlist_w_append(FILE *f, const one_vec_t * const vec);
 
 /** @brief prepare to read from an `NZLIST` file */
-  FILE * nzlist_r_open(const char fnam[], long int *lineno);
+  FILE * nzlist_r_open(const char fnam[], long long int *lineno);
 
 /** @brief read one item from an `NZLIST` file.
  * The structure in `vec` will be reallocated if necessary.
@@ -119,7 +119,7 @@ static inline int by_energy(void *a, void *b){
  * @param[in] vec structure to hold the vector or NULL.            
  * @param[in,out] lineno pointer to current line number in the file
  * @return the pointer to the structure containing the data or NULL. */
-  one_vec_t * nzlist_r_one(FILE *f, one_vec_t * vec, const char fnam[], long int *lineno);  
+  one_vec_t * nzlist_r_one(FILE *f, one_vec_t * vec, const char fnam[], long long int *lineno);  
 
   /** extra io functions ******************************************************************/
 void read_dem_file(char *fnam, void * ptrs[3], int debug);

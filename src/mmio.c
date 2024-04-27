@@ -14,6 +14,9 @@
 
 #include "mmio.h"
 
+#define _maybe_unused __attribute__((unused)) 
+
+
 int mm_read_unsymmetric_sparse(const char *fname, int *M_, int *N_, int *nz_,
                 double **val_, int **I_, int **J_)
 {
@@ -268,7 +271,7 @@ int mm_write_mtx_array_size(FILE *f, int M, int N)
 /* use when I[], J[], and val[]J, and val[] are already allocated */
 /******************************************************************/
 
-int mm_read_mtx_crd_data(FILE *f, int M, int N, int nz, int I[], int J[],
+int mm_read_mtx_crd_data(FILE *f, _maybe_unused int M, _maybe_unused int N, int nz, int I[], int J[],
         double val[], MM_typecode matcode)
 {
     int i;
@@ -463,7 +466,7 @@ char  *mm_typecode_to_str(MM_typecode matcode)
     char buffer[MM_MAX_LINE_LENGTH];
     char *types[4];
 	char *mm_strdup(const char *);
-    int error =0;
+	_maybe_unused int error =0;
 
     /* check for MTX type */
     if (mm_is_matrix(matcode)) 
