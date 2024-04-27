@@ -89,7 +89,7 @@ at once.  Specifically, for each non-pivot point `jj` it
 To speed up this version:
  - [x] copy the energy values between recursion levels
  - [x] do not copy current error vectors for last recursion level
- - [ ] introduce the maximum number of columns to do OSD with
+ - [x] introduce the maximum number of columns to do OSD with
  - [ ] perhaps introduce a cut-off by weight? 
  - [ ] use `mzd_find_pivot()` ???
 
@@ -191,12 +191,12 @@ stim sample_dem \
   - [x] serial BP (c-based): given the order of check nodes, select `c`, 
     * update messages to `c`, 
 	* update messages from `c`.
-  - [ ] serial BP (v-based)   
-  - [ ] Add error estimation
+  - [x] serial BP (v-based)   
+  - [x] Add error estimation
   - [ ] BP with randomization
   - [ ] BP with Freezing / Stabilizer inactivation (Savin et al)
   - [ ] BP version by Kung, Kuo, Lai (http://arXiv.org/abs/2305.03321) and/or Kuo, Lai (http://arXiv.org/abs/2104.13659)
-  - [ ] Add OSD
+  - [x] Add OSD
   - [ ] Stopping sets analysis?
   - [ ] Initial BP acceleration ? 
   - [ ] Other tricks from papers by Narayanan; Kuo+Lai; Roffe; Valentin Savin
@@ -217,8 +217,8 @@ stim sample_dem \
         (see the unfinished function `int star_triangle()` in `star_poly.c` )
   - [ ] Remove `w=4` degeneracies (rows of weight 4 in `G`)
   - [ ] Code for arbitrary row weight (exponentially large matrices may result)
-- [ ] List-based decoding 
-  - [ ] Write a list of codewords to a file; read it from a file.
+
+- [x] Write a list of codewords to a file; read it from a file.
         Format: given $L$, each CW $c$ (column) has associated
         syndrome vector $L c$ (a binary vector) and a list of non-zero
         positions.  **We just store non-zero positions**.  Format: 
@@ -231,4 +231,17 @@ stim sample_dem \
 		 5  2 4 8 23 61
 		 ```
 	
+
+- [ ] Better `G` and `K` matrices (use list of codewords read to generate those)
+
+- [ ] ML decoding implementation variants 
   - [ ] Given the found error vector (syndrome OK), try to add the codewords one-by-one.
+  - [ ] Given a valid error vector `e` found, use a list of vectors
+        orthogonal to H (e.g., read from file) to make MC moves,
+        compare the time spent in each syndrome.  May need to heat up
+        sometimes to get out of local minima.
+  - [ ] Similar, but use Bennett acceptance ratios to estimate free energy differences 
+  - [ ] List decoding first (e.g., for small-weight vectors, or for vectors where minE decoding may fail)
+  - [ ] During BP decoding OSD, store generated vectors in a hash to
+        estimate FE for each sector (or just make non-vector-based
+        decoding in this case).
