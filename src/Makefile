@@ -31,40 +31,8 @@ default: give_help
 vecdec: ${VECDEC_OBJS} ${VECDEC_XTRA} ${VECDEC_HDRS} Makefile 
 	${CPP} ${CFLAGS} ${VECDEC_OBJS} ${VECDEC_XTRA} -o vecdec -l m4ri
 
-#vecdec.o: vecdec.c ${VECDEC_HDRS} Makefile 
-#	@echo ${CC} ${CFLAGS} -o $@ -c $<
-#	@${CC} ${CFLAGS} -o $@ -c $<
-#	@if [ $$? -ne 0 ] ; then \
-#	  echo -e 'Do you have libm4ri_dev on your system?' ; \
-#	  echo -e "On a Mac, try to disable '-march=native' compiler switch by running" ;\
-#	  echo -e "  make vecdec OPT=-g -mtune=native -O3" ;\
-#	  echo -e " " ;\
-#	  false ; \
-#	fi
-
-vecdec.o: vecdec.c ${VECDEC_HDRS} Makefile 
-	@${CC} ${CFLAGS} -c $<
-
-iter_dec.o: iter_dec.c   ${VECDEC_HDRS} Makefile 
-	@${CC} ${CFLAGS} -c $<
-
-util_m4ri.o: util_m4ri.c ${VECDEC_HDRS} Makefile 
-	@${CC} ${CFLAGS} -c $<
-
-utils.o: utils.c         ${VECDEC_HDRS} Makefile 
-	@${CC} ${CFLAGS} -c $<
-
-tinymt64.o: tinymt64.c   ${VECDEC_HDRS} Makefile 
-	@${CC} ${CFLAGS} -c $<
-
-qllr.o: qllr.c           ${VECDEC_HDRS} Makefile 
-	@${CC} ${CFLAGS} -c $<
-
-star_poly.o: star_poly.c ${VECDEC_HDRS} Makefile 
-	@${CC} ${CFLAGS} -c $<
-
-mmio.o: mmio.c mmio.h Makefile 
-	${CC} ${CFLAGS}  -c $<
+%.o: %.c ${VECDEC_HDRS} Makefile 
+	${CC} ${CFLAGS} -c $<
 
 clean:
 	rm -f *~ *.tmp *.out *.o ../input/*~ TAGS
@@ -83,10 +51,16 @@ zip: ${src}
 	zip -9 -o vecdec.zip ${src} ../Doxyfile ../README.md
 
 give_help:
-	@echo -e "\e[36m make vecdec \e[0m" "   to compile \`vecdec\` \e[32m a simple vectorized decoder\e[0m"
-	@echo -e "\e[36m make clean \e[0m   " "to\e[31m remove\e[0m object files and such"
-	@echo -e "\e[36m make veryclean \e[0m" "also\e[31m remove\e[0m executables and zip file"
-	@echo -e "\e[36m make zip \e[0m    " "to make \e[35m \`vecdec.zip\`\e[0m file with C/C++ sources"
-	@echo -e "\e[36m make dox \e[0m    " "to run doxygen to prepare \e[35m documentation\e[0m in 'docs/' \e[31m(broken)\e[0m"
-	@echo -e "\e[36m make tags \e[0m   " "to create \e[35m TAGS\e[0m file"
+	@echo  "\e[36m make vecdec \e[0m" "   to compile \`vecdec\` \e[32m a simple vectorized decoder\e[0m"
+	@echo  "\e[36m make clean \e[0m   " "to\e[31m remove\e[0m object files and such"
+	@echo  "\e[36m make veryclean \e[0m" "also\e[31m remove\e[0m executables and zip file"
+	@echo  "\e[36m make zip \e[0m    " "to make \e[35m \`vecdec.zip\`\e[0m file with C/C++ sources"
+	@echo  "\e[36m make dox \e[0m    " "to run doxygen to prepare \e[35m documentation\e[0m in 'docs/' \e[31m(broken)\e[0m"
+	@echo  "\e[36m make tags \e[0m   " "to create \e[35m TAGS\e[0m file"
+	@echo
+	@echo  "\e[31m The program does not compile?\e[0m"
+	@echo  "  - Make sure you have '\e[32mlibm4ri_dev\e[0m' on your system."
+	@echo  "    Please see '../README.md' for installation instructions."
+	@echo  "  - On a Mac, you may want to disable '\e[32m-march=native\e[0m' compiler switch by running" 
+	@echo  "\e[36m make vecdec OPT='-g -mtune=native -O3'\e[0m" 
 
