@@ -5,16 +5,15 @@ WARN = -Wall -Wsign-compare -Wextra
 ## EXTRA may be set on the command line, e.g., "EXTRA=''" or "EXTRA='-pg -DNDEBUG'"
 # EXTRA = -DNDEBUG -Wno-unused-variable -Wno-unused-parameter  
 # OPT  = -g -march=native -mtune=native -O3 ${PRODUCTION}
-EXTRA=-DNDEBUG -DUSE_QLLR
+EXTRA=-DNDEBUG
+VER=-DUSE_QLLR
 # use -DNDEBUG to disable assert, -Wfatal-errors to stop at 1st error
 # to compile on Mac you may need to disable '-march=native` 
 OPT = -g -march=native -mtune=native -O3 ${EXTRA}
 #OPT = -g -mtune=native -O3 ${EXTRA}
 CC = gcc
-CFLAGS = ${OPT} ${WARN}
+CFLAGS = ${OPT} ${VER} ${WARN}
 CPP = g++
-
-src = vecdec.c utils_m4ri.c  utils.c tinymt64.c ${VECDEC_HDRS}
 
 #-Wmissing-prototypes   -Wconversion -Wextra
 # -std=gnu11
@@ -32,26 +31,9 @@ default: give_help
 vecdec: ${VECDEC_OBJS} ${VECDEC_XTRA} ${VECDEC_HDRS} Makefile 
 	${CPP} ${CFLAGS} ${VECDEC_OBJS} ${VECDEC_XTRA} -o vecdec -l m4ri
 
-# depend on all headers 
-${VECDEC_OBJS}: ${VECDEC_HDRS} Makefile
-
-mmio.o: mmio.c Makefile
-	${CC} ${OPT} -c $<
-
-#iter_dec.o: iter_dec.c 
-#	@echo ${CC} ${CFLAGS} -o iter_dec.o -c $<
-#	@${CC}  ${CFLAGS} -o iter_dec.o -c $<
-#	@if [ $$? -ne 0 ] ; then \
-#	  echo -e 'Do you have libm4ri_dev on your system?' ; \
-#	  echo -e "On a Mac, try to disable '-march=native' compiler switch by running" ;\
-#	  echo -e "  make iter_dec OPT=-g -mtune=native -O3" ;\
-#	  echo -e " " ;\
-#	  false ; \
-#	fi
-
-vecdec.o: vecdec.c
-	@echo ${CC} ${CFLAGS} -o vecdec.o -c $<
-	@${CC}  ${CFLAGS} -o vecdec.o -c $<
+vecdec.o: vecdec.c Makefile ${VECDEC_HDRS}
+	@echo ${CC} ${CFLAGS} -o $@ -c $<
+	@${CC} ${CFLAGS} -o $@ -c $<
 	@if [ $$? -ne 0 ] ; then \
 	  echo -e 'Do you have libm4ri_dev on your system?' ; \
 	  echo -e "On a Mac, try to disable '-march=native' compiler switch by running" ;\
@@ -60,6 +42,20 @@ vecdec.o: vecdec.c
 	  false ; \
 	fi
 
+iter_dec.o: iter_dec.c ${VECDEC_HDRS} Makefile 
+	@${CC} ${CFLAGS} -o $@ -c $<
+util_m4ri.o: util_m4ri.c ${VECDEC_HDRS} Makefile 
+	@${CC} ${CFLAGS} -o $@ -c $<
+utils.o: utils.c ${VECDEC_HDRS} Makefile 
+	@${CC} ${CFLAGS} -o $@ -c $<
+tinymt64.o: tinymt64.c ${VECDEC_HDRS} Makefile 
+	@${CC} ${CFLAGS} -o $@ -c $<
+qllr.o: qllr.c ${VECDEC_HDRS} Makefile 
+	@${CC} ${CFLAGS} -o $@ -c $<
+star_poly.o: star_poly.c ${VECDEC_HDRS} Makefile 
+	@${CC} ${CFLAGS} -o $@ -c $<
+mmio.o: mmio.c Makefile
+	${CC} ${OPT} -c $<
 
 clean:
 	rm -f *~ *.tmp *.out *.o ../input/*~ TAGS

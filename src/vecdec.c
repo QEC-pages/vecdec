@@ -242,6 +242,78 @@ long int nzlist_read(const char fnam[], params_t *p){
   return count;
 }
 
+double do_hash_fail_prob( params_t * const p){
+
+  one_vec_t *pvec;
+  
+  if(p->debug & 1024) {/** `print` the list of cws found by energy */
+    HASH_SORT(p->codewords, by_energy);
+    for(pvec = p->codewords; pvec != NULL; pvec=(one_vec_t *)(pvec->hh.next))
+      print_one_vec(pvec);
+  }
+  /** finally calculate and output fail probability here */
+  double pfail=0, pmax=0;
+  int minW=p->nvar + 1;
+  for(pvec = p->codewords; pvec != NULL; pvec=(one_vec_t *)(pvec->hh.next)){
+    double prob=do_prob_one_vec(pvec, p);
+    pfail += prob;
+    if(prob>pmax)
+      pmax=prob;
+    if(minW> pvec->weight)
+      minW=pvec->weight;
+  }
+  /** todo: prefactor calculation */
+  if(p->debug&1)
+    printf("# sumP(fail) maxP(fail) min_weight num_found\n");
+  printf("%g %g %d %lld\n", pfail, pmax, minW, p->num_cws);
+  
+  return pfail; 
+}
+
+void do_hash_clear(params_t *const p){
+    /** prescribed way to clean the hashing table */
+  one_vec_t *cw, *tmp;
+  HASH_ITER(hh, p->codewords, cw, tmp) {
+    HASH_DEL(p->codewords, cw);
+    free(cw);
+  }
+
+
+}
+
+/* @brief see if the codeword needs to be added to hash, return pointer */
+one_vec_t * do_hash_check(const int ee[], int weight, params_t * const p){
+  const size_t keylen = weight * sizeof(rci_t);
+  one_vec_t *pvec=NULL;
+  HASH_FIND(hh, p->codewords, ee, keylen, pvec);
+  if(pvec){
+    pvec->cnt++; /** just increment the counter */
+    if(p->debug &16)
+      printf("vector exists, cnt=%d\n",pvec->cnt);
+  }
+  else{ /** vector not found, inserting */
+    qllr_t energ=0;
+    for(int i=0; i<weight; i++) 
+      energ += p->vLLR[ee[i]];
+    if(p->debug & 16){
+      printf("# new vec=[");
+      for(int i=0;i<weight; i++)
+	printf("%d%s",ee[i],i+1==weight ? "]\n" : ", ");
+    }
+    pvec = (one_vec_t *) malloc(sizeof(one_vec_t)+keylen);
+    if(!pvec)
+      ERROR("memory allocation failed!\n");
+    pvec->energ = energ; /** energy value */
+    pvec->weight = weight;
+    pvec->cnt = 1; /** encountered `1`st time */
+    memcpy(pvec->arr, ee, keylen);
+    HASH_ADD(hh, p->codewords, arr, keylen, pvec); /** store in the `hash` */
+   
+  }
+  return pvec;
+}
+
+
 /** @brief Random Information Set search for small-E logical operators.
  *
  *  Uses hashing storage to identify unique vectors.  Only vectors of weight no
@@ -340,52 +412,29 @@ int do_LLR_dist(int dW, params_t  * const p){
       if(nz){ /** we got non-trivial codeword! */
         /** TODO: try local search to `lerr` */
         /** calculate the energy and compare */
-        qllr_t energ=0;
-        for(int i=0; i<cnt; i++) 
-          energ += p->vLLR[ee[i]];
         /** at this point we have `cnt` codeword indices in `ee`, and its `energ` */
-       
-        if (energ < minE){  /** legacy code */
-          if(p->debug&1)
-            printf("nz=%d cnt=%d energ=%g\n",nz,cnt,dbl_from_llr(energ));
-          minE=energ;
-        }
         if (cnt < minW){
           minW=cnt;
 	  if (minW <= p->dmin){ /** early termination condition */
 	    minW = -minW; /** this distance value is of little interest; */
-	    goto alldone; 
 	  }
 	}
-        if (cnt <= minW + dW){ /** try to add to hashing storage */
-          const size_t keylen = cnt * sizeof(rci_t);
-          one_vec_t *pvec=NULL;
-          HASH_FIND(hh, p->codewords, ee, keylen, pvec);
-          if(pvec){
-            pvec->cnt++; /** just increment the counter */
-            if(p->debug &16)
-              printf("vector exists, cnt=%d\n",pvec->cnt);
-          }
-          else{ /** vector not found, inserting */
-	    if(p->debug & 16){
-	      printf("# new vec=[");
-	      for(int i=0;i<cnt; i++)
-		printf("%d%s",ee[i],i+1==cnt ? "]\n" : ", ");
+        if (cnt <= abs(minW) + dW){ /** try to add to hashing storage */
+	  one_vec_t *ptr=do_hash_check(ee,cnt,p); 
+	  if(ptr->cnt == 1){ /** new codeword just added to hash */
+	    ichanged++; 
+	    ++(p->num_cws); 
+	    if(ptr->energ > maxE)
+	      maxE=ptr->energ;       
+	    if (ptr->energ < minE){  /** legacy code */
+	      if(p->debug&1)
+		printf("nz=%d cnt=%d energ=%g\n",nz,cnt,dbl_from_llr(ptr->energ));
+	      minE=ptr->energ;
 	    }
-            ++ ichanged; /** increment counter how many vectors added */
-            ++(p->num_cws);
-            if(energ>maxE)
-              maxE=energ;
-            pvec = (one_vec_t *) malloc(sizeof(one_vec_t)+keylen);
-            if(!pvec)
-              ERROR("memory allocation failed!\n");
-            pvec->energ = energ; /** energy value */
-            pvec->weight = cnt;
-            pvec->cnt = 1; /** encountered `1`st time */
-            memcpy(pvec->arr, ee, keylen);
-            HASH_ADD(hh, p->codewords, arr, keylen, pvec); /** store in the `hash` */
-            if((p->ntot > 0) && (p->num_cws >= p->ntot)) /** todo: sort by energy, replace maxE cw */
-              break; /** limit was set, not an error */
+	    if (minW<0)
+	      goto alldone; 
+	    if((p->ntot > 0) && (p->num_cws >= p->ntot)) /** todo: sort by energy, replace maxE cw */
+	      break; /** limit was set, not an error */
           }
         }
       }
@@ -404,26 +453,10 @@ int do_LLR_dist(int dW, params_t  * const p){
       break;
     }
   }/** end of `steps` random window */
-  one_vec_t *pvec;
-  if(p->debug & 1024) {/** `print` the list of cws found by energy */
-    HASH_SORT(p->codewords, by_energy);
-    for(pvec = p->codewords; pvec != NULL; pvec=(one_vec_t *)(pvec->hh.next))
-      print_one_vec(pvec);
-  }
-  /** finally calculate and output fail probability here */
-  double pfail=0, pmax=0;
-  for(pvec = p->codewords; pvec != NULL; pvec=(one_vec_t *)(pvec->hh.next)){
-    double prob=do_prob_one_vec(pvec, p);
-    pfail += prob;
-    if(prob>pmax)
-      pmax=prob;
-  }
+
   /** TODO: prefactor calculation */
 
  alldone: 
-  if(p->debug&1)
-    printf("# sumP(fail) maxP(fail) min_weight num_found\n");
-  printf("%g %g %d %lld\n", pfail, pmax, minW, p->num_cws);
 
   /** clean up */
   mzp_free(perm);
@@ -436,13 +469,7 @@ int do_LLR_dist(int dW, params_t  * const p){
   else
     mzd_free(mL);
   mzd_free(mH);
-
-  /** prescribed way to clean the hashing table */
-  one_vec_t *cw, *tmp;
-  HASH_ITER(hh, p->codewords, cw, tmp) {
-    HASH_DEL(p->codewords, cw);
-    free(cw);
-  }
+  
   return minW;
 }
 
@@ -1551,9 +1578,11 @@ int main(int argc, char **argv){
 	printf("# %lld codewords read from %s\n",p->num_cws, p->finC);
     }
     do_LLR_dist(p->nfail, p);
+    do_hash_fail_prob(p);
     if(p->outC){
       /** TODO: write the codewords here */
     }
+    do_hash_clear(p);
     break;
     
   case 3: /** read in DEM file and output the H, L, G matrices and P vector */
