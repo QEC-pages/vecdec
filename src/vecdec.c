@@ -104,74 +104,6 @@ static inline double do_prob_one_vec(const one_vec_t * const pvec, const params_
   return ans;
 }
 
-/**
- * @brief one step of gauss on column `idx` of matrix `M`
- * @param M the matrix
- * @param idx index of the column of `M` to deal with
- * @param begrow row to start with
- * @return number of pivot points found, `0` or `1` only
- */
-static inline int gauss_one(mzd_t *M, const int idx, const int begrow){
-  /** note: force-inlining actually slows it down (`???`) */
-  rci_t startrow = begrow;
-  rci_t pivots = 0;
-  const rci_t i = idx;
-  //  for (rci_t i = startcol; i < endcol ; ++i) {
-  for(rci_t j = startrow ; j < M->nrows; ++j) {
-    if (mzd_read_bit(M, j, i)) {
-      mzd_row_swap(M, startrow, j);
-      ++pivots;
-      for(rci_t ii = 0 ;  ii < M->nrows; ++ii) {
-        if (ii != startrow) {
-          if (mzd_read_bit(M, ii, i)) {
-            mzd_row_add_offset(M, ii, startrow,0);
-          }
-        }
-      }
-      startrow = startrow + 1;
-      break;
-    }
-  }
-  //  }
-  return pivots; /** 0 or 1 only */
-  // if one, need to update the current pivot list
-}
-
-/**
- * @brief one step of gauss on column `idx` of two-block matrix `[M|S]`
- * @param M the first block (check matrix)
- * @param S the second block (syndromes)
- * @param idx index of the column of `M` to deal with
- * @param begrow row to start with
- * @return number of pivot points found, `0` or `1` only
- */
-static inline int twomat_gauss_one(mzd_t *M, mzd_t *S, const int idx, const int begrow){
-  /** note: force-inlining actually slows it down (`???`) */
-  rci_t startrow = begrow;
-  rci_t pivots = 0;
-  const rci_t i = idx;
-  //  for (rci_t i = startcol; i < endcol ; ++i) {
-  for(rci_t j = startrow ; j < M->nrows; ++j) {
-    if (mzd_read_bit(M, j, i)) {
-      mzd_row_swap(M, startrow, j);
-      mzd_row_swap(S, startrow, j);
-      ++pivots;
-      for(rci_t ii = 0 ;  ii < M->nrows; ++ii) {
-        if (ii != startrow) {
-          if (mzd_read_bit(M, ii, i)) {
-            mzd_row_add_offset(M, ii, startrow,0);
-            mzd_row_add_offset(S, ii, startrow,0);
-          }
-        }
-      }
-      startrow = startrow + 1;
-      break;
-    }
-  }
-  //  }
-  return pivots; /** 0 or 1 only */
-  // if one, need to update the current pivot list
-}
 
  
 /** @brief return permutation = decreasing probabilities (increasing LLR) */
@@ -228,7 +160,7 @@ mzp_t * do_skip_pivs(const size_t rank, const mzp_t * const pivs){
 /** @brief Read in vectors from `NZLIST` file `fnam` to hash.
     @return number of entries read */
 long long int nzlist_read(const char fnam[], params_t *p){
-  long long int count=0, lineno;
+  long long int count = 0, lineno;
   assert(fnam);
   FILE * f=nzlist_r_open(fnam, &lineno); /** no need to check if open */
   one_vec_t *entry=NULL;
@@ -244,9 +176,15 @@ long long int nzlist_read(const char fnam[], params_t *p){
     const size_t keylen = entry->weight * sizeof(rci_t);
     HASH_ADD(hh, p->codewords, arr, keylen, entry); /** store in the `hash` */
     count ++;
+
+    if(p->minW > entry->weight)
+      p->minW = entry->weight;
+    if(p->minE > entry->energ)
+      p->minE = entry->energ;
   }
+  p->num_cws += count; 
   fclose(f);
-  return count;
+  return count; 
 }
 
 /** @brief Write vectors from hash to `NZLIST` file `fnam`.
@@ -1375,11 +1313,11 @@ int var_init(int argc, char **argv, params_t *p){
 	    p->mode, p->submode);
     break;
     
-  case 3: /** read in DEM file and output the H, L, G matrices and P vector */
+  case 3: /** read in DEM file and output the H, L, G, K matrices and P vector */
     if(strcmp(p->fout,"stdout")==0)
       p->use_stdout=1;
-    if (p->submode!=0)
-      ERROR(" mode=%d : non-zero submode='%d' unsupported\n",
+    if (p->submode>=32)
+      ERROR(" mode=%d : submode='%d' unsupported\n",
 	    p->mode, p->submode);    
     break;
     
@@ -1722,56 +1660,79 @@ int main(int argc, char **argv){
     if(!(comment = malloc(size + 1)))
       ERROR("memory allocation");
     sprintf(comment, "H matrix from DEM file %s", p->fdem);
-    if(p->debug&1)
-      printf("# writing H=Hx matrix [ %d x %d ] to \t%s%s\n",
-	     p->mH->rows, p->mH->cols, p->fout, p->use_stdout ? "\n" :"H.mmx");
-    csr_mm_write(p->fout,"H.mmx",p->mH,comment);
-    if(p->debug&1)
-      printf("# writing L=Lx matrix [ %d x %d ] to \t%s%s\n",
-	     p->mL->rows, p->mL->cols, p->fout, p->use_stdout ? "\n" :"L.mmx");
-    comment[0]='L';
-    csr_mm_write(p->fout,"L.mmx",p->mL,comment);
-
-    if(p->debug&1)
-      printf("# writing P vector [ %d ] to      \t%s%s\n",
-	     p->nvar, p->fout, p->use_stdout ? "\n" :"P.mmx");
-    comment[0]='P';
-    //    printf("%% %s\n", comment);
-    dbl_mm_write(p->fout,"P.mmx",1,p->nvar,p->vP,comment);
-
-    if(!p->mG){
+    
+    if(!(p->submode & 31) || (p->submode & 4)){ /** see USAGE in `vecdec.h` for codes */
       if(p->debug&1)
-	printf("# creating G=Hz matrix and writing to\t%s%s\n",
-	       p->fout, p->use_stdout ? "\n" :"G.mmx");
-      p->mG = do_G_matrix(p->mHt,p->mLt,p->vLLR, p->debug);
-      comment[0]='G';
+	printf("# writing H=Hx matrix [ %d x %d ] to \t%s%s\n",
+	       p->mH->rows, p->mH->cols, p->fout, p->use_stdout ? "\n" :"H.mmx");
+      csr_mm_write(p->fout,"H.mmx",p->mH,comment);
     }
-    else{
-      size_t size2 = snprintf(NULL, 0, "G matrix from file %s", p->finG);
-      if(size2>size){
-	comment = realloc(comment, size2 + 1);
-	size=size2;
-      }    
-      assert(comment);
-      sprintf(comment, "G matrix from file %s", p->finG);
-    }
-    csr_mm_write(p->fout,"G.mmx",p->mG,comment);
-
-    if(!p->mK){ /** create `Lz` */
+    
+    if(!(p->submode & 31) || (p->submode & 8)){      
       if(p->debug&1)
-	printf("# creating K=Lz matrix and writing to\t%s%s\n",
-	       p->fout, p->use_stdout ? "\n" :"K.mmx");
-      p->mK=Lx_for_CSS_code(p->mG,p->mH);
-      comment[0]='K';
+	printf("# writing L=Lx matrix [ %d x %d ] to \t%s%s\n",
+	       p->mL->rows, p->mL->cols, p->fout, p->use_stdout ? "\n" :"L.mmx");
+      comment[0]='L';
+      csr_mm_write(p->fout,"L.mmx",p->mL,comment);
     }
-    else{
-      size_t size2 = snprintf(NULL, 0, "K matrix from file %s", p->finK);
-      if(size2>size)
-	if(!(comment = realloc(comment, size2 + 1)))
-	  ERROR("memory allocation");
-      sprintf(comment, "K matrix from file %s", p->finK);
+    
+    if(!(p->submode & 31) || (p->submode & 16)){      
+      if(p->debug&1)
+	printf("# writing P vector [ %d ] to      \t%s%s\n",
+	       p->nvar, p->fout, p->use_stdout ? "\n" :"P.mmx");
+      comment[0]='P';
+      dbl_mm_write(p->fout,"P.mmx",1,p->nvar,p->vP,comment);
     }
-    csr_mm_write(p->fout,"K.mmx",p->mK,comment);
+
+
+    if(!(p->submode & 31) || (p->submode & 1)){      
+      if(!p->mG){
+	if(p->debug&1)
+	  printf("# creating G=Hz matrix and writing to\t%s%s\n",
+		 p->fout, p->use_stdout ? "\n" :"G.mmx");
+	
+	p->mG = do_G_matrix(p->mHt,p->mLt,p->vLLR, p->debug);
+	comment[0]='G';
+      }
+      else{
+	if(p->debug&1)
+	  printf("# writing G=Hz matrix to\t%s%s\n",
+		 p->fout, p->use_stdout ? "\n" :"G.mmx");
+	
+	size_t size2 = snprintf(NULL, 0, "G matrix from file %s", p->finG);
+	if(size2>size){
+	  comment = realloc(comment, size2 + 1);
+	  size=size2;
+	}    
+	assert(comment);
+	sprintf(comment, "G matrix from file %s", p->finG);
+      }
+      csr_mm_write(p->fout,"G.mmx",p->mG,comment);
+    }
+
+    if(!(p->submode & 31) || (p->submode & 2)){      
+      if(!p->mK){ /** create `Lz` */
+	if(p->debug&1)
+	  printf("# creating K=Lz matrix and writing to\t%s%s\n",
+		 p->fout, p->use_stdout ? "\n" :"K.mmx");
+	if(p->finC){/** use the list of codewords from file */
+	  nzlist_read(p->finC, p);
+	  p->mK = do_K_from_C(p->mLt, p->codewords, p->ncws, p->minW, p->minW+p->dW, p->debug);
+	  //	  csr_out(p->mK);
+	}
+	else
+	  p->mK=Lx_for_CSS_code(p->mG,p->mH);
+	comment[0]='K';
+      }
+      else{
+	size_t size2 = snprintf(NULL, 0, "K matrix from file %s", p->finK);
+	if(size2>size)
+	  if(!(comment = realloc(comment, size2 + 1)))
+	    ERROR("memory allocation");
+	sprintf(comment, "K matrix from file %s", p->finK);
+      }
+      csr_mm_write(p->fout,"K.mmx",p->mK,comment);
+    }
     
     free(comment);
     break;

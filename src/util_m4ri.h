@@ -246,6 +246,76 @@ static inline int matvec_gauss_one(mzd_t *M, mzd_t *S, const int idx, const int 
   return pivots; /** 0 or 1 only */
   // if one, need to update the current pivot list
 }
+
+/**
+ * @brief one step of gauss on column `idx` of matrix `M`
+ * @param M the matrix
+ * @param idx index of the column of `M` to deal with
+ * @param begrow row to start with
+ * @return number of pivot points found, `0` or `1` only
+ */
+static inline int gauss_one(mzd_t *M, const int idx, const int begrow){
+  /** note: force-inlining actually slows it down (`???`) */
+  rci_t startrow = begrow;
+  rci_t pivots = 0;
+  const rci_t i = idx;
+  //  for (rci_t i = startcol; i < endcol ; ++i) {
+  for(rci_t j = startrow ; j < M->nrows; ++j) {
+    if (mzd_read_bit(M, j, i)) {
+      mzd_row_swap(M, startrow, j);
+      ++pivots;
+      for(rci_t ii = 0 ;  ii < M->nrows; ++ii) {
+        if (ii != startrow) {
+          if (mzd_read_bit(M, ii, i)) {
+            mzd_row_add_offset(M, ii, startrow,0);
+          }
+        }
+      }
+      startrow = startrow + 1;
+      break;
+    }
+  }
+  //  }
+  return pivots; /** 0 or 1 only */
+  // if one, need to update the current pivot list
+}
+
+/**
+ * @brief one step of gauss on column `idx` of two-block matrix `[M|S]`
+ * @param M the first block (check matrix)
+ * @param S the second block (syndromes)
+ * @param idx index of the column of `M` to deal with
+ * @param begrow row to start with
+ * @return number of pivot points found, `0` or `1` only
+ */
+static inline int twomat_gauss_one(mzd_t *M, mzd_t *S, const int idx, const int begrow){
+  /** note: force-inlining actually slows it down (`???`) */
+  rci_t startrow = begrow;
+  rci_t pivots = 0;
+  const rci_t i = idx;
+  //  for (rci_t i = startcol; i < endcol ; ++i) {
+  for(rci_t j = startrow ; j < M->nrows; ++j) {
+    if (mzd_read_bit(M, j, i)) {
+      mzd_row_swap(M, startrow, j);
+      mzd_row_swap(S, startrow, j);
+      ++pivots;
+      for(rci_t ii = 0 ;  ii < M->nrows; ++ii) {
+        if (ii != startrow) {
+          if (mzd_read_bit(M, ii, i)) {
+            mzd_row_add_offset(M, ii, startrow,0);
+            mzd_row_add_offset(S, ii, startrow,0);
+          }
+        }
+      }
+      startrow = startrow + 1;
+      break;
+    }
+  }
+  //  }
+  return pivots; /** 0 or 1 only */
+  // if one, need to update the current pivot list
+}
+  
   
 
 /** 
