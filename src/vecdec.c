@@ -1475,8 +1475,10 @@ int main(int argc, char **argv){
     /** at least one round always */
     synd_tot=0, synd_fail=0;
     for(long long int iround=0; iround < rounds; iround++){
-      if(p->debug &1)
-	printf("# starting round %lld of %lld\n", iround, rounds);
+      if(p->debug &1){
+	printf("# starting round %lld of %lld fail=%lld total=%lld\n", iround, rounds, synd_fail,synd_tot);
+	fflush(stdout);
+      }
     
       if( !(ierr_tot = do_err_vecs(p)))
 	break; /** no more rounds */
