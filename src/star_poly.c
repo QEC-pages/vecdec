@@ -62,7 +62,7 @@ csr_t * do_K_from_C(const csr_t * const mLt, const one_vec_t * const codewords,
     maxW=minW;
   for(int iw = minW; iw <= maxW && rank < k; iw++){
     for(pvec = codewords; pvec != NULL; pvec=(one_vec_t *)(pvec->hh.next)){
-      mzd_row_clear_offset(vLt, rank, 0); /** probably not needed */
+      mzd_row_clear_offset(vLt, rank, 0); 
       if(skip_checkW || (pvec->weight == iw)){
 	//	printf("iw=%d rank=%d ",iw,rank); print_one_vec(pvec); 
 	for(int i=0; i < pvec->weight; i++){
@@ -107,69 +107,74 @@ csr_t * do_K_from_C(const csr_t * const mLt, const one_vec_t * const codewords,
 
 /** @brief create G=Hz matrix with minimum weight rows from a list of codewords in hash */
 csr_t * do_G_from_C(const csr_t * const mLt, const one_vec_t * const codewords,
-		    const int k, const int minW, int maxW,
+		    const int num_need, const int minW, int maxW,
 		    _maybe_unused const int debug){
   assert(mLt);
   assert(codewords);
   //printf("k=%d minW=%d maxW=%d\n",k,minW,maxW);
-  mzd_t *vLt = mzd_init(1, mLt->cols);
-  ERROR("finish here: need rank of G -- or do we??? -- redundant rows OK!");
-  /** TODO: 
-   *  1. one-by-one read rows; choose those of zero product with `Lt`
-   *  2. copy to `G`.
-   * 3. calculate rank G, verify 
-   * 
-   */ 
-  one_vec_t const **list = malloc(k*sizeof(one_vec_t *)); /** chosen vectors (pointers) */
-  if(!list) ERROR("memory allocation");
+  mzd_t *mat = mzd_init(num_need, mLt->rows); /** needed to ensure the sufficient rank */
+  mzd_t *vLt = mzd_init(1, mLt->cols); 
   one_vec_t const * pvec;
-  int rank=0, nz=0; /** how many rows already found; `nz` = non-zero bits total */
-  int skip_checkW = minW > maxW ? 1 : 0;
+  int rank=0, num=0, nz=0; /** `rank` how many rows already in mat; `num` vectors, `nz` = non-zero bits total */
+  int skip_checkW = minW > maxW ? 1 : 0; /** this may happen if `dW=-1`, i.e., include any weight */
   if (maxW < minW)
     maxW=minW;
-  for(int iw = minW; iw <= maxW && rank < k; iw++){
+  printf("minW=%d maxW=%d \n",minW, maxW);
+  /** first round: count codewords, non-zero entries, and ensure sufficient rank */
+  for(int iw = minW; iw <= maxW ; iw++){
     for(pvec = codewords; pvec != NULL; pvec=(one_vec_t *)(pvec->hh.next)){
-      mzd_row_clear_offset(vLt, rank, 0); /** probably not needed */
+      mzd_row_clear_offset(vLt, 0, 0); 
+      if(rank < num_need)
+	mzd_row_clear_offset(mat, rank, 0); 
       if(skip_checkW || (pvec->weight == iw)){
-	//	printf("iw=%d rank=%d ",iw,rank); print_one_vec(pvec); 
 	for(int i=0; i < pvec->weight; i++){
-	  const int pos = pvec->arr[i];
-	  for(int j=mLt->p[pos]; j < mLt->p[pos+1] ; j++)
-	    mzd_flip_bit(vLt,rank,mLt->i[j]);
+	  const int idx = pvec->arr[i];
+	  for(int j=mLt->p[idx]; j < mLt->p[idx+1] ; j++)
+	    mzd_flip_bit(vLt,0,mLt->i[j]);
 	}
-	if(!mzd_row_is_zero(vLt, rank)){	 
-	  //	  mzd_print_row(vLt,rank);
-	  int rk=mzd_gauss_delayed(vLt,0,1);
-	  if(rk > rank){
-	    list[rank++]=pvec;
-	    nz += pvec->weight;
-	    if(rank==k)
-	      break;
+	if(mzd_row_is_zero(vLt, 0)){
+	  num++;
+	  nz+=pvec->weight;
+	  if(rank < num_need){
+	    for(int i=0; i < pvec->weight; i++)
+	      mzd_flip_bit(mat, rank, pvec->arr[i]);
+	    rank=mzd_gauss_delayed(mat,0,1);
 	  }
-	  else{
-	    //	    mzd_print(vLt);
-	  }
-	}
+	  //	  printf("num=%d nz=%d rank=%d\n",num,nz,rank);
+	}	
       }
     }
   }
-  if(rank<k)
-    ERROR("Number of codewords is not sufficient to construct K=Lz matrix");
+  if(rank<num_need)
+    ERROR("Number of codewords is not sufficient to construct G=Hz matrix: rk=%d < rankG=%d",rank,num_need);
   
-  mzd_free(vLt);
+  mzd_free(mat);
 
-  /** create CSR matrix from the list of vectors */
-  csr_t *ans = csr_init(NULL,k,mLt->rows,nz); 
-  for(int j=0, pos=0; j<k; j++){ /** row index */
-    for(int i=0; i < list[j]->weight; i++){
-      int idx=list[j]->arr[i]; /** col index */
-      ans->i[pos++] = idx;
-    }
-    ans->p[j+1] = pos;
+  /** second round: actually create the CSR matrix */
+  csr_t *ans = csr_init(NULL,num,mLt->rows,nz);
+  int jvec=0; /** vector index */
+  int pos=0; /** position index */
+  for(int iw = minW; iw <= maxW ; iw++){ /** same cycle as before  */
+    for(pvec = codewords; pvec != NULL; pvec=(one_vec_t *)(pvec->hh.next)){
+      if(skip_checkW || (pvec->weight == iw)){
+	for(int i=0; i < pvec->weight; i++){
+	  const int idx = pvec->arr[i];
+	  for(int j=mLt->p[idx]; j < mLt->p[idx+1] ; j++)
+	    mzd_flip_bit(vLt,0,mLt->i[j]);
+	}
+	if(mzd_row_is_zero(vLt, 0)){ /** this vector is trivial */
+	  for(int i=0; i < pvec->weight; i++){
+	    const int idx=pvec->arr[i]; /** col index again */
+	    ans->i[pos++] = idx;
+	  }
+	  ans->p[++jvec] = pos;	
+	}
+      }
+    }	
   }
   ans->nz = -1;/** csr compressed form */
 
-  free(list);
+  mzd_free(vLt);
   return ans;
 }
 
@@ -177,10 +182,14 @@ csr_t * do_G_from_C(const csr_t * const mLt, const one_vec_t * const codewords,
 /** @brief create `generator` matrix orthogonal to rows of `mH` and
  *  `mL`.
  *
- *  WARNING: Currently, only finds cycles of length 3 (this is OK to
- *  construct `G` matrix for a DEM constructed by `stim`. 
+ *  WARNING:  Only finds cycles of length 3 (this is OK to
+ *  construct `G` matrix for a DEM constructed by `stim`.  
+ *
+ *  If fails, use `do_G_from_C()` instead 
+ *
+ * @param rankG required rank of the matrix 
  */
-csr_t * do_G_matrix(const csr_t * const mHt, const csr_t * const mLt, const qllr_t LLR[], 
+csr_t * do_G_matrix(const csr_t * const mHt, const csr_t * const mLt, const qllr_t LLR[], const int rankG, 
 		    const int debug){
   /** sanity check */
   assert(mHt->nz == -1); 
@@ -317,19 +326,16 @@ csr_t * do_G_matrix(const csr_t * const mHt, const csr_t * const mLt, const qllr
   free(HL);
   
   /** verify the rank (should be `n`-`k`) ???? *********************** */
-  int rankG=rank_csr(ans);
-  int rankL=rank_csr(mLt); /** `k` of the code */
-  int rankH=rank_csr(mHt); 
+  int got_rankG=rank_csr(ans);
   if(debug&1){
-    printf("# n=%d k=%d rankG=%d rankH=%d\n"
+    printf("# n=%d k=%d rankG=%d\n"
 	   "# Created matrix G of size %d x %d (all weight-3 rows)\n",
-	   mLt->rows, rankL, rankG, rankH, ans->rows, ans->cols);
+	   mLt->rows, mLt->cols, rankG, ans->rows, ans->cols);
   }
 
-  if(rankH+rankL + rankG != mLt->rows )    
-    ERROR("FIXME: some longer cycles are missing from G\n"
-	  "n=%d != (k=%d) + (rankG=%d) + (rankH=%d)",
-	  mLt->rows, rankL, rankG, rankH );
+  if( rankG != got_rankG )    
+    ERROR("Some longer cycles are missing from G\n"
+	  "expect rankG=%d != got rankG=%d", rankG, got_rankG );
   /** This would require some extensive changes to the code.  DEMs
       from Stim with depolarizing noise enabled have the shortest
       cycles of length 3, and these are sufficient to generate the

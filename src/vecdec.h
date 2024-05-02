@@ -37,6 +37,9 @@ extern "C"{
     int nchk; /** rows in `H` or `r` (set in the `input file`) */
     int ncws;  /** how many codewords `k` (set in the `input file`) */
     int nvar;     /** columns in H `n` (set in the `input file`) */
+    int rankH;
+    int rankG;
+    int rankL;
     int steps; /** number of random window or BP decoding steps, default: `50` */
     int nvec;  /** max number of syndromes to process in one bunch (default: `16`) */
     long long int ntot;  /** total number of syndromes to generate (default: `1`) */
@@ -160,6 +163,11 @@ extern "C"{
   csr_t * do_K_from_C(const csr_t * const mLt, const one_vec_t * const codewords,
 		      const int k, const int minW, const int maxW,
 		      _maybe_unused const int debug);
+
+/** @brief create G=Hz matrix with minimum weight rows from a list of codewords in hash */
+csr_t * do_G_from_C(const csr_t * const mLt, const one_vec_t * const codewords,
+		    const int num_need, const int minW, int maxW,
+		    _maybe_unused const int debug);  
   
   csr_t * do_G_matrix(const csr_t * const mHt, const csr_t * const mLt, const qllr_t LLR[], 
 		      const int debug);
@@ -244,7 +252,7 @@ extern "C"{
   "\t\t\t By default (submode&31=0) outpul everything, otherwise\n"	\
   "\t\t\t .1 (bit 0) write G=Hz matrix\n"				\
   "\t\t\t .2 (bit 1) write K=Lz matrix\n"				\
-  "\t\t\t .4 (bit 2) write H=Hx matrix\n\n"				\
+  "\t\t\t .4 (bit 2) write H=Hx matrix\n"				\
   "\t\t\t .8 (bit 3) write  L=Lx matrix\n"				\
   "\t\t\t .16 (bit 4) write P vector\n"					\
   "\t\t\t Use 'fout=' command line argument to generate file names\n"	\

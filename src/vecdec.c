@@ -1677,63 +1677,88 @@ int main(int argc, char **argv){
       comment[0]='L';
       csr_mm_write(p->fout,"L.mmx",p->mL,comment);
     }
-    
+
     if(!(p->submode & 31) || (p->submode & 16)){      
       if(p->debug&1)
 	printf("# writing P vector [ %d ] to      \t%s%s\n",
 	       p->nvar, p->fout, p->use_stdout ? "\n" :"P.mmx");
       comment[0]='P';
       dbl_mm_write(p->fout,"P.mmx",1,p->nvar,p->vP,comment);
-    }
+    }    
 
-
-    if(!(p->submode & 31) || (p->submode & 1)){      
-      if(!p->mG){
-	if(p->debug&1)
-	  printf("# creating G=Hz matrix and writing to\t%s%s\n",
-		 p->fout, p->use_stdout ? "\n" :"G.mmx");
-	
-	p->mG = do_G_matrix(p->mHt,p->mLt,p->vLLR, p->debug);
-	comment[0]='G';
+    if(!(p->submode & 31) || (p->submode & 1) || (p->submode & 2)){/** need `G=Hz` or `L=Lz` matrices */
+      if(p->finC){/** use the list of codewords from file */
+	nzlist_read(p->finC, p);
       }
-      else{
-	if(p->debug&1)
-	  printf("# writing G=Hz matrix to\t%s%s\n",
-		 p->fout, p->use_stdout ? "\n" :"G.mmx");
-	
-	size_t size2 = snprintf(NULL, 0, "G matrix from file %s", p->finG);
-	if(size2>size){
-	  comment = realloc(comment, size2 + 1);
-	  size=size2;
-	}    
-	assert(comment);
-	sprintf(comment, "G matrix from file %s", p->finG);
-      }
-      csr_mm_write(p->fout,"G.mmx",p->mG,comment);
-    }
-
-    if(!(p->submode & 31) || (p->submode & 2)){      
-      if(!p->mK){ /** create `Lz` */
-	if(p->debug&1)
-	  printf("# creating K=Lz matrix and writing to\t%s%s\n",
-		 p->fout, p->use_stdout ? "\n" :"K.mmx");
-	if(p->finC){/** use the list of codewords from file */
-	  nzlist_read(p->finC, p);
-	  p->mK = do_K_from_C(p->mLt, p->codewords, p->ncws, p->minW, p->minW+p->dW, p->debug);
-	  //	  csr_out(p->mK);
+      
+      p->rankH=rank_csr(p->mH);
+      p->rankL=rank_csr(p->mL);
+      p->rankG=p->nvar - p->rankH - p->rankL;
+      if(p->ncws != p->rankL)
+	ERROR("code parameters mismatch: rkH=%d rkL=%d Num(codewords)=%d\n",p->rankH, p->rankL, p->ncws);
+      if(p->debug &1)
+	printf("code parameters: n=%d k=%d rkH=%d rkG=%d\n",p->nvar,p->ncws,p->rankH, p->rankG);
+      
+      if(!(p->submode & 31) || (p->submode & 1)){      
+	if(!p->mG){
+	  if(p->debug&1)
+	    printf("# creating G=Hz matrix and writing to\t%s%s\n",
+		   p->fout, p->use_stdout ? "\n" :"G.mmx");
+	  if(p->finC)
+	    p->mG = do_G_from_C(p->mLt,p->codewords,p->rankG,p->minW, p->minW + p->dW, p->debug);
+	  else 
+	    p->mG = do_G_matrix(p->mHt,p->mLt,p->vLLR, p->debug);
+	  comment[0]='G';
 	}
-	else
-	  p->mK=Lx_for_CSS_code(p->mG,p->mH);
-	comment[0]='K';
+	else{
+	  if(p->debug&1)
+	    printf("# writing G=Hz matrix to\t%s%s\n",
+		   p->fout, p->use_stdout ? "\n" :"G.mmx");
+	  
+	  size_t size2 = snprintf(NULL, 0, "G matrix from file %s", p->finG);
+	  if(size2>size){
+	    comment = realloc(comment, size2 + 1);
+	    size=size2;
+	  }    
+	  assert(comment);
+	  sprintf(comment, "G matrix from file %s", p->finG);
+#ifndef NDEBUG	  
+	  int rankG=rank_csr(p->mG);
+	  if(rankG != p->rankG)
+	    ERROR("Incorrect rank=%d of provided matrix G=Hz, expected %d",rankG, p->rankG);
+#endif 	  	  
+	}
+	csr_mm_write(p->fout,"G.mmx",p->mG,comment);
       }
-      else{
-	size_t size2 = snprintf(NULL, 0, "K matrix from file %s", p->finK);
-	if(size2>size)
-	  if(!(comment = realloc(comment, size2 + 1)))
-	    ERROR("memory allocation");
-	sprintf(comment, "K matrix from file %s", p->finK);
+
+      if(!(p->submode & 31) || (p->submode & 2)){      
+	if(!p->mK){ /** create `Lz` */
+	  if(p->debug&1)
+	    printf("# creating K=Lz matrix and writing to\t%s%s\n",
+		   p->fout, p->use_stdout ? "\n" :"K.mmx");
+	  if(p->finC){/** use the list of codewords from file */
+	    //	    nzlist_read(p->finC, p);
+	    p->mK = do_K_from_C(p->mLt, p->codewords, p->ncws, p->minW, p->minW+p->dW, p->debug);
+	    //	  csr_out(p->mK);
+	  }
+	  else
+	    p->mK=Lx_for_CSS_code(p->mG,p->mH);
+	  comment[0]='K';
+	}
+	else{
+	  size_t size2 = snprintf(NULL, 0, "K matrix from file %s", p->finK);
+	  if(size2>size)
+	    if(!(comment = realloc(comment, size2 + 1)))
+	      ERROR("memory allocation");
+	  sprintf(comment, "K matrix from file %s", p->finK);
+#ifndef NDEBUG	  
+	  int rankK=rank_csr(p->mK);
+	  if(rankK != p->rankL)
+	    ERROR("Incorrect rank=%d of provided matrix K=Lz, expected %d",rankK, p->rankL);
+#endif 	  	  	
+	}
+	csr_mm_write(p->fout,"K.mmx",p->mK,comment);
       }
-      csr_mm_write(p->fout,"K.mmx",p->mK,comment);
     }
     
     free(comment);
