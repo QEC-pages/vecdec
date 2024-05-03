@@ -93,7 +93,7 @@ MaTrix market exchange (`MTX`) format and David MacKay's `alist` format.
 
 ## Common tasks 
 
-### Analyze the performance of a quantum or classical code with internal decoder
+### Simulate the performance of a quantum or classical code with the internal decoder
 
 - Use a classical code specified by a parity check matrix in Matrix
   Market coordinate (`MTX`) or David MacKay's `alist` format; generate
@@ -106,14 +106,15 @@ MaTrix market exchange (`MTX`) format and David MacKay's `alist` format.
 ./vecdec debug=1 mode=0 finH= ./examples/1920.1280.3.303.alist ntot=10240 nvec=1024 steps=50 lerr=1 useP=0.05 nfail=100
 ```
 
-This example generates `10240` random error vectors in 10 bunches of
-size `1024` each (for best performance, use `nvec` a factor of `64`
-and at least `1024` or larger).  Uniform error probability `P=0.05` is
-chosen for each variable node.  The run will stop after encountering
-`nfail=100` decoding errors.  Linear algebra part of Random
-Information Set decoding is also done in bunches; total of `steps=50`
-random information sets are taken.  For each of these, vectors with
-information set weight up to `lerr=1` are examined.
+This example generates up to `ntot=10240` random error vectors in
+bunches of size `nvec=1024` each (for best performance, make sure that
+`nvec` be divisible by `64` and not smaller than `1024`).  Uniform
+error probability `P=0.05` is chosen for each variable node.  The run
+will stop after encountering `nfail=100` decoding errors.  Linear
+algebra part of Random Information Set decoding is also done in
+bunches; total of `steps=50` random information sets are taken.  For
+each of these, vectors with information set weight up to `lerr=1` are
+examined.
 
 - Use a quantum CSS code specified by parity check matrices `Hx`
   and `Hz`; generate errors internally.  In this particular example, a generalized bicycle
@@ -170,10 +171,10 @@ $vecdec debug=1 mode=0 fdem=$fnam.dem fdet=$fnam.det fobs=$fnam.obs steps=50 ler
            nvec=1024 nfail=100 
 ```
 
+### Use belief propagation decoders 
 ### Calculate the distance of a quantum code or a syndrome measurement circuit 
 
-The code
-
+### Save the files 
 
 
 
