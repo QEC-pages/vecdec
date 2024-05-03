@@ -714,9 +714,14 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
       mzd_print(mEt0);
     }
     mzp_free(skip_pivs);
-    if (p->lerr > 1){
+    //    if (p->lerr > 1){
+    if (mEt1){
       mzd_free(mEt1);
+      mEt1=NULL;
+    }
+    if (vE1){
       free(vE1);
+      vE1=NULL;
     }
   }
 
@@ -777,8 +782,11 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
         mzd_print(mEt0);
       }
       mzp_free(skip_pivs);
-      if (p->lerr > 1)
+      //      if (p->lerr > 1)
+      if(vE1){
 	free(vE1);
+	vE1=NULL;
+      }
     }
 
     mzd_free(mEt);
