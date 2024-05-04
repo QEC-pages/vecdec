@@ -232,7 +232,7 @@ stim sample_dem \
 		 ```
 	
 
-- [ ] Better `G` and `K` matrices (use list of codewords read to generate those)
+- [x] Better `G` and `K` matrices (use list of codewords read to generate those)
 
 - [ ] ML decoding implementation variants 
   - [ ] Given the found error vector (syndrome OK), try to add the codewords one-by-one.
@@ -245,3 +245,16 @@ stim sample_dem \
   - [ ] During BP decoding OSD, store generated vectors in a hash to
         estimate FE for each sector (or just make non-vector-based
         decoding in this case).
+
+- [ ] verification and convenience
+  - [ ] add help specific for each `mode` (use `vecdec mode=2 help`)
+  - [ ] make sure `debug=1` prints the values relevant for each mode
+  - [ ] make sure `debug=1` complaints if a value not relevant to the current mode is set 
+  - [ ] more examples
+  - [ ] verify matrix orthogonality and ranks
+  - [ ] more usage examples in the documentation
+  - [ ] testing facility 
+
+- [ ] syndrome transformations / detector events creation
+  - [ ] syndrome transformation matrix (e.g., for subcode decoding)
+
