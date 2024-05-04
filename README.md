@@ -83,10 +83,10 @@ matrices `H=Hx` and `L=Lx` (use command-line parameters `finH=` and
 `L`, the dual CSS generator matrix `G=Hz` can be given.
 
 All matrices with entries in `GF(2)` should have the same number of
-columns, `n`, and obey the following orthogonality conditions: $$
-H_XH_Z^T=0, \quad H_XL_Z^T=0, \quad L_XH_Z^T=0, \quad L_XL_Z^T=I,$$
-where $I$ is an identity matrix.  Notice that matrix $L_Z$ is not used
-by the program and it cannot be set.
+columns, `n`, and obey the following orthogonality conditions: 
+$$H_XH_Z^T=0,\quad H_XL_Z^T=0,\quad L_XH_Z^T=0,\quad L_XL_Z^T=I,$$
+where $I$ is an identity matrix.  Notice that matrix $K=L_Z$ is not currently used
+by the program, although it can be set using `finK` command line argument, and computed/exported in `mode=3`.
 
 The program can read matrices from files in sparse (`coordinate`)
 MaTrix market exchange (`MTX`) format and David MacKay's `alist` format. 
