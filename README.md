@@ -85,8 +85,8 @@ matrices `H=Hx` and `L=Lx` (use command-line parameters `finH=` and
 All matrices with entries in `GF(2)` should have the same number of
 columns, `n`, and obey the following orthogonality conditions: 
 $$H_XH_Z^T=0,\quad H_XL_Z^T=0,\quad L_XH_Z^T=0,\quad L_XL_Z^T=I,$$
-where $I$ is an identity matrix.  Notice that matrix $K=L_Z$ is not currently used
-by the program, although it can be set using `finK` command line argument, and computed/exported in `mode=3`.
+where $I$ is an identity matrix.  Notice that the latter identity is not required; 
+it is sufficient that `Lx` and `Lz` matrices have the same full row rank `=k`, the dimension of the code, each row of `Lx` has a non-zero scalar product with a row of `Lz`, and vice versa.
 
 The program can read matrices from files in sparse (`coordinate`)
 MaTrix market exchange (`MTX`) format and David MacKay's `alist` format. 
@@ -126,7 +126,6 @@ $vecdec debug=1 mode=0 finH= ../input/GB_10_w6_X.mtx \
                        finG= ../input/GB_10_w6_Z.mtx \
 					useP=0.001 lerr=1 nvec=1024 ntot=10240 steps=50 nfail=100
 ```
-Alternatively, a file with 
 
 - Use a quantum code specified by a detector error moded (`DEM`) file
   generated for a specific measurement circuit by `Stim`.  In this
@@ -258,7 +257,7 @@ the `submode` bitmap, and also by parameters `bpalpha`, `bpretry`,
 ### submode bitmap values 
 
 The `submode` bitmap is specified after a decimal point in the mode
-parameter, e.g., `mode=1.12` has `submode=12=2+4+8`, which corresponds
+parameter, e.g., `mode=1.14` has `submode=14` ($=2+4+8=2^1+2^2+2^3$), which corresponds
 to set bits `1`, `2`, and `3`.  As detailed below, this gives `serial-V`
 BP schedule based on `average LLR`.
 
@@ -268,7 +267,7 @@ BP schedule based on `average LLR`.
   
 - bit `1` controls the use of average LLR to check the convergence.
 
-  When both bit `0` and bit `1` are sets, both sets of LLR values will
+  When both bit `0` and bit `1` are set, both sets of LLR values will
   be computed and used sequentially after every round of BP to check
   the convergence.  For convenience, when `neither` bit `0` nor bit
   `1` is set, both sets of LLR values will be computed and used.
@@ -289,10 +288,10 @@ BP schedule based on `average LLR`.
   `bpalpha=0` gives the same result at instantaneous LLR.
 
 - parameter `bpretry` (integer, default value `1`, do not retry)
-  allows to repeat BP several times using different node permutation.
+  allows to repeat BP several times using different node permutations.
   The prescribed number of attempts is made until a solution which
   satisfies the syndrome is found.  This is useless with the
-  `parallel` schedule (TODO: randomization of prior probabilities).
+  `parallel` schedule (**TODO:** randomization of prior probabilities).
   
 - the use of optional ordered-statistics decoding (OSD) after BP
   failed to converge is controlled by the parameters `lerr` (default
@@ -300,17 +299,17 @@ BP schedule based on `average LLR`.
   are sorted by decreasing error probability (according to BP), and
   Gauss elimination is used to find valid error vectors.  With
   `lerr=0`, the unique solution corresponds to all-zero information
-  set, with `lerr=1`, in addition to all-zero information set,
+  set (variable nodes corresponding to pivot columns), with `lerr=1`, in addition to all-zero information set,
   information sets with a single non-zero bit are also checked, and
   the minimum-weight vector is selected; with `lerr=2` up to two
   non-zero bits are selected, etc.  When `maxosd` parameter is
-  non-zero, the search with multiple non-zero information bits is
-  restricted to this range of columns.
+  non-zero, the search with *multiple* non-zero information bits is
+  restricted to this range of columns (default value `maxosd=100`).
 
 ### Quantized LLR and `min-sum` vs. `sum-product` BP updates
 
 When the program is compiled with `USE_QLLR` (the default), parameters
-of integer-based Quantized LLR module can be set using `qllr#=ubt`,
+of integer-based Quantized LLR module can be set using `qllr#=int`,
 where `#` can be 1, 2, or 3.  By default, the recommended values
 `qllr1=12 qllr2=300 qllr3=7` are used.
 
@@ -366,7 +365,7 @@ Additional parameters relevant for this mode:
   codewords read are verified after reading; error will result if any
   codeword does not satisfy the orthogonality conditions, `H*c=0`,
   `L*c!=0` (this may happen, e.g., if an incorrect file was specified).
-- `outC` optional filename t write the full list of codewords to
+- `outC` optional filename to write the full list of codewords to
   (default: empty, do not write).
 - `maxC` maximum number of codewords to read/write/create (default: `0`, no limit).
 - `dW` maximum weight of codewords above the minimum weight (default:
@@ -379,11 +378,14 @@ Additional parameters relevant for this mode:
 
 This section describes operation with the command-line switch
 `mode=3`.  In this case the program does not try to run anything and
-just parses the DEM file and saves the corresponding parity-check `H`,
-observables `L` matrices and the error-probabilities `P` vector.  In
-addition, the program constructs the `G` matrix (whose rows are
-orthogonal to rows of `H` and `L` matrices and the total rank equals
-to `n`, the number of columns in these matrices).
+just parses the DEM file and saves the corresponding parity-check `H=Hx`,
+observables `L=Lx` matrices and the error-probabilities `P` vector.  In
+addition, the program constructs the `G=Hz` and `K=Lz` matrices.  As a reminder,
+rows of `G` are orthogonal to rows of `H` and `L`, while rows of `K` are orthogonal to the rows of `H`, 
+are linearly independent from rows of `G`, and each has a non-zero product with a row of `L`.  Also, 
+`rank H + rank G = n-k`, `rank L = rank K = k`, where `n` is the number of variable nodes (matrix columns) 
+and `k` is the dimension of the code.  For a classical code, matrix `G` is trivial (has zero rank), 
+while the `L` matrix can be selected to have all rows of weight `1`.
 
 The matrices are written in the Matrix Market format to files with names
 `${fout}H.mmx`, `${fout}G.mmx`, `${fout}L.mmx`, and `${fout}P.mmx`,
