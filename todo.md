@@ -257,4 +257,4 @@ stim sample_dem \
 
 - [ ] syndrome transformations / detector events creation
   - [ ] syndrome transformation matrix (e.g., for subcode decoding)
-  - [ ] 
+
