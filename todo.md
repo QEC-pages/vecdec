@@ -215,6 +215,34 @@ stim sample_dem \
         transformations)
   - [ ] Remove `w=3` degeneracies (rows of weight 3 in `G`)
         (see the unfinished function `int star_triangle()` in `star_poly.c` )
+    - [ ] make a structure for "column", with `[col_number, K, colG,
+          colL]`, where `colG` and `colL` give sparse representation
+          of the corresponding matrix column; sortable by
+          `col_number`, and a routine to restore the sparse `H`, `L`
+          matrices and the error vector.
+    - [ ] Start with `Ht`, `Lt`, and the `G` matrix (e.g., read from a
+          file) or even a list of codewords (not necessarily
+          complete) read from a file.
+  	  - [ ] A weight-one row of `G` -- the corresponding column is dropped.
+      - [ ] A weight-two row of `G` -- the corresponding columns are
+            combined, two bits of the error vector combined, and `K=K1
+            [+] K2` (operation `boxplus`).
+      - [ ] A weight-three row of `G` corresponding to columns
+            `[b1,b2,b3]` in `H` which sum to zero give columns
+            `[0,b2,b3]`, and an extra row `[1,1,1]` (this extra row carries zero syndrome).  Columns
+            `[a1,a2,a3]` in `L` (which sum to `1`) are replaced with
+            `[0,a2,a3]`.  The new LLR coefficients `[B1,B2,B3]` are
+            $$B_3={1\over4}\ln\left[{\cosh(A_1+A_2+A_3)\cosh(A_1+A_2-A_3)\over\cosh(A_1-A_2+A_3)\cosh(A_1-A_2-A_3)}\right]$$
+            which can also be written as `B3=0.5*(A1+A2 [+] A3) +
+            0.5*(A1-A2 [+] A3)`.
+      - [ ] For now, we do not want to give a translation of the error
+            vectors, just the new `K` and `L` matrices and the
+            corresponding LLR coefficients.
+    - [ ] Go over `non-overlapping` weight-3 rows in `G` and create
+          new matrices; the rest of the columns just write `as is`.
+    - [ ] If wanted, the procedure can be repeated again, creating the
+          codewords list, the corresponding `G` matrix, and writing
+          out the new error model `(H, L, probabilities)`.
   - [ ] Remove `w=4` degeneracies (rows of weight 4 in `G`)
   - [ ] Code for arbitrary row weight (exponentially large matrices may result)
 
@@ -258,3 +286,4 @@ stim sample_dem \
 - [ ] syndrome transformations / detector events creation
   - [ ] syndrome transformation matrix (e.g., for subcode decoding)
 
+- [ ] convenience feature: with negative seed, combine `time(null)` with the number provided
