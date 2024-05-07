@@ -70,7 +70,7 @@ extern "C"{
     char *ferr; /** `input file` name for error vectors */
     int classical; /** `1` if this is a classical code? */
     int internal; /** `1` to generate obs/det internally, `2` to generate from `err` file */
-    long long int seed;  /** rng `seed`, set=0 for automatic */
+    long long int seed;  /** rng `seed`, set<=0 for automatic */
     double useP; /** global error probability `overriding` values in the `DEM` file (default: 0, no override) */
     double *vP; /** probability vector (total of `n`) */
     qllr_t *vLLR; /** vector of LLRs (total of `n`) */
@@ -220,7 +220,7 @@ csr_t * do_G_from_C(const csr_t * const mLt, const one_vec_t * const codewords,
   "\t\t\t (default value: -1, no upper limit on energy)\n"		\
   "\t dmin=[integer]\t: terminate distance calculation immediately when\n" \
   "\t\t\t a vector of weight 'W<=dmin' is found, return '-w' (default: 0)\n" \
-  "\t seed= [long long int]\t: RNG seed or use time(NULL) if 0 (default)\n"	\
+  "\t seed= [long long int]\t: RNG seed or automatic if <=0 (default: 0)\n"	\
   "\t qllr1=[integer]\t: if 'USE_QLLR' is set, parameter 'd1' (12)\n"	\
   "\t qllr2=[integer]\t: if 'USE_QLLR' is set, parameter 'd2' (300)\n"	\
   "\t qllr3=[integer]\t: if 'USE_QLLR' is set, parameter 'd3' (7)\n"	\
