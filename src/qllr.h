@@ -111,7 +111,6 @@ extern "C"{
     return llr_from_dbl(val);
   }
 
-
   
 #else /* not USE_QLLR */
 
@@ -163,6 +162,19 @@ static inline qllr_t boxplus(const qllr_t x, const qllr_t y){
 
   qllr_params_t * init_LLR_tables (const int d1, const int d2, const int d3);
   void out_LLR_params(_maybe_unused qllr_params_t *lcu);
+
+  /** @brief calculate error probability from the LLR value */
+  static inline double P_from_llr(const qllr_t llr){
+    const double x = dbl_from_llr(llr);
+    if (x>5){
+      double emx=exp(-x);
+      return emx/(1.0+emx);
+    }
+    else 
+      return 1.0/1.0+exp(x);
+  }
+
+
   
 #ifdef __cplusplus
 }

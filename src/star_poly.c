@@ -17,6 +17,20 @@
 #include "util_m4ri.h"
 #include "qllr.h"
 
+/** @brief transform LLR coefficients `[A,B;C]:=0.5*(boxplus(A+B,C)+boxplus(A-B,C));`
+ * @param A the input LLR 
+ * @param B the input LLR 
+ * @param C the input LLR
+ * @return the transformed LLR
+ */
+qllr_t transform3(const qllr_t A, const qllr_t B, const qllr_t C){
+  const qllr_t C1=boxplus(A+B,C);
+  const qllr_t C2=boxplus(A-B,C);
+  const double CC = 0.5 * (dbl_from_llr(C1) + dbl_from_llr(C2));
+  return llr_from_dbl(CC);
+}
+
+
 /** @brief replace the DEM with star-triangle transformed 
  *
  * for every triplet of columns `(i1,i2,i3)` which sum to zero both in
@@ -35,13 +49,93 @@
  * @param debug bitmap for debugging info
  * @return the number of transformation steps done 
  */
-#if 0
-int star_triangle(csr_t * Ht, csr_t * Lt, qllr_t *LLR, const long int debug){
+#if 1
+int star_triangle(csr_t * Ht, csr_t * Lt, qllr_t *LLR, const one_vec_t * const codewords,
+		  const double eps,
+		  _maybe_unused const long int debug){
     /** sanity check */
   assert(Ht->nz == -1); 
   assert(Lt->nz == -1); /** CSR, not LOP form */
   assert(Ht->rows == Lt->rows);
+  const int n=Ht->rows;
+  mzd_t *used = mzd_init(1,n);
+  one_prob_t **cols = calloc(n, sizeof(one_prob_t *)); /* storage for processed columns */
+  int n1=0, r1=Ht->cols, nzH1=0, nzL1=0; /** new `n`, rows of new `H`, and non-zero elements */
+  if((!used) || (!cols))
+    ERROR("memory allocation failed!");
+  for(one_vec_t const * pvec = codewords; pvec != NULL; pvec=(one_vec_t *)(pvec->hh.next)){
+    if((pvec->weight ==3) &&
+       (mzd_read_bit(used, 0, pvec->arr[0])==0) &&
+       (mzd_read_bit(used, 0, pvec->arr[1])==0) &&
+       (mzd_read_bit(used, 0, pvec->arr[2])==0)){
+      int changed=0; /** did we use any of the three columns? */
+      for(int i=0; i<3; i++){
+	const int i0=(i+1)%3, i1=(i+2)%3, i2=(i+0)%3; 
+	int idx = pvec->arr[i2]; /** working on this column */
+	double prob = P_from_llr(transform3(LLR[pvec->arr[i0]], LLR[pvec->arr[i1]], LLR[pvec->arr[i2]]));
+	if(prob > eps){ /** otherwise just ignore this column */
+	  changed++;
+	  int wH = i2==0 ? 1 : Ht->p[idx+1] - Ht->p[idx] + 1 ;
+	  nzH1 += wH;
+	  int wL = i2==0 ? 0 : Lt->p[idx+1] - Lt->p[idx];
+	  nzL1 += wL;
+	  if((cols[n1] = malloc(sizeof(one_prob_t)+(wH+wL)*sizeof(int)))==NULL)
+	    ERROR("memory allocation failed!");
+	  cols[n1]->p = prob;
+	  cols[n1]->wH = wH;
+	  cols[n1]->wL = wL;
+	  int nz=0;
+	  if(i2!=0)
+	    for(int j=Ht->p[idx]; j < Ht->p[idx+1]; j++)
+	      cols[n1]->idx[nz++] = Ht->i[j];
+	  cols[n1]->idx[nz++] = r1; /** new (1,1,1) row */
+	  assert(nz==wH);
+	  if(i2!=0)
+	    for(int j=Lt->p[idx]; j < Lt->p[idx+1]; j++)
+	      cols[n1]->idx[nz++] = Lt->i[j];
+	  assert(nz==wH+wL);
+	  n1++;
+	}
+      }
+      if(changed)
+	r1++;
+    }     
+  }
+  /** go over the remaining columns */
+  for (int idx=0; idx<n; idx++){
+    if(mzd_read_bit(used, 0, idx)==0){
+      double prob = P_from_llr(LLR[idx]);
+      if(prob > eps){ /** otherwise just ignore this column - this may cause decoding failure */
+	int wH = Ht->p[idx+1] - Ht->p[idx];
+	nzH1 += wH;
+	int wL = Lt->p[idx+1] - Lt->p[idx];
+	nzL1 += wL;
+	if((cols[n1] = malloc(sizeof(one_prob_t)+(wH+wL)*sizeof(int)))==NULL)
+	  ERROR("memory allocation failed!");
+	cols[n1]->p = prob;
+	cols[n1]->wH = wH;
+	cols[n1]->wL = wL;
+	int nz=0;
+	for(int j=Ht->p[idx]; j < Ht->p[idx+1]; j++)
+	  cols[n1]->idx[nz++] = Ht->i[j];
+	for(int j=Lt->p[idx]; j < Lt->p[idx+1]; j++)
+	    cols[n1]->idx[nz++] = Lt->i[j];
+	n1++;
+      }
+    }
+  }
 
+  ERROR("add routines for exporting the matrices here ");
+  /** warning: add routines for exporting the matrices */
+  
+  /** memory clean-up */
+  mzd_free(used);
+  for(int i=0; i<n1; n1++)
+    if(cols[i])
+      free(cols[i]);
+  free(cols);
+  
+  return 0;
 }
 #endif 
 

@@ -94,6 +94,7 @@ extern "C"{
     //    int maxJ;	/** memory to initially allocate for local storage */
     qllr_t LLRmin;
     qllr_t LLRmax;
+    double epsilon; /** probability to ignore, default `1e-8` */
     one_vec_t *codewords; /** `hash table` with found codewords */
     long long int num_cws; /** `number` of codewords in the `hash` */
     FILE *file_err;
@@ -194,6 +195,7 @@ csr_t * do_G_from_C(const csr_t * const mLt, const one_vec_t * const codewords,
   "\t outC=[string]\t: output file name for codewords in `nzlist` format\n" \
   "\t\t\t (if same as finC, the file will be updated)\n"		\
   "\t maxC=[long long int]\t: max number of codewords to read/write/store\n" \
+  "\t epsilon=[double]\t: small probability cutoff (default: 1e-8)\n"	\
   "\t useP=[double]\t: fixed probability value (override values in DEM file)\n"	\
   "\t\t for a quantum code specify 'fdem' OR 'finH' and ( 'finL' OR 'finG' );\n" \
   "\t\t for classical just 'finH' (and optionally the dual matrix 'finL')\n" \

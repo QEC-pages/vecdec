@@ -28,7 +28,7 @@
 params_t prm={ .nchk=0, .nvar=0, .ncws=0, .steps=50,
   .lerr=-1, .maxosd=100, .bpalpha=0.5, .bpretry=1, .swait=0, .maxC=0,
   .dW=0, .minW=INT_MAX, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
-  .nvec=1024, .ntot=1, .nfail=0, .seed=0, .useP=0, .dmin=0,
+  .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8, .useP=0, .dmin=0,
   .debug=1, .fdem=NULL, .fdet=NULL, .fobs=NULL, .fout="tmp", .ferr=NULL,
   .mode=0, .submode=0, .use_stdout=0, 
   .LLRmin=0, .LLRmax=0, .codewords=NULL, .num_cws=0,
@@ -985,6 +985,13 @@ int var_init(int argc, char **argv, params_t *p){
       if (p->debug&1)
 	printf("# read %s, bpretry=%d\n",argv[i],p-> bpretry);
     }
+    else if (sscanf(argv[i],"epsilon=%lg",&val)==1){ /** `epsilon` */
+      p->epsilon = val;
+      if (p->debug&1)
+	printf("# read %s, epsilon=%g\n",argv[i],p-> epsilon);
+      if((val<0) || (val>1))
+	ERROR("arg[%d]=%s invalid probability cut-off, read %g",i,argv[i],val);
+    }
     else if (sscanf(argv[i],"useP=%lg",&val)==1){ /** `useP` */
       p->useP = val;
       if (p->debug&1)
@@ -1137,10 +1144,11 @@ int var_init(int argc, char **argv, params_t *p){
   }
 
   
-  if (p->seed == 0){
-    p->seed=time(NULL)+1000000ul*getpid(); /* ensure a different seed even if started at the same time */
+  if (p->seed <= 0){
+    long long int seed_old= - p->seed; 
+    p->seed=-(seed_old) + time(NULL)+1000000ul*getpid(); /* ensure a different seed even if started at the same time */
     if((p->debug)&&(p->mode!=3))
-      printf("# initializing seed=%lld from time(NULL)+1000000ul*getpid()\n",p->seed);
+      printf("# initializing seed=%lld from time(NULL)+1000000ul*getpid()+%lld\n",p->seed, seed_old);
     /** use `tinymt64_generate_double(&pp.tinymt)` for double [0,1] */
   }
   

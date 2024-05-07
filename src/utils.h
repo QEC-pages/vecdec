@@ -76,8 +76,8 @@ static inline double rnd_exponential(void){
   /** @brief structure to read in one line of data */
   typedef struct ONE_PROB_T {
     double p; /**< probability */
-    int n1;   /**< number of entries in H column */
-    int n2;   /**< number of entries in L column */
+    int wH;   /**< number of entries in H column */
+    int wL;   /**< number of entries in L column */
     int idx[]; /**< flexible array to store `n1+n2` entries */
   } one_prob_t;
 
