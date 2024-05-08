@@ -167,20 +167,25 @@ long long int nzlist_read(const char fnam[], params_t *p){
   while((entry=nzlist_r_one(f,NULL, fnam, &lineno))){
     if((p->maxC) && (count >= p->maxC))
       ERROR("number of entries in file %s exceeds maxC=%lld\n", p->finC, p->maxC);
-
-    qllr_t energ=0;
-    for(int i=0; i < entry->weight; i++) 
-      energ += p->vLLR[entry -> arr[i]];
-    entry->energ=energ;
-      /** `assume` unique vectors stored in the file */
     const size_t keylen = entry->weight * sizeof(rci_t);
-    HASH_ADD(hh, p->codewords, arr, keylen, entry); /** store in the `hash` */
-    count ++;
+    /** `DO NOT assume` unique vectors stored in the file */
+    one_vec_t *pvec=NULL;
+    HASH_FIND(hh, p->codewords, entry->arr, keylen, pvec);
+    if(!pvec){ /** vector not found, inserting */
 
-    if(p->minW > entry->weight)
-      p->minW = entry->weight;
-    if(p->minE > entry->energ)
-      p->minE = entry->energ;
+      qllr_t energ=0;
+      for(int i=0; i < entry->weight; i++) 
+	energ += p->vLLR[entry -> arr[i]];
+      entry->energ=energ;
+
+      HASH_ADD(hh, p->codewords, arr, keylen, entry); /** store in the `hash` */
+      count ++;
+
+      if(p->minW > entry->weight)
+	p->minW = entry->weight;
+      if(p->minE > entry->energ)
+	p->minE = entry->energ;
+    }
   }
   p->num_cws += count; 
   fclose(f);

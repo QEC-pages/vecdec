@@ -103,13 +103,25 @@ one_vec_t * nzlist_r_one(FILE *f, one_vec_t * vec, const char fnam[], long long 
   assert(f!=NULL);
   if ( ferror (f)|| feof(f) )
     return NULL; /** not an actuall error */
-  //  printf("%s:%ld: start nzlist_r_one() here\n", fnam, *lineno);
   int w;
+
+  char c=fgetc(f); /** are there comments to skip? */
+  while(c=='%'){ /** `comment line` starting with '%' */
+    do{
+      c=fgetc(f);     
+      if(feof(f))
+	return NULL;
+    }
+    while(c!='\n'); /** skip to the end of the comment line */
+    (*lineno)++;
+    c=fgetc(f);
+  }
+  ungetc(c,f); 
+  
   if(!fscanf(f," %d",&w)){
     printf("%s:%lld: invalid NZLIST entry\n", fnam, *lineno);
     ERROR("expected an integer");
   }
-  //  printf("read w=%d from line %ld\n",w,*lineno);
   if ((vec!=NULL) && (vec->weight<w)){
     free(vec);
     vec=NULL;

@@ -286,4 +286,9 @@ stim sample_dem \
 - [ ] syndrome transformations / detector events creation
   - [ ] syndrome transformation matrix (e.g., for subcode decoding)
 
-- [ ] convenience feature: with negative seed, combine `time(null)` with the number provided
+- [x] convenience feature: with negative seed, combine `time(null)` with the number provided
+- [ ] convenience feature: ability to combine several files with
+      codewords (several `finC` arguments).  (**do we need this --
+      given that the codewords are now read uniquely? **)
+- [ ] a special mode to process ( test / give the stats / select
+      irreducible codewords ) in codewords files.
