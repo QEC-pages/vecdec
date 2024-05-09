@@ -159,16 +159,20 @@ extern "C"{
 		    const qllr_t LLR[], const params_t * const p);
   
   /** function defined in `star_poly.c` ********************************************* */
-
-/** @brief create K=Lz matrix with minimum weight rows from a list of codewords in hash */
+  
+  /** @brief replace the DEM (matrices Ht, Lt, and LLR vector) with star-triangle transformed */
+  int star_triangle(csr_t * Ht, csr_t * Lt, qllr_t *LLR, const one_vec_t * const codewords,
+		  _maybe_unused const long int debug);
+  
+  /** @brief create K=Lz matrix with minimum weight rows from a list of codewords in hash */
   csr_t * do_K_from_C(const csr_t * const mLt, const one_vec_t * const codewords,
 		      const int k, const int minW, const int maxW,
 		      _maybe_unused const int debug);
 
-/** @brief create G=Hz matrix with minimum weight rows from a list of codewords in hash */
-csr_t * do_G_from_C(const csr_t * const mLt, const one_vec_t * const codewords,
-		    const int num_need, const int minW, int maxW,
-		    _maybe_unused const int debug);  
+  /** @brief create G=Hz matrix with minimum weight rows from a list of codewords in hash */
+  csr_t * do_G_from_C(const csr_t * const mLt, const one_vec_t * const codewords,
+		      const int num_need, const int minW, int maxW,
+		      _maybe_unused const int debug);  
   
   csr_t * do_G_matrix(const csr_t * const mHt, const csr_t * const mLt, const qllr_t LLR[], 
 		      const int debug);
@@ -257,6 +261,8 @@ csr_t * do_G_from_C(const csr_t * const mLt, const one_vec_t * const codewords,
   "\t\t\t .4 (bit 2) write H=Hx matrix\n"				\
   "\t\t\t .8 (bit 3) write  L=Lx matrix\n"				\
   "\t\t\t .16 (bit 4) write P vector\n"					\
+  "\t\t\t In addition, mode=3.32 (just one bit set) in combination with\n" \
+  "\t\t\t  codewords file 'finC' forces matrix transformation mode\n"	\
   "\t\t\t Use 'fout=' command line argument to generate file names\n"	\
   "\t\t\t ${fout}H.mmx, ${fout}G.mmx, ${fout}L.mmx, ${fout}K.mmx, and ${fout}P.mmx\n" \
   "\t\t\t with 'fout=stdout' all output is sent to 'stdout'\n"		\

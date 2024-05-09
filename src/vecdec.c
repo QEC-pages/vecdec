@@ -1255,6 +1255,10 @@ int var_init(int argc, char **argv, params_t *p){
     for(int i=0;i<p->nvar;i++, ptr++)
       *ptr = p->useP;    
   }
+  else if (p->finP){/** read probabilities */
+
+
+  }
   if(!p->vP)
     ERROR("probabilities missing, specify 'fdem', 'finP', or 'useP'");
     
@@ -1337,9 +1341,15 @@ int var_init(int argc, char **argv, params_t *p){
   case 3: /** read in DEM file and output the H, L, G, K matrices and P vector */
     if(strcmp(p->fout,"stdout")==0)
       p->use_stdout=1;
-    if (p->submode>=32)
+    if (p->submode>=64)
       ERROR(" mode=%d : submode='%d' unsupported\n",
-	    p->mode, p->submode);    
+	    p->mode, p->submode);
+    if(p->submode & 32){ // matrix modification
+      if(!(p->submode &31))
+	p->submode ^= (4+8+16);
+      else 
+	ERROR("mode=%d : submode=%d should equal 32 ('mode=3.32' for matrix modification)\n",p->mode,p->submode);
+    }
     break;
     
   default:
@@ -1679,6 +1689,34 @@ int main(int argc, char **argv){
     break;
     
   case 3: /** read in DEM file and output the H, L, G matrices and P vector */
+    if(p->submode&32){ /** matrix transformation */
+      if(!p->finC)
+	ERROR("mode=%d submode=%d (bit 5 set) must set 'finC' for matrix transformations",
+	      p->mode,p->submode);
+
+      p->num_cws = nzlist_read(p->finC, p);
+      if(p->debug&1)
+	printf("# %lld codewords read from %s ...",p->num_cws, p->finC);
+      do_hash_verify_CW(p->mHt, p->mLt, p);
+      if(p->debug&1)
+	printf("all verified\n");
+      do_hash_min(p); /** set values `minE` and `minW` from stored CWs */
+      if(p->minW > 3)
+	ERROR("minW=%d, codewords of weight <= 3 required for matrix transformation\n",p->minW);
+      star_triangle(p->mHt, p->mLt, p->vLLR, p->codewords, p->debug);
+
+      /** update the three matrices and the error vector */
+      csr_free(p->mH);
+      p->mH = csr_transpose(NULL, p->mHt);
+      csr_free(p->mL);
+      p->mL = csr_transpose(NULL,p->mLt);
+      p->nchk = p->mH->rows;
+      p->nvar = p->mH->cols;
+      for(int i=0; i < p->nchk; i++)
+	p->vP[i] = P_from_llr(p->vLLR[i]);
+      
+      assert((p->submode & (4+8+16)) == 28); /** only write Hx, Lx, and P */
+    }
     size = snprintf(NULL, 0, "H matrix from DEM file %s", p->fdem);
     if(!(comment = malloc(size + 1)))
       ERROR("memory allocation");

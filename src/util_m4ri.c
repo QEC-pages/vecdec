@@ -386,9 +386,17 @@ csr_t *csr_free(csr_t *p){
  * check existing size and (re)allocate if  needded 
  */
 csr_t *csr_init(csr_t *mat, int rows, int cols, int nzmax){
-  if ((mat!=NULL)&&((mat->nzmax < nzmax)||(mat->nzmax < rows+1)))
-    mat=csr_free(mat);  /* allocated size was too small */  
-  if(mat==NULL){
+  if ((mat!=NULL)&&((mat->nzmax < nzmax)||(mat->nzmax < rows+1))){
+    // mat=csr_free(mat);  /* allocated size was too small */
+    /** keep allocated `mat` */
+    mat->p = realloc(mat->p,MAX(nzmax,(rows+1))*sizeof(int));
+    mat->i = realloc(mat->i, nzmax*sizeof(int));
+    if ((mat->p==NULL) || (mat->i==NULL))
+      ERROR("csr_init: failed to reallocate CSR rows=%d cols=%d nzmax=%d",
+            rows,cols,nzmax);
+    mat->nzmax=nzmax;
+  }
+  else if(mat==NULL){
     mat=malloc(sizeof(csr_t));  
     mat->p=calloc(MAX(nzmax,(rows+1)),sizeof(int));
     mat->i=calloc(nzmax,sizeof(int)); 

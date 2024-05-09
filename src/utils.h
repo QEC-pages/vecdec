@@ -73,14 +73,6 @@ static inline double rnd_exponential(void){
     int arr[0]; /** array of `weight` integers, the actual key  */
   } one_vec_t;
 
-  /** @brief structure to read in one line of data */
-  typedef struct ONE_PROB_T {
-    double p; /**< probability */
-    int wH;   /**< number of entries in H column */
-    int wL;   /**< number of entries in L column */
-    int idx[]; /**< flexible array to store `n1+n2` entries */
-  } one_prob_t;
-
   /** @brief print entire `one_vec_t` structure by pointer */
   void print_one_vec(const one_vec_t * const pvec);
 
