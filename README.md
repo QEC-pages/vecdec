@@ -408,7 +408,8 @@ You can generate the list of supported command line arguments by running
 `vecdec --help`.
 
 ```bash
-  usage: ./src/vecdec param=value [[param=value] ... ]
+./vecdec:  vecdec - vectorized decoder and LER estimator
+  usage: ./vecdec param=value [[param=value] ... ]
 	 Command line arguments are processed in the order given.
 	 Supported parameters:
 	 --help		: give this help (also '-h' or just 'help')
@@ -444,6 +445,7 @@ You can generate the list of supported command line arguments by running
 	 ntot =[long long int]	: total syndromes to generate (default: 1)
 	 nfail=[long long int]	: total fails to terminate (0, do not terminate)
 	 dW=[integer]	: if 'dW>=0', may keep vectors of weight up to 'minW+dW' (0)
+	 maxW=[integer]	: if non-zero, skip any vectors above this weight (0)
 	 dE=[double]	: if 'dE>=0', may keep vectors of energy up to 'minE+dE'
 			 (default value: -1, no upper limit on energy)
 	 dmin=[integer]	: terminate distance calculation immediately when
@@ -485,6 +487,8 @@ You can generate the list of supported command line arguments by running
 			 .4 (bit 2) write H=Hx matrix
 			 .8 (bit 3) write  L=Lx matrix
 			 .16 (bit 4) write P vector
+			 In addition, mode=3.32 (just one bit set) in combination with
+			  codewords file 'finC' forces matrix transformation mode
 			 Use 'fout=' command line argument to generate file names
 			 ${fout}H.mmx, ${fout}G.mmx, ${fout}L.mmx, ${fout}K.mmx, and ${fout}P.mmx
 			 with 'fout=stdout' all output is sent to 'stdout'
@@ -507,7 +511,12 @@ You can generate the list of supported command line arguments by running
   ```C
   seed = x + time(NULL) + 1000000ul * getpid();
   ```
-
+- The command-line argument `maxW` can be used to ensure that all
+  codewords of higher weight are omitted.  This is useful with
+  `mode=3.32` (matrix transformation) as the complexity grows
+  exponentially with the weight.  [Currently only transformations
+  corresponding to codewords of weight `1`, `2`, and `3` are
+  implemented.]
 
 ## Libraries 
 
