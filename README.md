@@ -378,14 +378,17 @@ Additional parameters relevant for this mode:
 
 This section describes operation with the command-line switch
 `mode=3`.  In this case the program does not try to run anything and
-just parses the DEM file and saves the corresponding parity-check `H=Hx`,
-observables `L=Lx` matrices and the error-probabilities `P` vector.  In
-addition, the program constructs the `G=Hz` and `K=Lz` matrices.  As a reminder,
-rows of `G` are orthogonal to rows of `H` and `L`, while rows of `K` are orthogonal to the rows of `H`, 
-are linearly independent from rows of `G`, and each has a non-zero product with a row of `L`.  Also, 
-`rank H + rank G = n-k`, `rank L = rank K = k`, where `n` is the number of variable nodes (matrix columns) 
-and `k` is the dimension of the code.  For a classical code, matrix `G` is trivial (has zero rank), 
-while the `L` matrix can be selected to have all rows of weight `1`.
+just parses the DEM file and saves the corresponding parity-check
+`H=Hx`, observables `L=Lx` matrices and the error-probabilities `P`
+vector.  In addition, the program constructs the `G=Hz` and `K=Lz`
+matrices.  As a reminder, rows of `G` are orthogonal to rows of `H`
+and `L`, while rows of `K` are orthogonal to the rows of `H`, are
+linearly independent from rows of `G`, and each has a non-zero product
+with a row of `L`.  Also, `rank H + rank G = n-k`, `rank L = rank K =
+k`, where `n` is the number of variable nodes (matrix columns) and `k`
+is the dimension of the code.  For a classical code, matrix `G` is
+trivial (has zero rank), while the `L` matrix can be selected to have
+all rows of weight `1`.
 
 The matrices are written in the Matrix Market format to files with names
 `${fout}H.mmx`, `${fout}G.mmx`, `${fout}L.mmx`, and `${fout}P.mmx`,
