@@ -294,9 +294,9 @@ extern "C"{
   "   The dual CSS matrix Hz can be specified instead of Lx.\n"	\
   "\t In such a case, the internal error generator must be used\n"	\
   "\t (an attempt to specify 'fdet' and 'fobs' files will result in an error).\n" \
-  "   For a classical code, specify only the parity check matrix Hx=H.\n" \
+  "   For a classical code, just give the parity check matrix Hx=H.\n"	\
   "\t In this case G matrix is trivial (has zero rank), and\n"		\
-  "\t Lx is set to identity matrix.  \n"				\
+  "\t Lx has all rows of weight '1'.  \n"				\
   "\t Only the internal error generator can be used for classical codes\n"
   
   
