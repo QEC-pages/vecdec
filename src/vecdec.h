@@ -76,6 +76,7 @@ extern "C"{
     qllr_t *vLLR; /** vector of LLRs (total of `n`) */
     int minW; /** minimum weight of a codeword or error vector found */
     int dW; /** weight over `minW` to keep the CW or error vector in a hash (-1: no limit; default `0`) */
+    int maxW; /** if non-zero, skip any vectors above this weight (default `0`, no upper limit) */
     qllr_t minE; /** minimum energy of a codeword or error vector found */
     qllr_t dE; /** energy over `minE` to keep the CW or error vector in a hash (default: -1, no limit on `E`) */
     double dEdbl; /** temp value */
@@ -220,6 +221,7 @@ extern "C"{
   "\t ntot =[long long int]\t: total syndromes to generate (default: 1)\n"	\
   "\t nfail=[long long int]\t: total fails to terminate (0, do not terminate)\n" \
   "\t dW=[integer]\t: if 'dW>=0', may keep vectors of weight up to 'minW+dW' (0)\n" \
+  "\t maxW=[integer]\t: if non-zero, skip any vectors above this weight (0)\n" \
   "\t dE=[double]\t: if 'dE>=0', may keep vectors of energy up to 'minE+dE'\n" \
   "\t\t\t (default value: -1, no upper limit on energy)\n"		\
   "\t dmin=[integer]\t: terminate distance calculation immediately when\n" \

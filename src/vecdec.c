@@ -27,7 +27,7 @@
 
 params_t prm={ .nchk=0, .nvar=0, .ncws=0, .steps=50,
   .lerr=-1, .maxosd=100, .bpalpha=0.5, .bpretry=1, .swait=0, .maxC=0,
-  .dW=0, .minW=INT_MAX, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
+  .dW=0, .minW=INT_MAX, .maxW=0, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
   .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8, .useP=0, .dmin=0,
   .debug=1, .fdem=NULL, .fdet=NULL, .fobs=NULL, .fout="tmp", .ferr=NULL,
   .mode=0, .submode=0, .use_stdout=0, 
@@ -167,24 +167,26 @@ long long int nzlist_read(const char fnam[], params_t *p){
   while((entry=nzlist_r_one(f,NULL, fnam, &lineno))){
     if((p->maxC) && (count >= p->maxC))
       ERROR("number of entries in file %s exceeds maxC=%lld\n", p->finC, p->maxC);
-    const size_t keylen = entry->weight * sizeof(rci_t);
-    /** `DO NOT assume` unique vectors stored in the file */
-    one_vec_t *pvec=NULL;
-    HASH_FIND(hh, p->codewords, entry->arr, keylen, pvec);
-    if(!pvec){ /** vector not found, inserting */
+    if((p->maxW==0) ||((p->maxW) && (entry->weight <= p->maxW))){
+      const size_t keylen = entry->weight * sizeof(rci_t);
+      /** `DO NOT assume` unique vectors stored in the file */
+      one_vec_t *pvec=NULL;
+      HASH_FIND(hh, p->codewords, entry->arr, keylen, pvec);
+      if(!pvec){ /** vector not found, inserting */
+	
+	qllr_t energ=0;
+	for(int i=0; i < entry->weight; i++) 
+	  energ += p->vLLR[entry -> arr[i]];
+	entry->energ=energ;
+	
+	HASH_ADD(hh, p->codewords, arr, keylen, entry); /** store in the `hash` */
+	count ++;
+	if(p->minE > entry->energ)
+	  p->minE = entry->energ;
 
-      qllr_t energ=0;
-      for(int i=0; i < entry->weight; i++) 
-	energ += p->vLLR[entry -> arr[i]];
-      entry->energ=energ;
-
-      HASH_ADD(hh, p->codewords, arr, keylen, entry); /** store in the `hash` */
-      count ++;
-
-      if(p->minW > entry->weight)
-	p->minW = entry->weight;
-      if(p->minE > entry->energ)
-	p->minE = entry->energ;
+	if(p->minW > entry->weight)
+	  p->minW = entry->weight;
+      }
     }
   }
   p->num_cws += count; 
@@ -197,12 +199,14 @@ long long int nzlist_read(const char fnam[], params_t *p){
 long long int nzlist_write(const char fnam[], const char comment[], params_t *p){
   long long int count=0;
   assert(fnam);
-  FILE * f=nzlist_w_new(fnam, comment); /** no need to check if open */
+  FILE * f = nzlist_w_new(fnam, comment); /** no need to check if open */
   one_vec_t *pvec;
   
   for(pvec = p->codewords; pvec != NULL; pvec = (one_vec_t *)(pvec->hh.next)){
-    count ++;
-    nzlist_w_append(f,pvec);
+    if((p->maxW==0) ||((p->maxW) && (pvec->weight <= p->maxW))){
+      count ++;
+      nzlist_w_append(f,pvec);
+    }
   }
   fclose(f);
   return count;
@@ -280,19 +284,22 @@ double do_hash_fail_prob( params_t * const p){
   if(p->debug & 1024) {/** `print` the list of cws found by energy */
     HASH_SORT(p->codewords, by_energy);
     for(pvec = p->codewords; pvec != NULL; pvec=(one_vec_t *)(pvec->hh.next))
-      print_one_vec(pvec);
+      if ((p->maxW==0) || ((p->maxW != 0) && (pvec->weight <= p->maxW)))
+	print_one_vec(pvec);
   }
   /** finally calculate and output fail probability here */
   /** TODO: use the limit on `W` and `E` (just ignore codewords outside the limit) */
   double pfail=0, pmax=0;
   int minW=p->nvar + 1;
   for(pvec = p->codewords; pvec != NULL; pvec=(one_vec_t *)(pvec->hh.next)){
-    double prob=do_prob_one_vec(pvec, p);
-    pfail += prob;
-    if(prob>pmax)
-      pmax=prob;
-    if(minW> pvec->weight)
-      minW=pvec->weight;
+    if ((p->maxW==0) || ((p->maxW != 0) && (pvec->weight <= p->maxW))){
+      double prob=do_prob_one_vec(pvec, p);
+      pfail += prob;
+      if(prob>pmax)
+	pmax=prob;
+      if(minW> pvec->weight)
+	minW=pvec->weight;
+    }
   }
   /** todo: prefactor calculation */
   if(p->debug&1)
@@ -1023,6 +1030,16 @@ int var_init(int argc, char **argv, params_t *p){
 	  printf("# setting upper limit 'minW+%d' on error/codeword weight to store\n",p->dW);
       }	
     }
+    else if (sscanf(argv[i],"maxW=%d",&dbg)==1){ /** `maxW` */
+      p -> maxW = dbg;
+      if (p->debug&1){
+	printf("# read %s, maxW=%d\n",argv[i],p-> maxW);
+	if (p->maxW <= 0)
+	  printf("# no hard limit on error/codeword weight\n");
+	else
+	  printf("# hard upper limit w<=%d on codeword weight\n",p->maxW);
+      }	
+    }
     else if (0==strncmp(argv[i],"fout=",5)){ /** `fout` */
       if(strlen(argv[i])>5){
         p->fout = argv[i]+5;
@@ -1256,8 +1273,12 @@ int var_init(int argc, char **argv, params_t *p){
       *ptr = p->useP;    
   }
   else if (p->finP){/** read probabilities */
-
-
+    int rows, cols, siz;
+    p->vP = dbl_mm_read(p->finP, &rows, &cols, &siz, NULL);
+    assert(rows == 1);
+    assert(cols == p->nvar);
+    if(p->debug&1)
+      printf("# read %d probability values from %s\n", cols, p->finP);
   }
   if(!p->vP)
     ERROR("probabilities missing, specify 'fdem', 'finP', or 'useP'");
@@ -1675,15 +1696,15 @@ int main(int argc, char **argv){
 	name=p->finH;
       else
 	name="(unknown source)";
-      size_t size = 1 + snprintf(NULL, 0, "codewords computed from '%s'", name);
+      size_t size = 1 + snprintf(NULL, 0, "codewords computed from '%s', maxW=%d", name, p->maxW);
       char *buf = malloc(size * sizeof(char));
       if(!buf)
 	ERROR("memory allocation");
-      snprintf(buf, size, "# codewords from '%s'", name);
+      snprintf(buf, size, "# codewords computed from '%s', maxW=%d", name, p->maxW);
       
       long long cnt=nzlist_write(p->outC, buf, p);
       if(p->debug & 1)
-	printf("wrote %lld computed codewords to file %s\n",cnt,p->outC);
+	printf("# wrote %lld computed codewords to file %s\n",cnt,p->outC);
     }
     do_hash_clear(p);
     break;

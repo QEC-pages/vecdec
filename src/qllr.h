@@ -171,7 +171,7 @@ static inline qllr_t boxplus(const qllr_t x, const qllr_t y){
       return emx/(1.0+emx);
     }
     else 
-      return 1.0/1.0+exp(x);
+      return 1.0/(1.0+exp(x));
   }
 
 

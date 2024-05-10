@@ -18,6 +18,7 @@
 #include "utils.h"
 #include "mmio.h"
 #include "qllr.h"
+#include <errno.h>
 
 tinymt64_t tinymt;
 
@@ -46,8 +47,10 @@ void print_one_vec(const one_vec_t * const pvec){
  */
 FILE * nzlist_w_new(const char fnam[], const char comment[]){
   FILE *f=fopen(fnam,"w");
-  if(!f)
+  if(!f){
+    printf("FILE I/O ERROR: %s\n", strerror(errno));
     ERROR("can't open file %s for writing",fnam);
+  }
   fprintf(f,"%%%% NZLIST\n");
   if(comment)
     fprintf(f,"%% %s\n",comment);
@@ -71,8 +74,10 @@ int nzlist_w_append(FILE *f, const one_vec_t * const vec){
 FILE * nzlist_r_open(const char fnam[], long long int *lineno){
   int cnt;
   FILE *f=fopen(fnam,"r");
-  if(!f)
+  if(!f){    
+    printf("FILE I/O ERROR: %s\n", strerror(errno));
     ERROR("can't open file %s for writing",fnam);
+  }
   if((EOF == fscanf(f,"%%%% NZLIST %n",&cnt)) || (cnt<9))
     ERROR("invalid signature line, expected '%%%% NZLIST'");
   *lineno=2;  
@@ -165,8 +170,10 @@ double * dbl_mm_read(const char * const fin, int *nrows, int *ncols, int *siz, d
   *nrows = 0;
   *ncols = 0;
 
-  if ((f = fopen(fin, "r")) == NULL) 
-    ERROR("can't open file %s",fin);
+  if ((f = fopen(fin, "r")) == NULL){
+    printf("FILE I/O ERROR: %s\n", strerror(errno)); 
+    ERROR("can't open file %s for reading",fin);
+  }
 
   if (mm_read_banner(f, &matcode) != 0)
     ERROR("Could not process Matrix Market banner.");
@@ -205,6 +212,7 @@ double * dbl_mm_read(const char * const fin, int *nrows, int *ncols, int *siz, d
     if(1 != fscanf(f," %lg ", ptr))
       ERROR("failed to read entry %d of %d",i,num_items);
   }
+  fclose(f);
   return arr;
 }
 
@@ -226,8 +234,10 @@ void dbl_mm_write( char * const fout, const char fext[],
     f=stdout;
   }
   
-  if(!f)
+  if(!f){
+    printf("FILE I/O ERROR: %s\n", strerror(errno)); 
     ERROR("can't open file '%s' for writing",str);
+  }
   if(fprintf(f,"%%%%MatrixMarket matrix array real general\n")<0)
     result++;
   if(comment!=NULL){
@@ -271,8 +281,10 @@ void read_dem_file(char *fnam, void * ptrs[3], int debug){
   if(debug & 1)
     printf("# opening DEM file %s\n",fnam);
   FILE *f = fopen(fnam, "r");
-  if(f==NULL)
+  if(f==NULL){
+    printf("FILE I/O ERROR: %s\n", strerror(errno));     
     ERROR("can't open the (DEM) file %s for reading\n",fnam);
+  }
 
   int r=-1, k=-1, n=0;
   int iD=0, iL=0; /** numbers of `D` and `L` entries */
