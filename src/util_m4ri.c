@@ -734,7 +734,7 @@ csr_t *csr_alist_read(const char fnam[], csr_t * mat, int transpose, int debug){
 
   if(debug &1)
     printf("# read alist file %s %s: rows=%d cols=%d nz=%d\n",
-	   fnam,!transpose?"(transposed)":"",mat->rows,mat->cols,mat->nz);
+	   fnam,!transpose?"(transposed)":"",mat->rows,mat->cols,nz);
 
   return mat;    
 }
@@ -1009,8 +1009,9 @@ int do_errors(mzd_t *mHe, mzd_t *mLe, const csr_t * const Ht, const csr_t * cons
   
   assert((mHe!=NULL) && (mLe!=NULL)); /** sanity check */
   assert(mHe->ncols == mLe->ncols);   /** how many errors to produce */
-  assert(Lt->cols == mLe->nrows);     /** rows `L` */
-  assert(Ht->cols == mHe->nrows);     /** rows `H` */
+  assert((Lt!=NULL) && (Lt->cols == mLe->nrows));     /** rows `L` */
+  assert((Ht!=NULL) && (Ht->cols == mHe->nrows));     /** rows `H` */
+  assert(vP!=NULL);
   
   int max = 100;  /** initial size of `vec` */
   int * vec = malloc(max * sizeof(int));

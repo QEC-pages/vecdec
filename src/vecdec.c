@@ -26,11 +26,12 @@
 #include "qllr.h"
 
 params_t prm={ .nchk=0, .nvar=0, .ncws=0, .steps=50,
+  .rankH=-1, .rankG=-1, .rankL=-1, 
   .lerr=-1, .maxosd=100, .bpalpha=0.5, .bpretry=1, .swait=0, .maxC=0,
   .dW=0, .minW=INT_MAX, .maxW=0, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
   .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8, .useP=0, .dmin=0,
   .debug=1, .fdem=NULL, .fdet=NULL, .fobs=NULL, .fout="tmp", .ferr=NULL,
-  .mode=0, .submode=0, .use_stdout=0, 
+  .mode=-1, .submode=0, .use_stdout=0, 
   .LLRmin=0, .LLRmax=0, .codewords=NULL, .num_cws=0,
   .finH=NULL, .finL=NULL, .finG=NULL, .finK=NULL, .finP=NULL,
   .finC=NULL, .outC=NULL, 
@@ -154,6 +155,41 @@ mzp_t * do_skip_pivs(const size_t rank, const mzp_t * const pivs){
     for(size_t i=0; i< rank; i++)
       printf(" %d%s",pivs->values[i],i+1 == rank ?"\n":"");
   }
+  return ans;
+}
+
+/** @brief construct `L` matrix for a classical code orthogonal to rows of `H`
+ * 
+ * The matrix should have `k` rows of weight `1` each.
+ */
+csr_t * do_L_classical(const csr_t * const H, const params_t * const p){
+  assert((H!=NULL) && (H->nz == -1));
+  mzd_t * mH = mzd_from_csr(NULL, H);
+
+  /** construct a list of non-pivot columns in `H` */
+  mzp_t * skip_pivs=mzp_init(p->nvar); 
+  if(!skip_pivs)
+    ERROR("memory allocation failed!\n");
+  int rank=0, k=0;
+  for(int col=0; col< p->nvar; col++){
+    int ret=gauss_one(mH, col, rank);
+    if(ret)
+      rank++;
+    else
+      skip_pivs->values[k++]=col;
+  }
+  mzd_free(mH);
+
+  /** construct the matrix to return */
+  csr_t *ans = csr_init(NULL,k,p->nvar,k);
+  for(int i=0; i<k; i++){
+    ans->p[i] = i;
+    ans->i[i] = skip_pivs->values[i];
+  }
+  ans->p[k]=k;
+  ans->nz = -1;
+
+  mzp_free(skip_pivs);
   return ans;
 }
 
@@ -823,12 +859,13 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
 void init_Ht(params_t *p){
   const int n = p->nvar;
   p->mHt = csr_transpose(p->mHt, p->mH);
-  p->mLt = csr_transpose(p->mLt,p->mL);
+  if(p->mL)
+    p->mLt = csr_transpose(p->mLt,p->mL);
   /** todo: fix reallocation logic to be able to reuse the pointers model */
   //  if(p->vP)    free(p->vP);
   //  p->vP=inP;
-  p->vLLR = malloc(n*sizeof(qllr_t));
-  assert(p->vLLR !=0);
+  if(!(p->vLLR = malloc(n*sizeof(qllr_t))))
+    ERROR("memory allocation!");
   p->LLRmin=1e9;
   p->LLRmax=-1e9;
 
@@ -867,12 +904,14 @@ void init_Ht(params_t *p){
     mzd_print(mdH);
     mzd_free(mdH);
 
-    printf("mL:\n");
-    //    csr_out(mL);
-    mzd_t *mdL = mzd_from_csr(NULL,p->mL);
-    mzd_print(mdL);
-    mzd_free(mdL);
-    //    }
+    if(p->mL){
+      printf("mL:\n");
+      //    csr_out(mL);
+      mzd_t *mdL = mzd_from_csr(NULL,p->mL);
+      mzd_print(mdL);
+      mzd_free(mdL);
+      //    }
+    }
   }
 #endif
 
@@ -1148,7 +1187,12 @@ int var_init(int argc, char **argv, params_t *p){
     else if((strcmp(argv[i],"--help")==0)
             ||(strcmp(argv[i],"-h")==0)
             ||(strcmp(argv[i],"help")==0)){
-      printf( USAGE , argv[0],argv[0]);
+      switch(p->mode){
+      case -1:  /** todo: insert help messages specific to each mode */
+      default:
+	printf( USAGE , argv[0],argv[0]);
+	break;
+      }    
       exit (-1);
     }
     else if((strcmp(argv[i],"--morehelp")==0)
@@ -1164,7 +1208,8 @@ int var_init(int argc, char **argv, params_t *p){
     }
 
   }
-
+  if(p->mode==-1)
+    p->mode=0; /** the default value if `mode` is not set on command line */
   
   if (p->seed <= 0){
     long long int seed_old= - p->seed; 
@@ -1253,6 +1298,7 @@ int var_init(int argc, char **argv, params_t *p){
       ERROR("rows of H=Hx and G=Hz should be orthogonal \n");
 
     if(!p->mL) /** create `Lx` */
+      /** WARNING: this does not necessarily have minimal row weights */
       p->mL=Lx_for_CSS_code(p->mH,p->mG);
     p->ncws = p->mL->rows;
 
@@ -1287,13 +1333,8 @@ int var_init(int argc, char **argv, params_t *p){
 
   p->dE = llr_from_dbl(p->dEdbl);
   
-  if(!p->mL){
-    p->mL=csr_identity(p->nvar, p->nvar);
-    p->ncws = p->nvar;
-  }
-
   switch(p->mode){
-  case 1:  /** currently only needed for BP */
+  case 1: /** both `mode=1` (BP) and `mode=0` */
     if(p->debug&1){
       out_LLR_params(LLR_table);
       printf("# submode=%d, %s BP using %s LLR\n",
@@ -1312,6 +1353,11 @@ int var_init(int argc, char **argv, params_t *p){
       ERROR(" mode=%d BP : submode='%d' currently unsupported\n", p->mode, p->submode);    
     /* fall through */
   case 0:
+    if(p->classical){
+      p->mL=do_L_classical(p->mH, p);
+      p->ncws = p->mL->rows;
+    }
+    
     if((p->ferr) && (p->fobs))
       ERROR("With ferr=%s cannot specify fobs=%s (will calculate)\n",p->fdem, p->fobs);
     if((p->ferr) && (p->fdet))
@@ -1383,11 +1429,12 @@ int var_init(int argc, char **argv, params_t *p){
     mzd_t *mH0 = mzd_from_csr(NULL,p->mH);
     printf("matrix mH0:\n");  mzd_print(mH0);
     mzd_free(mH0);
-    
-    mzd_t *mL0 = mzd_from_csr(NULL,p->mL);
-    printf("matrix mL0:\n");  mzd_print(mL0);
-    mzd_free(mL0);
 
+    if(p->mL){
+      mzd_t *mL0 = mzd_from_csr(NULL,p->mL);
+      printf("matrix mL0:\n");  mzd_print(mL0);
+      mzd_free(mL0);
+    }
     //    for(int i=0; i < p->nvar; i++)
     //      printf(" P[%d]=%g \n",i,p->vP[i]);
   }
@@ -1442,9 +1489,12 @@ void var_kill(params_t *p){
 
   p->mH =  csr_free(p->mH);
   p->mHt = csr_free(p->mHt);
-  p->mL =  csr_free(p->mL);
-  p->mLt = csr_free(p->mLt);
-  p->mG = csr_free(p->mG);
+  if(p->mL)
+    p->mL =  csr_free(p->mL);
+  if(p->mLt)
+    p->mLt = csr_free(p->mLt);
+  if(p->mG)
+    p->mG = csr_free(p->mG);
   if(p->mE) mzd_free(p->mE);
   if(p->mHe) mzd_free(p->mHe);
   if(p->mLe) mzd_free(p->mLe);
@@ -1507,10 +1557,8 @@ int main(int argc, char **argv){
   
   /** initialize variables, read in the DEM file, initialize sparse matrices */
   var_init(argc,argv,  p);
-  assert(p->mL);
-    //    p->mL=csr_identity(p->nvar, p->nvar);
   init_Ht(p);
-  //  mat_init(p);
+
   if(p->debug & 1)
     printf("# mode=%d submode=%d debug=%d\n",p->mode,p->submode,p->debug);
 
@@ -1526,7 +1574,7 @@ int main(int argc, char **argv){
   case 0: /** `mode=0` internal `vecdec` decoder */
     /** at least one round always */
     synd_tot=0, synd_fail=0;
-    for(long long int iround=0; iround < rounds; iround++){
+    for(long long int iround=1; iround <= rounds; iround++){
       if(p->debug &1){
 	printf("# starting round %lld of %lld fail=%lld total=%lld\n", iround, rounds, synd_fail,synd_tot);
 	fflush(stdout);
@@ -1714,7 +1762,8 @@ int main(int argc, char **argv){
       if(!p->finC)
 	ERROR("mode=%d submode=%d (bit 5 set) must set 'finC' for matrix transformations",
 	      p->mode,p->submode);
-
+      if((p->classical)||(!(p->mL)))
+	ERROR("mode=%d submode=%d (bit 5 set) must be a quantum code",p->mode,p->submode);
       p->num_cws = nzlist_read(p->finC, p);
       if(p->debug&1)
 	printf("# %lld codewords read from %s ...",p->num_cws, p->finC);
@@ -1749,13 +1798,18 @@ int main(int argc, char **argv){
 	       p->mH->rows, p->mH->cols, p->fout, p->use_stdout ? "\n" :"H.mmx");
       csr_mm_write(p->fout,"H.mmx",p->mH,comment);
     }
-    
-    if(!(p->submode & 31) || (p->submode & 8)){      
-      if(p->debug&1)
-	printf("# writing L=Lx matrix [ %d x %d ] to \t%s%s\n",
-	       p->mL->rows, p->mL->cols, p->fout, p->use_stdout ? "\n" :"L.mmx");
-      comment[0]='L';
-      csr_mm_write(p->fout,"L.mmx",p->mL,comment);
+    if(!(p->submode & 31) || (p->submode & 8)){
+      if(p->mL){
+	if(p->debug&1)
+	  printf("# writing L=Lx matrix [ %d x %d ] to \t%s%s\n",
+		 p->mL->rows, p->mL->cols, p->fout, p->use_stdout ? "\n" :"L.mmx");
+	comment[0]='L';
+	csr_mm_write(p->fout,"L.mmx",p->mL,comment);
+      }
+      else {
+	if(p->debug&1)
+	  printf("# skippling L=Lx matrix for a classical code\n");	
+      }
     }
 
     if(!(p->submode & 31) || (p->submode & 16)){      
@@ -1772,14 +1826,25 @@ int main(int argc, char **argv){
       }
       
       p->rankH=rank_csr(p->mH);
-      p->rankL=rank_csr(p->mL);
-      p->rankG=p->nvar - p->rankH - p->rankL;
-      if(p->ncws != p->rankL)
-	ERROR("code parameters mismatch: rkH=%d rkL=%d Num(codewords)=%d\n",p->rankH, p->rankL, p->ncws);
-      if(p->debug &1)
-	printf("code parameters: n=%d k=%d rkH=%d rkG=%d\n",p->nvar,p->ncws,p->rankH, p->rankG);
+      if (p->mL){
+	p->rankL=rank_csr(p->mL);
+	p->rankG=p->nvar - p->rankH - p->rankL;
+	if(p->ncws != p->rankL)
+	  ERROR("code parameters mismatch: rkH=%d rkL=%d Num(codewords)=%d\n",p->rankH, p->rankL, p->ncws);
+	if(p->debug &1)
+	  printf("quantum code parameters: n=%d k=%d rkH=%d rkG=%d\n",p->nvar,p->ncws,p->rankH, p->rankG);
+      }
+      else{
+	p->rankL=p->nvar - p->rankH;
+	p->rankG=0;
+	if(p->debug &1)
+	  printf("classical code parameters: n=%d k=%d rkH=%d \n",p->nvar,p->rankL,p->rankH);       
+      }
       
-      if(!(p->submode & 31) || (p->submode & 1)){      
+      if(!(p->submode & 31) || (p->submode & 1)){
+	if(p->classical)
+	  ERROR("mode=%d submode=%d : create G matrix not supported for a classical code\n"
+		"use K matrix instead (dual to H)\n",p->mode,p->submode);
 	if(!p->mG){
 	  if(p->debug&1)
 	    printf("# creating G=Hz matrix and writing to\t%s%s\n",
