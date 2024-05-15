@@ -25,8 +25,8 @@
 #include "vecdec.h"
 #include "qllr.h"
 
-params_t prm={ .nchk=0, .nvar=0, .ncws=0, .steps=50,
-  .rankH=-1, .rankG=-1, .rankL=-1, 
+params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=-1,
+  .rankH=0, .rankG=-1, .rankL=-1, 
   .lerr=-1, .maxosd=100, .bpalpha=0.5, .bpretry=1, .swait=0, .maxC=0,
   .dW=0, .minW=INT_MAX, .maxW=0, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
   .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8, .useP=0, .dmin=0,
@@ -41,6 +41,19 @@ params_t prm={ .nchk=0, .nvar=0, .ncws=0, .steps=50,
   .mE=NULL, .mHe=NULL, .mLe=NULL, .mHeT=NULL, .mLeT=NULL,
   .nzH=0, .nzL=0
 };
+
+
+params_t prm_default={  .steps=50,
+  .lerr=-1, .maxosd=100, .bpalpha=0.5, .bpretry=1, .swait=0, .maxC=0,
+  .dW=0, .minW=INT_MAX, .maxW=0, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
+  .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8, .useP=0, .dmin=0,
+  .debug=1, .fout="tmp", .ferr=NULL,
+  .mode=-1, .submode=0, .use_stdout=0, 
+  .LLRmin=0, .LLRmax=0, .num_cws=0,
+  .internal=0, 
+  .nzH=0, .nzL=0
+};
+
 
 /** various success counters */
 long long int cnt[EXTR_MAX];
@@ -268,14 +281,18 @@ int do_hash_min(params_t * const p){
 int do_hash_verify_CW(const csr_t * const mHt, const csr_t * const mLt, const params_t * const p){
   const int k= mLt!=NULL ? mLt->cols : 0;
   const int r=mHt->cols;
-  if (k) assert(mHt->rows == mLt->rows);
+  if (k)
+    assert(mHt->rows == mLt->rows);
+  else
+    assert(p->classical);
+  
   mzd_t *vHt = mzd_init(1, r);
   mzd_t *vLt = k>0 ? mzd_init(1, k) : NULL;
   one_vec_t *pvec;
-  int not_cw = 0; 
   long long int count=0;
 
   for(pvec = p->codewords; pvec != NULL; pvec=(one_vec_t *)(pvec->hh.next)){
+    int not_cw = 0; 
     mzd_set_ui(vHt,0);
     for(int i=0; i < pvec->weight; i++){
       const int pos = pvec->arr[i];
@@ -300,7 +317,7 @@ int do_hash_verify_CW(const csr_t * const mHt, const csr_t * const mLt, const pa
 	printf("v*Lt=");
 	mzd_print(vLt);
       }
-      ERROR("invalid hash vector[%lld]\n",count);
+      ERROR("invalid hash vector [%lld]\n",count);
     }
     count++;
   }
@@ -397,24 +414,28 @@ one_vec_t * do_hash_check(const int ee[], int weight, params_t * const p){
  * 
  * @param dW weight increment from the minimum found
  * @param p pointer to global parameters structure
+ * @param classical set to `1` for classical code (do not use `L` matrix), `0` otherwise  
  * @return minimum `weight` of a CW found (or `-weigt` if early termination condition is reached). 
  */
-int do_LLR_dist(params_t  * const p){
+int do_LLR_dist(params_t  * const p, const int classical){
   const int dW=p->dW;
   //  qllr_t dE=p->dE;
   /** whether to verify logical ops as a vector or individually */
-  const int use_vector = p->mLt->cols >= 16 ? 1 : 0;
+  int use_vector=0;
+  if (!classical)
+    use_vector = p->mLt->cols >= 16 ? 1 : 0;
   if(p->nvec == 16) /** default value */
     p->nvec=0;
   mzd_t * mH = mzd_from_csr(NULL, p->mH);
   mzd_t *mLt = NULL, *eemLt = NULL, *mL = NULL;
-  if(use_vector){ /** all logical ops at once */
-    mLt = mzd_from_csr(NULL, p->mLt);
-    eemLt = mzd_init(1, p->mLt->cols);
+  if(!classical){
+    if(use_vector){ /** all logical ops at once */
+      mLt = mzd_from_csr(NULL, p->mLt);
+      eemLt = mzd_init(1, p->mLt->cols);
+    }
+    else /** just one logical op */
+      mL = mzd_from_csr(NULL, p->mL);
   }
-  else /** just one logical op */
-    mL = mzd_from_csr(NULL, p->mL);
-    
   rci_t *ee = malloc(p->mH->cols*sizeof(rci_t)); /** actual `vector` */
   
   if((!mH) || (!ee))
@@ -466,20 +487,24 @@ int do_LLR_dist(params_t  * const p){
       
       /** verify logical operator */
       int nz;
-      if(use_vector){ /** use vector */
-        mzd_set_ui(eemLt,0);
-        for(int i=0; i<cnt; i++) 
-          mzd_combine_even_in_place(eemLt,0,0,mLt,ee[i],0);
-        nz = mzd_is_zero(eemLt) ? 0 : 1;
-      }
-      else{ /** for each logical operator = row of `mL` */
-	nz=0;
-	for(int j=0; j < mL->nrows; j++){
+      if (classical)
+	nz=1; /** no need to verify */
+      else{
+	if(use_vector){ /** use vector */
+	  mzd_set_ui(eemLt,0);
+	  for(int i=0; i<cnt; i++) 
+	    mzd_combine_even_in_place(eemLt,0,0,mLt,ee[i],0);
+	  nz = mzd_is_zero(eemLt) ? 0 : 1;
+	}
+	else{ /** for each logical operator = row of `mL` */
 	  nz=0;
-	  for(int i=0; i<cnt; i++) /** bits in one row */
-	    nz ^= mzd_read_bit(mL,j,ee[i]);
-	  if(nz)
-	    break;
+	  for(int j=0; j < mL->nrows; j++){
+	    nz=0;
+	    for(int i=0; i<cnt; i++) /** bits in one row */
+	      nz ^= mzd_read_bit(mL,j,ee[i]);
+	    if(nz)
+	      break;
+	  }
 	}
       }
       if(nz){ /** we got non-trivial codeword! */
@@ -534,11 +559,14 @@ int do_LLR_dist(params_t  * const p){
   mzp_free(pivs);
   free(ee);
   if(use_vector){
-    mzd_free(eemLt);
-    mzd_free(mLt);
+    if(eemLt)
+      mzd_free(eemLt);
+    if (mLt)
+      mzd_free(mLt);
   }
   else
-    mzd_free(mL);
+    if (mL)
+      mzd_free(mL);
   mzd_free(mH);
   
   return p->minW;
@@ -1208,6 +1236,7 @@ int var_init(int argc, char **argv, params_t *p){
     }
 
   }
+  
   if(p->mode==-1)
     p->mode=0; /** the default value if `mode` is not set on command line */
   
@@ -1257,6 +1286,8 @@ int var_init(int argc, char **argv, params_t *p){
     p->mH=csr_mm_read(p->finH, p->mH, 0, p->debug);
     p->nvar = p->mH->cols;
     p->nchk = p->mH->rows;
+    p->rankH = rank_csr(p->mH);
+    p->ncws = p->nvar - p->rankH;
   }
   /** at this point we should have `H` matrix for sure */
   assert(p->mH);
@@ -1734,7 +1765,7 @@ int main(int argc, char **argv){
 	printf("all verified\n");
       do_hash_min(p); /** set values `minE` and `minW` from stored CWs */
     }
-    do_LLR_dist(p);
+    do_LLR_dist(p, p->classical);
     do_hash_fail_prob(p); /** output results */
     if(p->outC){
       char * name;
@@ -1744,11 +1775,11 @@ int main(int argc, char **argv){
 	name=p->finH;
       else
 	name="(unknown source)";
-      size_t size = 1 + snprintf(NULL, 0, "codewords computed from '%s', maxW=%d", name, p->maxW);
+      size_t size = 1 + snprintf(NULL, 0, "codewords computed from '%s', maxW=%d ", name, p->maxW);
       char *buf = malloc(size * sizeof(char));
       if(!buf)
 	ERROR("memory allocation");
-      snprintf(buf, size, "# codewords computed from '%s', maxW=%d", name, p->maxW);
+      snprintf(buf, size, "# codewords computed from '%s', maxW=%d ", name, p->maxW);
       
       long long cnt=nzlist_write(p->outC, buf, p);
       if(p->debug & 1)
@@ -1760,10 +1791,10 @@ int main(int argc, char **argv){
   case 3: /** read in DEM file and output the H, L, G matrices and P vector */
     if(p->submode&32){ /** matrix transformation */
       if(!p->finC)
-	ERROR("mode=%d submode=%d (bit 5 set) must set 'finC' for matrix transformations",
+	ERROR("mode=%d submode=%d (bit 5 set) must set 'finC' for matrix transformation",
 	      p->mode,p->submode);
       if((p->classical)||(!(p->mL)))
-	ERROR("mode=%d submode=%d (bit 5 set) must be a quantum code",p->mode,p->submode);
+	ERROR("mode=%d submode=32 (bit 5 set) must be a quantum code for matrix transformation",p->mode);
       p->num_cws = nzlist_read(p->finC, p);
       if(p->debug&1)
 	printf("# %lld codewords read from %s ...",p->num_cws, p->finC);
@@ -1824,8 +1855,8 @@ int main(int argc, char **argv){
       if(p->finC){/** use the list of codewords from file */
 	nzlist_read(p->finC, p);
       }
-      
-      p->rankH=rank_csr(p->mH);
+      if(! p->rankH)
+	p->rankH=rank_csr(p->mH);
       if (p->mL){
 	p->rankL=rank_csr(p->mL);
 	p->rankG=p->nvar - p->rankH - p->rankL;
@@ -1844,7 +1875,7 @@ int main(int argc, char **argv){
       if(!(p->submode & 31) || (p->submode & 1)){
 	if(p->classical)
 	  ERROR("mode=%d submode=%d : create G matrix not supported for a classical code\n"
-		"use K matrix instead (dual to H)\n",p->mode,p->submode);
+		"use 'mode=3.2' to create K matrix instead (dual to H)\n",p->mode,p->submode);
 	if(!p->mG){
 	  if(p->debug&1)
 	    printf("# creating G=Hz matrix and writing to\t%s%s\n",
@@ -1883,7 +1914,7 @@ int main(int argc, char **argv){
 		   p->fout, p->use_stdout ? "\n" :"K.mmx");
 	  if(p->finC){/** use the list of codewords from file */
 	    //	    nzlist_read(p->finC, p);
-	    p->mK = do_K_from_C(p->mLt, p->codewords, p->ncws, p->minW, p->minW+p->dW, p->debug);
+	    p->mK = do_K_from_C(p->mLt, p->codewords, p->ncws, p->nvar, p->minW, p->minW+p->dW, p->debug);
 	    //	  csr_out(p->mK);
 	  }
 	  else

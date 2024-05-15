@@ -167,7 +167,7 @@ extern "C"{
   
   /** @brief create K=Lz matrix with minimum weight rows from a list of codewords in hash */
   csr_t * do_K_from_C(const csr_t * const mLt, const one_vec_t * const codewords,
-		      const int k, const int minW, const int maxW,
+		      const int k, const int n, const int minW, const int maxW,
 		      _maybe_unused const int debug);
 
   /** @brief create G=Hz matrix with minimum weight rows from a list of codewords in hash */

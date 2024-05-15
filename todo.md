@@ -278,10 +278,20 @@ stim sample_dem \
         decoding in this case).
 
 - [ ] verification and convenience
-  - [ ] add help specific for each `mode` (use `vecdec mode=2 help`)
-  - [ ] make sure `debug=1` prints the values relevant for each mode
-  - [ ] make sure `debug=1` complaints if a value not relevant to the current mode is set 
-  - [ ] more examples
+  - [ ] add help specific for each `mode` (use `vecdec mode=2 help`).
+        To this end, first scan for `mode` (complain if it is set more
+        than once), then scan for `debug` (set it), then scan for
+        `help`.
+  - [ ] Add the ability to read MTX complex matrices (non-CSS codes).
+        See `GAP` package `QDistRnd`.
+  - [ ] Add `alpha` for modified BP, rename current `alpha` to `beta`.
+  - [ ] make sure `debug=1` prints the values relevant for each mode,
+        and also give parameters of the matrices (dimensions, ranks,
+        etc)
+  - [ ] make `debug=2` show command line arguments
+  - [ ] make `debug=4` show additional information (e.g., `QLLR`)
+  - [ ] make sure program complaints if a value not relevant to the
+        current mode is set on the command line
   - [ ] verify matrix orthogonality and ranks
   - [ ] more usage examples in the documentation
   - [ ] testing facility 
