@@ -25,7 +25,7 @@
 #include "vecdec.h"
 #include "qllr.h"
 
-params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=-1,
+params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50,
   .rankH=0, .rankG=-1, .rankL=-1, 
   .lerr=-1, .maxosd=100, .bpalpha=0.5, .bpretry=1, .swait=0, .maxC=0,
   .dW=0, .minW=INT_MAX, .maxW=0, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
@@ -49,9 +49,6 @@ params_t prm_default={  .steps=50,
   .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8, .useP=0, .dmin=0,
   .debug=1, .fout="tmp", .ferr=NULL,
   .mode=-1, .submode=0, .use_stdout=0, 
-  .LLRmin=0, .LLRmax=0, .num_cws=0,
-  .internal=0, 
-  .nzH=0, .nzL=0
 };
 
 
