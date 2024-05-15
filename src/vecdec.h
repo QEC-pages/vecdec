@@ -45,7 +45,8 @@ extern "C"{
     long long int ntot;  /** total number of syndromes to generate (default: `1`) */
     long long int nfail; /** when non-zero, num of fails to terminate the run (default: `0`, do not terminate) */
     long long int maxC; /** when non-zero, max number of codewords (default: `0`, no maximum) */
-    int dmin; /** if non-zero, terminate distance calculation immediately when a vector of weight `d`<=`dmin` is found, return `-d` (default: 0) */
+    int dmin; /** if non-zero, terminate distance calculation immediately when a vector 
+		  of weight `d`<=`dmin` is found, return `-d` (default: 0) */
     int swait; /** gauss decoding steps with no vectors changed to stop (default: `0`, do not stop) */
     int lerr;  /** local search after gauss up to this weight (default: `-1`, no OSD) */
     int maxosd;  /** max column for OSD2 and above (default: `100`) */

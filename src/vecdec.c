@@ -42,7 +42,6 @@ params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50,
   .nzH=0, .nzL=0
 };
 
-
 params_t prm_default={  .steps=50,
   .lerr=-1, .maxosd=100, .bpalpha=0.5, .bpretry=1, .swait=0, .maxC=0,
   .dW=0, .minW=INT_MAX, .maxW=0, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
@@ -51,13 +50,10 @@ params_t prm_default={  .steps=50,
   .mode=-1, .submode=0, .use_stdout=0, 
 };
 
-
 /** various success counters */
 long long int cnt[EXTR_MAX];
 long long int iter1[EXTR_MAX]; /** sums of BP iteration numbers */
 long long int iter2[EXTR_MAX]; /** sums of BP iteration numbers squared */
-
-
 
 /** @brief calculate the energy of the row `i` in `A` */
 static inline qllr_t mzd_row_energ_naive(qllr_t *coeff, const mzd_t *A, const int i){
