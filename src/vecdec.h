@@ -37,6 +37,9 @@ extern "C"{
     int nchk; /** rows in `H` or `r` (set in the `input file`) */
     int ncws;  /** how many codewords `k` (set in the `input file`) */
     int nvar;     /** columns in H `n` (set in the `input file`) */
+    int pads; /** if `1`, pad detector events (syndrome vectors) read from
+		     `fdet` file to required number of columns; if `0`, do
+		     no padding */
     int rankH;
     int rankG;
     int rankL;
@@ -206,9 +209,10 @@ extern "C"{
   "\t\t for a quantum code specify 'fdem' OR 'finH' and ( 'finL' OR 'finG' );\n" \
   "\t\t for classical just 'finH' (and optionally the dual matrix 'finL')\n" \
   "\t ferr=[string]\t: input file with error vectors (01 format)\n"	\
-  "\t fdet=[string]\t: input file with detector events (01 format)\n"   \
   "\t fobs=[string]\t: input file with observables (01 matching lines in fdet)\n" \
+  "\t fdet=[string]\t: input file with detector events (01 format)\n"   \
   "\t\t specify either 'ferr' OR a pair of 'ferr' and 'fdet' (or none for internal)\n" \
+  "\t pads=[integer]\t: if non-zero, pad vectors from `fdet` file with zeros (0)\n" \
   "\t fout=[string]\t: header for output file names ('tmp', see 'mode=3')\n" \
   "\t\t (space is OK in front of file names to enable shell completion)\n" \
   "\t steps=[integer]\t: num of RIS or BP decoding steps (default: 50)\n" \
