@@ -45,7 +45,8 @@ extern "C"{
     long long int ntot;  /** total number of syndromes to generate (default: `1`) */
     long long int nfail; /** when non-zero, num of fails to terminate the run (default: `0`, do not terminate) */
     long long int maxC; /** when non-zero, max number of codewords (default: `0`, no maximum) */
-    int dmin; /** if non-zero, terminate distance calculation immediately when a vector of weight `d`<=`dmin` is found, return `-d` (default: 0) */
+    int dmin; /** if non-zero, terminate distance calculation immediately when a vector 
+		  of weight `d`<=`dmin` is found, return `-d` (default: 0) */
     int swait; /** gauss decoding steps with no vectors changed to stop (default: `0`, do not stop) */
     int lerr;  /** local search after gauss up to this weight (default: `-1`, no OSD) */
     int maxosd;  /** max column for OSD2 and above (default: `100`) */
@@ -76,6 +77,7 @@ extern "C"{
     qllr_t *vLLR; /** vector of LLRs (total of `n`) */
     int minW; /** minimum weight of a codeword or error vector found */
     int dW; /** weight over `minW` to keep the CW or error vector in a hash (-1: no limit; default `0`) */
+    int maxW; /** if non-zero, skip any vectors above this weight (default `0`, no upper limit) */
     qllr_t minE; /** minimum energy of a codeword or error vector found */
     qllr_t dE; /** energy over `minE` to keep the CW or error vector in a hash (default: -1, no limit on `E`) */
     double dEdbl; /** temp value */
@@ -159,19 +161,23 @@ extern "C"{
 		    const qllr_t LLR[], const params_t * const p);
   
   /** function defined in `star_poly.c` ********************************************* */
-
-/** @brief create K=Lz matrix with minimum weight rows from a list of codewords in hash */
+  
+  /** @brief replace the DEM (matrices Ht, Lt, and LLR vector) with star-triangle transformed */
+  int star_triangle(csr_t * Ht, csr_t * Lt, qllr_t *LLR, const one_vec_t * const codewords,
+		  _maybe_unused const long int debug);
+  
+  /** @brief create K=Lz matrix with minimum weight rows from a list of codewords in hash */
   csr_t * do_K_from_C(const csr_t * const mLt, const one_vec_t * const codewords,
-		      const int k, const int minW, const int maxW,
+		      const int k, const int n, const int minW, const int maxW,
 		      _maybe_unused const int debug);
 
-/** @brief create G=Hz matrix with minimum weight rows from a list of codewords in hash */
-csr_t * do_G_from_C(const csr_t * const mLt, const one_vec_t * const codewords,
-		    const int num_need, const int minW, int maxW,
-		    _maybe_unused const int debug);  
+  /** @brief create G=Hz matrix with minimum weight rows from a list of codewords in hash */
+  csr_t * do_G_from_C(const csr_t * const mLt, const one_vec_t * const codewords,
+		      const int num_need, const int minW, int maxW,
+		      _maybe_unused const int debug);  
   
   csr_t * do_G_matrix(const csr_t * const mHt, const csr_t * const mLt, const qllr_t LLR[], 
-		      const int debug);
+		      const int rankG, const int debug);
 
   /** 
    * @brief The help message. 
@@ -216,6 +222,7 @@ csr_t * do_G_from_C(const csr_t * const mLt, const one_vec_t * const codewords,
   "\t ntot =[long long int]\t: total syndromes to generate (default: 1)\n"	\
   "\t nfail=[long long int]\t: total fails to terminate (0, do not terminate)\n" \
   "\t dW=[integer]\t: if 'dW>=0', may keep vectors of weight up to 'minW+dW' (0)\n" \
+  "\t maxW=[integer]\t: if non-zero, skip any vectors above this weight (0)\n" \
   "\t dE=[double]\t: if 'dE>=0', may keep vectors of energy up to 'minE+dE'\n" \
   "\t\t\t (default value: -1, no upper limit on energy)\n"		\
   "\t dmin=[integer]\t: terminate distance calculation immediately when\n" \
@@ -257,6 +264,8 @@ csr_t * do_G_from_C(const csr_t * const mLt, const one_vec_t * const codewords,
   "\t\t\t .4 (bit 2) write H=Hx matrix\n"				\
   "\t\t\t .8 (bit 3) write  L=Lx matrix\n"				\
   "\t\t\t .16 (bit 4) write P vector\n"					\
+  "\t\t\t In addition, mode=3.32 (just one bit set) in combination with\n" \
+  "\t\t\t  codewords file 'finC' forces matrix transformation mode\n"	\
   "\t\t\t Use 'fout=' command line argument to generate file names\n"	\
   "\t\t\t ${fout}H.mmx, ${fout}G.mmx, ${fout}L.mmx, ${fout}K.mmx, and ${fout}P.mmx\n" \
   "\t\t\t with 'fout=stdout' all output is sent to 'stdout'\n"		\
@@ -286,9 +295,9 @@ csr_t * do_G_from_C(const csr_t * const mLt, const one_vec_t * const codewords,
   "   The dual CSS matrix Hz can be specified instead of Lx.\n"	\
   "\t In such a case, the internal error generator must be used\n"	\
   "\t (an attempt to specify 'fdet' and 'fobs' files will result in an error).\n" \
-  "   For a classical code, specify only the parity check matrix Hx=H.\n" \
+  "   For a classical code, just give the parity check matrix Hx=H.\n"	\
   "\t In this case G matrix is trivial (has zero rank), and\n"		\
-  "\t Lx is set to identity matrix.  \n"				\
+  "\t Lx has all rows of weight '1'.  \n"				\
   "\t Only the internal error generator can be used for classical codes\n"
   
   

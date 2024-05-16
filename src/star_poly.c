@@ -17,6 +17,17 @@
 #include "util_m4ri.h"
 #include "qllr.h"
 
+/** @brief structure to store one column of DEM (using LLRs) */
+typedef struct ONE_PROB_T {
+  qllr_t llr; /**< LLR corresponding to the probability value */
+  int wH;   /**< number of entries in H column */
+  int wL;   /**< number of entries in L column */
+  int idx[]; /**< flexible array to store `n1+n2` entries */
+} one_prob_t;
+
+
+
+
 /** @brief transform LLR coefficients `[A,B;C]:=0.5*(boxplus(A+B,C)+boxplus(A-B,C));`
  * @param A the input LLR 
  * @param B the input LLR 
@@ -33,6 +44,15 @@ qllr_t transform3(const qllr_t A, const qllr_t B, const qllr_t C){
 
 /** @brief replace the DEM with star-triangle transformed 
  *
+ * 
+ * `zero-column removal`:
+ * any column which is zero both in `Hx` and  `Lx` (weight-1 row in `Hz`) is just dropped
+ * 
+ * `inverse decoration transformation`: 
+ * from a pair of identical columns in `Hx` and `Lx` (weight-2 row in `Hz`) keep only one, 
+ * with `K=boxplus(K1,K2)`
+ * 
+ * `star-triangle`: 
  * for every triplet of columns `(i1,i2,i3)` which sum to zero both in
  * `Hx` and `Lx` [weight-3 row in `Hz`], in effect, replace these columns 
  *  of `Hz` with `(b2+b3,b1+b2,b1+b3)`.
@@ -47,11 +67,9 @@ qllr_t transform3(const qllr_t A, const qllr_t B, const qllr_t C){
  * @param[in,out] Lt transposed matrix `Lx` -> the result
  * @param[in,out] initial LLR vector -> the modified LLR vector
  * @param debug bitmap for debugging info
- * @return the number of transformation steps done 
+ * @return the new number of columns (???) 
  */
-#if 1
 int star_triangle(csr_t * Ht, csr_t * Lt, qllr_t *LLR, const one_vec_t * const codewords,
-		  const double eps,
 		  _maybe_unused const long int debug){
     /** sanity check */
   assert(Ht->nz == -1); 
@@ -63,106 +81,161 @@ int star_triangle(csr_t * Ht, csr_t * Lt, qllr_t *LLR, const one_vec_t * const c
   int n1=0, r1=Ht->cols, nzH1=0, nzL1=0; /** new `n`, rows of new `H`, and non-zero elements */
   if((!used) || (!cols))
     ERROR("memory allocation failed!");
+
   for(one_vec_t const * pvec = codewords; pvec != NULL; pvec=(one_vec_t *)(pvec->hh.next)){
-    if((pvec->weight ==3) &&
-       (mzd_read_bit(used, 0, pvec->arr[0])==0) &&
-       (mzd_read_bit(used, 0, pvec->arr[1])==0) &&
-       (mzd_read_bit(used, 0, pvec->arr[2])==0)){
-      int changed=0; /** did we use any of the three columns? */
+
+    if((pvec->weight ==1) && (mzd_read_bit(used, 0, pvec->arr[0])==0)){
+      /** `zero-column removal`: just mark off this column */
+      mzd_flip_bit(used, 0, pvec->arr[0]); 
+    }
+    else if((pvec->weight ==2) &&
+	    (mzd_read_bit(used, 0, pvec->arr[0])==0) &&
+	    (mzd_read_bit(used, 0, pvec->arr[1])==0)){
+      /** `inverse decoration transformation`: combine two identical columns into one */
+      for(int i=0; i<2; i++)
+	mzd_flip_bit(used, 0, pvec->arr[i]);
+      int idx = pvec->arr[0]; /** working on this column */      
+      int wH =  Ht->p[idx+1] - Ht->p[idx] ;
+      nzH1 += wH;
+      int wL = Lt->p[idx+1] - Lt->p[idx];
+      nzL1 += wL;
+      if((cols[n1] = malloc(sizeof(one_prob_t)+(wH+wL)*sizeof(int)))==NULL)
+	ERROR("memory allocation failed!");
+      cols[n1]->llr = boxplus(LLR[pvec->arr[0]],LLR[pvec->arr[0]]);
+      cols[n1]->wH = wH;
+      cols[n1]->wL = wL;
+      int nz=0;
+      for(int j=Ht->p[idx]; j < Ht->p[idx+1]; j++)
+	cols[n1]->idx[nz++] = Ht->i[j];
+      for(int j=Lt->p[idx]; j < Lt->p[idx+1]; j++)
+	cols[n1]->idx[nz++] = Lt->i[j];
+      n1++;
+    }
+    else if((pvec->weight ==3) &&
+	    (mzd_read_bit(used, 0, pvec->arr[0])==0) &&
+	    (mzd_read_bit(used, 0, pvec->arr[1])==0) &&
+	    (mzd_read_bit(used, 0, pvec->arr[2])==0)){
+      for(int i=0; i<3; i++)
+	mzd_flip_bit(used, 0, pvec->arr[i]); 
+
       for(int i=0; i<3; i++){
 	const int i0=(i+1)%3, i1=(i+2)%3, i2=(i+0)%3; 
 	int idx = pvec->arr[i2]; /** working on this column */
-	double prob = P_from_llr(transform3(LLR[pvec->arr[i0]], LLR[pvec->arr[i1]], LLR[pvec->arr[i2]]));
-	if(prob > eps){ /** otherwise just ignore this column */
-	  changed++;
-	  int wH = i2==0 ? 1 : Ht->p[idx+1] - Ht->p[idx] + 1 ;
-	  nzH1 += wH;
-	  int wL = i2==0 ? 0 : Lt->p[idx+1] - Lt->p[idx];
-	  nzL1 += wL;
-	  if((cols[n1] = malloc(sizeof(one_prob_t)+(wH+wL)*sizeof(int)))==NULL)
-	    ERROR("memory allocation failed!");
-	  cols[n1]->p = prob;
-	  cols[n1]->wH = wH;
-	  cols[n1]->wL = wL;
-	  int nz=0;
-	  if(i2!=0)
-	    for(int j=Ht->p[idx]; j < Ht->p[idx+1]; j++)
-	      cols[n1]->idx[nz++] = Ht->i[j];
-	  cols[n1]->idx[nz++] = r1; /** new (1,1,1) row */
-	  assert(nz==wH);
-	  if(i2!=0)
-	    for(int j=Lt->p[idx]; j < Lt->p[idx+1]; j++)
-	      cols[n1]->idx[nz++] = Lt->i[j];
-	  assert(nz==wH+wL);
-	  n1++;
-	}
+	qllr_t llr = transform3(LLR[pvec->arr[i0]], LLR[pvec->arr[i1]], LLR[pvec->arr[i2]]);
+	int wH = i2==0 ? 1 : Ht->p[idx+1] - Ht->p[idx] + 1 ;
+	nzH1 += wH;
+	int wL = i2==0 ? 0 : Lt->p[idx+1] - Lt->p[idx];
+	nzL1 += wL;
+	if((cols[n1] = malloc(sizeof(one_prob_t)+(wH+wL)*sizeof(int)))==NULL)
+	  ERROR("memory allocation failed!");
+	cols[n1]->llr = llr;
+	cols[n1]->wH = wH;
+	cols[n1]->wL = wL;
+	int nz=0;
+	if(i2!=0)
+	  for(int j=Ht->p[idx]; j < Ht->p[idx+1]; j++)
+	    cols[n1]->idx[nz++] = Ht->i[j];
+	cols[n1]->idx[nz++] = r1; /** new (1,1,1) row */
+	assert(nz==wH);
+	if(i2!=0)
+	  for(int j=Lt->p[idx]; j < Lt->p[idx+1]; j++)
+	    cols[n1]->idx[nz++] = Lt->i[j];
+	assert(nz==wH+wL);
+	n1++;
       }
-      if(changed)
-	r1++;
+      r1++;
     }     
   }
   /** go over the remaining columns */
   for (int idx=0; idx<n; idx++){
     if(mzd_read_bit(used, 0, idx)==0){
-      double prob = P_from_llr(LLR[idx]);
-      if(prob > eps){ /** otherwise just ignore this column - this may cause decoding failure */
-	int wH = Ht->p[idx+1] - Ht->p[idx];
-	nzH1 += wH;
-	int wL = Lt->p[idx+1] - Lt->p[idx];
-	nzL1 += wL;
-	if((cols[n1] = malloc(sizeof(one_prob_t)+(wH+wL)*sizeof(int)))==NULL)
-	  ERROR("memory allocation failed!");
-	cols[n1]->p = prob;
-	cols[n1]->wH = wH;
-	cols[n1]->wL = wL;
-	int nz=0;
-	for(int j=Ht->p[idx]; j < Ht->p[idx+1]; j++)
-	  cols[n1]->idx[nz++] = Ht->i[j];
-	for(int j=Lt->p[idx]; j < Lt->p[idx+1]; j++)
-	    cols[n1]->idx[nz++] = Lt->i[j];
-	n1++;
-      }
+      mzd_flip_bit(used, 0, idx);
+      int wH = Ht->p[idx+1] - Ht->p[idx];
+      nzH1 += wH;
+      int wL = Lt->p[idx+1] - Lt->p[idx];
+      nzL1 += wL;
+      if((cols[n1] = malloc(sizeof(one_prob_t)+(wH+wL)*sizeof(int)))==NULL)
+	ERROR("memory allocation failed!");
+      cols[n1]->llr = LLR[idx];
+      cols[n1]->wH = wH;
+      cols[n1]->wL = wL;
+      int nz=0;
+      for(int j=Ht->p[idx]; j < Ht->p[idx+1]; j++)
+	cols[n1]->idx[nz++] = Ht->i[j];
+      for(int j=Lt->p[idx]; j < Lt->p[idx+1]; j++)
+	cols[n1]->idx[nz++] = Lt->i[j];
+      n1++;
     }
   }
 
-  ERROR("add routines for exporting the matrices here ");
-  /** warning: add routines for exporting the matrices */
-  
+  assert(n1<=n);//!    `ERROR`("unexpected n1=%d > n=%d",n1,n);
+  /** move the resulting data to `Ht`, `Lt`, and `LLR` */
+  csr_init(Ht,n1,r1,      nzH1); /** only reallocate `p` and `i` arrays */
+  csr_init(Lt,n1,Lt->cols,nzL1);
+  int jH=0, jL=0;
+  for(int ir = 0; ir < n1; ir++){
+    int j=0;
+    Ht->p[ir]=jH;
+    for(/*none*/ ; j < cols[ir]->wH; j++)
+      Ht->i[jH++] = cols[ir]->idx[j];
+    Lt->p[ir]=jL;
+    const int max = cols[ir]->wL + cols[ir]->wH;
+    for(/*none*/ ; j < max; j++)
+      Lt->i[jL++] = cols[ir]->idx[j];
+    LLR[ir] = cols[ir]->llr;
+  }
+  Ht->p[n1]=jH;
+  Ht->nz = -1;
+  Lt->p[n1]=jL;
+  Lt->nz = -1;  
+
   /** memory clean-up */
   mzd_free(used);
-  for(int i=0; i<n1; n1++)
+  for(int i=0; i<n1; i++)
     if(cols[i])
       free(cols[i]);
   free(cols);
   
   return 0;
 }
-#endif 
 
 /** @brief create K=Lz matrix with minimum weight rows from a list of codewords in hash */
 csr_t * do_K_from_C(const csr_t * const mLt, const one_vec_t * const codewords,
-		    const int k, const int minW, int maxW,
+		    const int k, const int n, const int minW, int maxW,
 		    _maybe_unused const int debug){
-  assert(mLt);
-  assert(codewords);
+  int classical = (mLt == NULL) ? 1 : 0;
   //printf("k=%d minW=%d maxW=%d\n",k,minW,maxW);
-  mzd_t *vLt = mzd_init(k, mLt->cols);
+  mzd_t *vLt = NULL;
+  if (!classical)
+    vLt = mzd_init(k, mLt->cols);
+  else 
+    vLt = mzd_init(k, n);
   one_vec_t const **list = malloc(k*sizeof(one_vec_t *)); /** chosen vectors (pointers) */
   if(!list) ERROR("memory allocation");
   one_vec_t const * pvec;
   int rank=0, nz=0; /** how many rows already found; `nz` = non-zero bits total */
   int skip_checkW = minW > maxW ? 1 : 0;
   if (maxW < minW)
-    maxW=minW;
+    maxW=minW; 
   for(int iw = minW; iw <= maxW && rank < k; iw++){
+    if(debug&2)
+      printf("rank=%d of %d; checking codewords of weight %d\n", rank, k, iw);
     for(pvec = codewords; pvec != NULL; pvec=(one_vec_t *)(pvec->hh.next)){
-      mzd_row_clear_offset(vLt, rank, 0); 
       if(skip_checkW || (pvec->weight == iw)){
-	//	printf("iw=%d rank=%d ",iw,rank); print_one_vec(pvec); 
-	for(int i=0; i < pvec->weight; i++){
-	  const int pos = pvec->arr[i];
-	  for(int j=mLt->p[pos]; j < mLt->p[pos+1] ; j++)
-	    mzd_flip_bit(vLt,rank,mLt->i[j]);
+	//	printf("iw=%d rank=%d ",iw,rank); print_one_vec(pvec);
+	mzd_row_clear_offset(vLt, rank, 0); 
+	if(!classical){
+	  for(int i=0; i < pvec->weight; i++){
+	    const int pos = pvec->arr[i];
+	    for(int j=mLt->p[pos]; j < mLt->p[pos+1] ; j++)
+	      mzd_flip_bit(vLt,rank,mLt->i[j]);
+	  }
+	}
+	else{ /* classical */
+	  for(int i=0; i < pvec->weight; i++){
+	    const int pos = pvec->arr[i];
+	    mzd_flip_bit(vLt,rank,pos);
+	  }    
 	}
 	if(!mzd_row_is_zero(vLt, rank)){	 
 	  //	  mzd_print_row(vLt,rank);
@@ -180,13 +253,15 @@ csr_t * do_K_from_C(const csr_t * const mLt, const one_vec_t * const codewords,
       }
     }
   }
-  if(rank<k)
+  if(rank<k){
+    printf("we have minW=%d maxW=%d (check dW parameter)\n",minW,maxW);
     ERROR("Number of codewords is not sufficient to construct K=Lz matrix");
+  }
   
   mzd_free(vLt);
 
   /** create CSR matrix from the list of vectors */
-  csr_t *ans = csr_init(NULL,k,mLt->rows,nz); 
+  csr_t *ans = csr_init(NULL,k,n,nz); 
   for(int j=0, pos=0; j<k; j++){ /** row index */
     for(int i=0; i < list[j]->weight; i++){
       int idx=list[j]->arr[i]; /** col index */
@@ -205,7 +280,7 @@ csr_t * do_G_from_C(const csr_t * const mLt, const one_vec_t * const codewords,
 		    _maybe_unused const int debug){
   assert(mLt);
   assert(codewords);
-  //printf("k=%d minW=%d maxW=%d\n",k,minW,maxW);
+  printf("num_need=%d row=%d minW=%d maxW=%d\n",num_need,mLt->rows, minW,maxW);
   mzd_t *mat = mzd_init(num_need, mLt->rows); /** needed to ensure the sufficient rank */
   mzd_t *vLt = mzd_init(1, mLt->cols); 
   one_vec_t const * pvec;
@@ -213,7 +288,8 @@ csr_t * do_G_from_C(const csr_t * const mLt, const one_vec_t * const codewords,
   int skip_checkW = minW > maxW ? 1 : 0; /** this may happen if `dW=-1`, i.e., include any weight */
   if (maxW < minW)
     maxW=minW;
-  printf("minW=%d maxW=%d \n",minW, maxW);
+  if(debug&4)
+    printf("minW=%d maxW=%d \n",minW, maxW);
   /** first round: count codewords, non-zero entries, and ensure sufficient rank */
   for(int iw = minW; iw <= maxW ; iw++){
     for(pvec = codewords; pvec != NULL; pvec=(one_vec_t *)(pvec->hh.next)){
@@ -241,7 +317,6 @@ csr_t * do_G_from_C(const csr_t * const mLt, const one_vec_t * const codewords,
   }
   if(rank<num_need)
     ERROR("Number of codewords is not sufficient to construct G=Hz matrix: rk=%d < rankG=%d",rank,num_need);
-  
   mzd_free(mat);
 
   /** second round: actually create the CSR matrix */

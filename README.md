@@ -83,58 +83,211 @@ matrices `H=Hx` and `L=Lx` (use command-line parameters `finH=` and
 `L`, the dual CSS generator matrix `G=Hz` can be given.
 
 All matrices with entries in `GF(2)` should have the same number of
-columns, `n`, and obey the following orthogonality conditions: 
+columns, `n`, and obey the following orthogonality conditions:
 $$H_XH_Z^T=0,\quad H_XL_Z^T=0,\quad L_XH_Z^T=0,\quad L_XL_Z^T=I,$$
-where $I$ is an identity matrix.  Notice that the latter identity is not required; 
-it is sufficient that `Lx` and `Lz` matrices have the same full row rank `=k`, the dimension of the code, each row of `Lx` has a non-zero scalar product with a row of `Lz`, and vice versa.
+where $I$ is an identity matrix.  Notice that the latter identity is
+not required; it is sufficient that `Lx` and `Lz` matrices have the
+same full row rank `=k`, the dimension of the code, each row of `Lx`
+has a non-zero scalar product with a row of `Lz`, and vice versa.
 
 The program can read matrices from files in sparse (`coordinate`)
-MaTrix market exchange (`MTX`) format and David MacKay's `alist` format. 
+MaTrix market exchange (`MTX`) format and David MacKay's `alist`
+format (the format is recognized automatically).
 
 ## Common tasks 
 
-### Simulate the performance of a quantum or classical code with the internal decoder
+### Simulate the performance of a classical code 
 
-- Use a classical code specified by a parity check matrix in Matrix
-  Market coordinate (`MTX`) or David MacKay's `alist` format; generate
-  errors internally.  The following command line uses the LDPC code
-  from David MacKay collection in the file
-  `./examples/1920.1280.3.303.alist` (**THIS FAILS!!! TODO: make sure
-  this works!**):
+- **Use the internal random information set (RIS) decoder.** Use a
+  classical code specified by a parity check matrix in Matrix Market
+  coordinate (`MTX`) or David MacKay's `alist` format; errors in this
+  mode can only be generated internally.  The following command line
+  uses the LDPC code `[96,48,6]` from David MacKay collection
+  (https://www.inference.org.uk/mackay/codes/data.html) in the file
+  `./examples/96.3.963.alist`:
   
 ```
-./vecdec debug=1 mode=0 finH= ./examples/1920.1280.3.303.alist ntot=10240 nvec=1024 steps=50 lerr=1 useP=0.05 nfail=100
+vecdec=./src/vecdec
+$vecdec debug=1 mode=0 finH= ./examples/96.3.963.alist \
+  ntot=10240 nvec=1024 steps=5000 lerr=1 useP=0.05 nfail=100
 ```
 
 This example generates up to `ntot=10240` random error vectors in
 bunches of size `nvec=1024` each (for best performance, make sure that
-`nvec` be divisible by `64` and not smaller than `1024`).  Uniform
+`nvec` be divisible by `64` and is not smaller than `1024`).  Uniform
 error probability `P=0.05` is chosen for each variable node.  The run
 will stop after encountering `nfail=100` decoding errors.  Linear
 algebra part of Random Information Set decoding is also done in
-bunches; total of `steps=50` random information sets are taken.  For
-each of these, vectors with information set weight up to `lerr=1` are
-examined.
+bunches; total of `steps=5000` random information sets are taken.  For
+each of these, vectors with information sets of weight up to `lerr=1`
+are examined.
 
-- Use a quantum CSS code specified by parity check matrices `Hx`
-  and `Hz`; generate errors internally.  In this particular example, a generalized bicycle
-  code `[[10,2,3]]` with row weight `6` specified by the MTX files
+In a particular run the block error rate (BER) `0.0249023` (`102` out
+of `4096`) was achieved.  Increasing the number of RIS decoding steps
+by a factor of 10 **increased** BER to `0.029541` (`121` out of
+`4096`). [**FIXME:** *This looks like a bug - likely in the OSD module
+-- nothing like this happens with `lerr=-1`!*]
+
+- **Use Belief Propagation (BP) disorder with optional OSD.** Same
+  code, using up to `steps=50` BP iterations with parallel update
+  schedule, using both average and instantaneous LLR (whichever
+  converges first), followed by OSD1 (`lerr=1`) using up to
+  `maxosd=50` columns:
+  
+```
+vecdec=./src/vecdec
+$vecdec debug=1 mode=1 maxosd=50 steps=50 lerr=2 \
+    finH= ./examples/96.3.963.alist ntot=102400 nvec=102400 useP=0.05 seed=5
+```
+Here equal `ntot` and `nvec` are used to ensure that the 
+random error sample remains the same (for reproducibility with the `seed` set).
+This particular example using OSD2 gives BER of `0.0325` (`3328`
+failed out of `102400`); using a lower OSD1 gives a BER of
+`0.0397754`.
+
+To use BP with serial-`C` or serial-`V` update schedules, use
+`mode=1.4` (bit `2` set in the `submode`) and `mode=1.12` (both bit
+`2` and bit `3` are set) respectively.  Bits `0` and bits `1` are used
+to specify just instantaneous or just average LLR values, e.g.,
+`mode=1.1` for parallel update schedule with instantaneous LLR,
+`mode=1.14` for serial-`V` update schedule with average LLR.  For this
+particular code and set of errors, `mode=1.14` gives the best
+performance, with BER of `0.0390918` (`4003` out of `102400`).
+
+- **Find the distance of a classical code and estimate the LER.** The
+  program in `mode=2` uses RIS algorithm to enumerate small-weight
+  codewords and estimate the LER based on the codewords available.
+  The list of codewords can be exported to and imported from a file
+  and therefore reused with a different error model.
+  
+  The following example uses `100,000` RIS steps to enumerate
+  codewords of up to `dW=10` above the minimum weight found (for this
+  particular code the code distance `minW=6`) and write them to a file
+  `tmp.nz`.
+```
+vecdec=./src/vecdec
+$vecdec mode=2 steps=100000 finH= ./examples/96.3.963.alist useP=0.05 outC=tmp.nz dW=10
+```
+In a particular run, `195769` codewords have been generated; more
+  codewords can be found by repeating the runs using the command line
+```
+$vecdec mode=2 steps=100000 finH= ./examples/96.3.963.alist useP=0.05 \
+  finC=tmp.nz outC=tmp.nz dW=10
+```
+In a particular set of three subsequent runs, `210822`, `212203`, and
+`212314` codewords were written to the file.  The computed codewords
+can be used to estimate the BER, e.g, by running a `bash` script 
+```
+for ((w=6; w<=16; w++)) ; do 
+  echo $w `$vecdec debug=0 mode=2 steps=0 \
+  finH= ./examples/96.3.963.alist useP=0.05 finC=tmp.nz maxW=$w`  
+done
+```
+which gives the output
+```
+6 0.020577 0.006859 6 3
+7 0.020577 0.006859 6 3
+8 0.051854 0.006859 6 27
+9 0.051854 0.006859 6 27
+10 0.100138 0.006859 6 222
+11 0.100138 0.006859 6 222
+12 0.190795 0.006859 6 2149
+13 0.190795 0.006859 6 2149
+14 0.361757 0.006859 6 21275
+15 0.361757 0.006859 6 21275
+16 0.68621 0.006859 6 212314
+```
+The second column is a greedy estimate for the LER (sum over
+contributions for each codeword), the third is the single maximum term
+in the sum, the fourth is the minimum weight of a codeword, and the last
+column is the total number of codewords used in the estimate.
+Clearly, the error probability `0.05` is too high for good convergence.  With
+a smaller error probability `useP=0.01`, a much better convergence is
+achieved:
+```
+6 0.000186297 6.20991e-05 6 3
+7 0.000186297 6.20991e-05 6 3
+8 0.000245316 6.20991e-05 6 27
+9 0.000245316 6.20991e-05 6 27
+10 0.000264306 6.20991e-05 6 222
+11 0.000264306 6.20991e-05 6 222
+12 0.000271737 6.20991e-05 6 2149
+13 0.000271737 6.20991e-05 6 2149
+14 0.000274658 6.20991e-05 6 21275
+15 0.000274658 6.20991e-05 6 21275
+16 0.000275813 6.20991e-05 6 212314
+```
+A much longer run over a million error samples in `mode=0` and
+`steps=1000` (definitely not sufficient for optimal minimum-weight
+decoding of this code) 
+```
+$vecdec debug=1 mode=0 steps=1000 lerr=1 finH= ./examples/96.3.963.alist useP=0.01 nvec=100000 ntot=1000000
+```
+gives the BER of `3.1e-5` (`31` out of `1000000`), which is an order of
+magnitude below the greedy estimate and even factor of two below the estimate based
+on a single codeword.  This is the result of a very rough prefactor
+value used in the estimate.  (**FIXME:** Come up with a more accurate
+prefactor calculation.)
+
+### Simulate the performance of a quantum CSS code 
+
+- Use RIS decoder (`mode=0`) with a quantum CSS code specified by parity check matrices `Hx`
+  and `Hz`; generate errors internally.  In this particular example,
+  the generalized bicycle (GB) code `[[10,2,3]]` with row weight `6` specified by the MTX files
   `./input/GB_10_w6_X.mtx` and `./input/GB_10_w6_Z.mtx` is used:
 ```bash
-vecdec=./src/vecdec # vecdec location relative to this file
-$vecdec debug=1 mode=0 finH= ../input/GB_10_w6_X.mtx \
-                       finG= ../input/GB_10_w6_Z.mtx \
-					useP=0.001 lerr=1 nvec=1024 ntot=10240 steps=50 nfail=100
+vecdec=./src/vecdec 
+$vecdec debug=1 mode=0 finH= ./input/GB_10_w6_X.mtx \
+                       finG= ./input/GB_10_w6_Z.mtx \
+					useP=0.005 lerr=1 nvec=10240 ntot=102400 steps=5000 
 ```
+  which gives the BER of `0.000908203` (`93` errors out of `102400`).
 
-- Use a quantum code specified by a detector error moded (`DEM`) file
-  generated for a specific measurement circuit by `Stim`.  In this
-  particular example, a $d=5$ surface code circuit with $5$ rounds of measurement
-  and a standard circuit error model with the same probability `p=0.005` of four error types: 
+- Use BP decoder with serial-`V` schedule based on average LLR
+```
+ $vecdec debug=1 mode=1.14 finH= ./input/GB_10_w6_X.mtx \
+                           finG= ./input/GB_10_w6_Z.mtx \
+					   useP=0.005 lerr=2 nvec=10240 ntot=102400 steps=100
+```
+  gives the BER of `0.00140625` (`144` out of `102400`). 
+
+- Estimate the BER by generating the list of codewords 
+```
+$vecdec debug=1 mode=2 finH= ./input/GB_10_w6_X.mtx \
+                       finG= ./input/GB_10_w6_Z.mtx \
+				    useP=0.005 steps=1000000 finC=tmp.nz outC=tmp.nz dW=7
+```
+  and a subsequent cycle over the maximum weight:
+```
+for ((w=3; w<=10; w++)) ; do 
+  echo $w `$vecdec debug=0 mode=2 finH=./input/GB_10_w6_X.mtx \
+      finG=./input/GB_10_w6_Z.mtx useP=0.005 steps=0 finC=tmp.nz  maxW=$w` 
+done
+```
+  which gives 
+```
+3 0.0280724 0.00280724 3 10
+4 0.0320325 0.00280724 3 20
+5 0.0327029 0.00280724 3 32
+6 0.0327029 0.00280724 3 32
+7 0.0327029 0.00280724 3 32
+8 0.0327029 0.00280724 3 32
+9 0.0327029 0.00280724 3 32
+10 0.0327029 0.00280724 3 32
+```
+Again, the estimated contribution from a single codeword is about
+twice the LER computed.
+
+### Simulate quantum Clifford circuit (given a detector error model)
+
+In this particular example, detector error model (DEM) file is
+generated by `Stim` for a specific quantum circuit.  Namely, a $d=5$
+surface code with $5$ rounds of measurements and a standard circuit
+error model with the same probability `p=0.005` of four common error types: 
 ```bash
 vecdec=./src/vecdec
 stim=../Stim/out/stim # location of `stim` command-line binary
-d=5                      # code distance 
+d=5                      # code distance (and number of rounds)
 p=0.005                  # error probability to use 
 fnam=sd5                 # base file name to use for `stim` files 
 # use `Stim` to create the actual circuit 
@@ -148,33 +301,182 @@ $stim gen --code surface_code --task rotated_memory_x \
 # use `Stim` to create the DEM file 
 $stim analyze_errors --in $fnam.stim > $fnam.dem
 # use `vecdec` to generate errors internally and do the actual decoding
-$vecdec debug=1 mode=0 fdem=$fnam.dem steps=50 lerr=1 \
+$vecdec debug=1 mode=0 fdem=$fnam.dem steps=500 lerr=1 \
           ntot=10240 nvec=1024 nfail=100 
 ```
-Notice that the DEM file, in effect, specifies matrices `H=Hx`,
-`L=Lx`, and the error probabilities in different variable nodes.  
+This gives BER of `0.0581055` (`119` out of  `2048`).  Note that the
+DEM file, in effect, specifies matrices `H=Hx`, `L=Lx`, and the error
+probabilities in different variable nodes.  In this particular case,
+the code has parameters `[[1679,1,5]]`.  The number of RIS decoding
+`steps=500` is too small for this long a code.
 
 The same result can be also achieved by specifying these parameters in
-different files: `finH=$H finL=$L finP=$P`, where `$H`, `$L` and `$P`
-are names of the files with the two matrices and the error probability
-vector.
+different files: `finH=$H finL=$L finP=$P`, where `$H`, `$L` and `$P`,
+respectively, are names of the files with the two matrices and the
+error probability vector.  To generate these files from a DEM file,
+use `vecdec` with `mode=3`: 
+``` 
+$vecdec mode=3.28 fdem=sd5.dem fout=tmp 
+``` 
 
-- Use `vecdec` with detector and observable events generated by
-  `Stim` (same shell variables as in the example above):
+This creates the files `tmpH.mmx`, `tmpL.mmx`, and `tmpP.mmx` with
+matrices `H` and `L` and the probability vector `P` extracted from the
+DEM file.  The submode bitmap `28=4+8+16` specifies the matrices to
+generate, and `fout=tmp` gives the beginning of the file names to
+create.  Similarly, `mode=3.1` can be used to create the dual
+generator matrix `G=Hz` (you may need to provide a file with the
+properly generated codewords), and `mode=3.2` to create the logical
+generator matrix `K=Lz` (use `mode=3.3` to generate both `G` and `K`
+matrices, provide the `G` matrix on the command line using `finG=...`
+argument, or provide the list of codewords using `finC=...`
+argument).
+
+The command line to use these files (in this case for BP decoding): 
+```
+$vecdec mode=1.14 finH=tmpH.mmx finL=tmpL.mmx finP=tmpP.mmx steps=50 lerr=2 \
+          ntot=10240 nvec=1024 nfail=100
+```
+It gives BER of `0.0103306` (`100` out of `9680`), substantially
+better than the RIS decoding.  
+
+- Use `vecdec` with detector and observable events generated by `Stim`:
 
 ```bash
-$stim  sample_dem --shots 10240 --in $fnam.dem \
+stim=../Stim/out/stim 
+fnam=sd5
+$stim sample_dem --shots 10240 --in $fnam.dem \
         --out $fnam.det --out_format 01 \
         --obs_out $fnam.obs --obs_out_format 01
-$vecdec debug=1 mode=0 fdem=$fnam.dem fdet=$fnam.det fobs=$fnam.obs steps=50 lerr=1 \
-           nvec=1024 nfail=100 
+$vecdec debug=1 mode=1.14 fdem=$fnam.dem fdet=$fnam.det fobs=$fnam.obs steps=50 lerr=2 \
+           nvec=1024 ntot=10240
 ```
 
-### Use belief propagation decoders 
-### Calculate the distance of a quantum code or a syndrome measurement circuit 
+Finally, to estimate the decoding
+performance at small error probabilities, `mode=2` can be used:
+```
+vecdec=./src/vecdec 
+$vecdec mode=2 fdem=sd5.dem steps=100000 dW=7 outC=tmp.nz 
+for ((w=5; w<=12; w++)) ; do 
+  echo $w `$vecdec debug=0 mode=2 fdem=sd5.dem steps=0 maxW=$w finC=tmp.nz`
+done
+```
+This the output (truncated at the top)
+```
+# sumP(fail) maxP(fail) min_weight num_found
+0.184833 0.000686607 5 5458643
+# wrote 5458643 computed codewords to file tmp.nz
+5 0.0757023 0.000686607 5 13785
+6 0.164425 0.000686607 5 175286
+7 0.182536 0.000686607 5 531246
+8 0.18459 0.000686607 5 1085981
+9 0.184808 0.000686607 5 1853386
+10 0.184829 0.000686607 5 2838376
+11 0.184832 0.000686607 5 4042564
+12 0.184833 0.000686607 5 5458643
+```
+While the expansion converges, clearly, the greedy estimate is nearly
+two orders of magnitude bigger than the actual error rate, while the
+single largest contribution to the sum is several orders of magnitude
+too small.  Evidently, the reason is the large number (`13785`) of
+minimum-weight vectors associated with this particular DEM.
 
-### Save the files 
+## Use matrix transformations to simplify the error model
 
+The transformations [@Pryadko-2020] reduce the degeneracy of a quantum
+code while preserving the maximum-likelihood (ML) decoding
+performance.  These correspond to *inverse decoration* or
+*star-triangle* (more generally, *star-polygon*) transformations in
+the equivalent Ising models.  Namely, *inverse decoration* combines
+two identical columns in the matrices `H=Hx` and `L=Lx` (degeneracy
+vector of weight `2` removal), while *star-triangle* removes a
+degeneracy vector of weight `3`.  More general *star-polygon*
+transformation can remove degeneracy vectors of higher weight
+(currently not implemented).
+
+If starting with the DEM file, first generate the corresponding `H=Hx`
+matrix matrix and the probability vector `P` (here these go to files
+`tmpH.mmx` and `tmpP.mmx`):
+```
+$vecdec mode=3.20 fdem= ./examples/surf_d3.dem fout=tmp
+```
+Second, create a list of (classical)
+codewords of weight `3` orthogonal to the rows of `H`
+```
+$vecdec mode=2 finH=tmpH.mmx steps=10000 maxW=3 finP= tmpP.mmx outC=tmp.nz
+```
+This creates a file `tmp.nz` with `854` vectors of weight `3`.
+
+Third, create the modified matrices `H`, `L`, and the vector of
+probabilities `P` using the created list of codewords and the original
+DEM model:
+```
+$vecdec mode=3.32 finC=tmp.nz fout=tmpX fdem= ./examples/surf_d3.dem
+```
+
+**FIXME:** come up with the protocol to use these files with the `det`
+and `obs` files generated by `Stim` (or use internally generated
+vectors somehow).  The issue is that the rows added to `H` matrix
+should all carry zero syndromes.
+
+### Calculate the distance of a code or a circuit
+ 
+Just use `mode=2`.  For larger circuits this may require a large
+number of steps.  For example, for the DEM file
+`./examples/surf_d7.dem` (it was originally generated with the help of
+`Stim`) we run
+```
+$vecdec debug=0 mode=2 steps=10000 fdem= ./examples/surf_d7.dem
+```
+to get the output 
+```
+8.53809e-06 1.26044e-06 7 19
+```
+where the third number (`7`) is the minimum weight of a codeword
+found, and `19` is the number of codewords found.  Re-run with the
+additional parameter `maxW=7` to give the number of codewords of this
+weight found:
+```
+./src/vecdec debug=0 mode=2 steps=1000 fout=tmp2 fdem= ./examples/surf_d7.dem maxW=7
+9.12457e-06 1.26044e-06 7 99
+```
+
+
+### Export code matrices to Matrix Market (`MMX`) files 
+
+Use `mode=3`.  Create all five matrices (`H=Hx`, `G=Hz`, `L=Lx`, `K=Lz`) 
+and the probability vector `P` from the DEM file
+`./examples/surf_d3.dem`: 
+```
+./src/vecdec mode=3 fdem=./examples/surf_d3.dem fout=tmp 
+```
+
+This creates the files `tmpH.mmx`, `tmpL.mmx`, `tmpG.mmx`,
+`tmpK.mmax`, and `tmpP.mmx`.  To ensure that the generator matrix
+`G=Hx` has smallest possible row weights, first generate the *classical*
+codewords orthogonal to `H`
+```
+./src/vecdec mode=2 finH=tmpH.mmx useP=0.01 outC=tmp.nz steps=10000 dW=0
+```
+Here `dW=0` limits the codewords to the minimum weight found, in this
+case `minW=3`, which gives `862` distinct vectors (you may need to
+increase `dW` if program fails to create `G` matrix in the next step).  
+Second, generate
+the corresponding `G` matrix.  Notice that this will generally create
+a matrix with redundant rows using all
+available vectors; use explicit `maxW=3` to limit  the row weights:
+```
+./src/vecdec mode=3.1 fdem=./examples/surf_d3.dem  \
+	finC=tmp.nz steps=0 maxW=3 fout=tmp
+```
+This creates the file `tmpG.mmx` with `726` rows.  The logical
+generator matrices for quantum codes should always have exactly `k`
+rows.  The matrix `K=Lz` with guaranteed minimum weight rows can be
+created from the same set of codewords, e.g., 
+```
+./src/vecdec mode=3.3 fdem=./examples/surf_d3.dem  finC=tmp.nz steps=0 maxW=3 fout=tmp
+``` 
+which creates both `G` and `K` matrices.  Of course, to create a
+`K=Lz` matrix, *quantum* codewords created directly from the `DEM` file can also be used.
 
 
 ## Vectorized decoder
@@ -378,14 +680,17 @@ Additional parameters relevant for this mode:
 
 This section describes operation with the command-line switch
 `mode=3`.  In this case the program does not try to run anything and
-just parses the DEM file and saves the corresponding parity-check `H=Hx`,
-observables `L=Lx` matrices and the error-probabilities `P` vector.  In
-addition, the program constructs the `G=Hz` and `K=Lz` matrices.  As a reminder,
-rows of `G` are orthogonal to rows of `H` and `L`, while rows of `K` are orthogonal to the rows of `H`, 
-are linearly independent from rows of `G`, and each has a non-zero product with a row of `L`.  Also, 
-`rank H + rank G = n-k`, `rank L = rank K = k`, where `n` is the number of variable nodes (matrix columns) 
-and `k` is the dimension of the code.  For a classical code, matrix `G` is trivial (has zero rank), 
-while the `L` matrix can be selected to have all rows of weight `1`.
+just parses the DEM file and saves the corresponding parity-check
+`H=Hx`, observables `L=Lx` matrices and the error-probabilities `P`
+vector.  In addition, the program constructs the `G=Hz` and `K=Lz`
+matrices.  As a reminder, rows of `G` are orthogonal to rows of `H`
+and `L`, while rows of `K` are orthogonal to the rows of `H`, are
+linearly independent from rows of `G`, and each has a non-zero product
+with a row of `L`.  Also, `rank H + rank G = n-k`, `rank L = rank K =
+k`, where `n` is the number of variable nodes (matrix columns) and `k`
+is the dimension of the code.  For a classical code, matrix `G` is
+trivial (has zero rank), while the `L` matrix can be selected to have
+all rows of weight `1`.
 
 The matrices are written in the Matrix Market format to files with names
 `${fout}H.mmx`, `${fout}G.mmx`, `${fout}L.mmx`, and `${fout}P.mmx`,
@@ -408,7 +713,8 @@ You can generate the list of supported command line arguments by running
 `vecdec --help`.
 
 ```bash
-  usage: ./src/vecdec param=value [[param=value] ... ]
+./vecdec:  vecdec - vectorized decoder and LER estimator
+  usage: ./vecdec param=value [[param=value] ... ]
 	 Command line arguments are processed in the order given.
 	 Supported parameters:
 	 --help		: give this help (also '-h' or just 'help')
@@ -444,6 +750,7 @@ You can generate the list of supported command line arguments by running
 	 ntot =[long long int]	: total syndromes to generate (default: 1)
 	 nfail=[long long int]	: total fails to terminate (0, do not terminate)
 	 dW=[integer]	: if 'dW>=0', may keep vectors of weight up to 'minW+dW' (0)
+	 maxW=[integer]	: if non-zero, skip any vectors above this weight (0)
 	 dE=[double]	: if 'dE>=0', may keep vectors of energy up to 'minE+dE'
 			 (default value: -1, no upper limit on energy)
 	 dmin=[integer]	: terminate distance calculation immediately when
@@ -485,6 +792,8 @@ You can generate the list of supported command line arguments by running
 			 .4 (bit 2) write H=Hx matrix
 			 .8 (bit 3) write  L=Lx matrix
 			 .16 (bit 4) write P vector
+			 In addition, mode=3.32 (just one bit set) in combination with
+			  codewords file 'finC' forces matrix transformation mode
 			 Use 'fout=' command line argument to generate file names
 			 ${fout}H.mmx, ${fout}G.mmx, ${fout}L.mmx, ${fout}K.mmx, and ${fout}P.mmx
 			 with 'fout=stdout' all output is sent to 'stdout'
@@ -507,7 +816,12 @@ You can generate the list of supported command line arguments by running
   ```C
   seed = x + time(NULL) + 1000000ul * getpid();
   ```
-
+- The command-line argument `maxW` can be used to ensure that all
+  codewords of higher weight are omitted.  This is useful with
+  `mode=3.32` (matrix transformation) as the complexity grows
+  exponentially with the weight.  [Currently only transformations
+  corresponding to codewords of weight `1`, `2`, and `3` are
+  implemented.]
 
 ## Libraries 
 

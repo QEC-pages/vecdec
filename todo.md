@@ -193,7 +193,7 @@ stim sample_dem \
 	* update messages from `c`.
   - [x] serial BP (v-based)   
   - [x] Add error estimation
-  - [ ] BP with randomization
+  - [ ] BP with randomization of probabilities 
   - [ ] BP with Freezing / Stabilizer inactivation (Savin et al)
   - [ ] BP version by Kung, Kuo, Lai (http://arXiv.org/abs/2305.03321) and/or Kuo, Lai (http://arXiv.org/abs/2104.13659)
   - [x] Add OSD
@@ -210,39 +210,43 @@ stim sample_dem \
   - [ ] Estimate the fudge-factor $\alpha$, given the statistics of error probabilities
   - [ ] Estimate the effect of correlations between the trajectories.
 - [ ] Code transformations reducing the degeneracy for `mode=3`
-  - [ ] Check for `w=1` and `w=2` degeneracies (submode `w`: remove
+  - [x] Check for `w=1` and `w=2` degeneracies (submode `w`: remove
         degeneracies up to `w` if non-zero, otherwise do no
         transformations)
-  - [ ] Remove `w=3` degeneracies (rows of weight 3 in `G`)
+  - [x] Remove `w=3` degeneracies (rows of weight 3 in `G`)
         (see the unfinished function `int star_triangle()` in `star_poly.c` )
-    - [ ] make a structure for "column", with `[col_number, K, colG,
-          colL]`, where `colG` and `colL` give sparse representation
-          of the corresponding matrix column; sortable by
-          `col_number`, and a routine to restore the sparse `H`, `L`
-          matrices and the error vector.
-    - [ ] Start with `Ht`, `Lt`, and the `G` matrix (e.g., read from a
-          file) or even a list of codewords (not necessarily
-          complete) read from a file.
-  	  - [ ] A weight-one row of `G` -- the corresponding column is dropped.
-      - [ ] A weight-two row of `G` -- the corresponding columns are
-            combined, two bits of the error vector combined, and `K=K1
-            [+] K2` (operation `boxplus`).
-      - [ ] A weight-three row of `G` corresponding to columns
-            `[b1,b2,b3]` in `H` which sum to zero give columns
-            `[0,b2,b3]`, and an extra row `[1,1,1]` (this extra row carries zero syndrome).  Columns
-            `[a1,a2,a3]` in `L` (which sum to `1`) are replaced with
-            `[0,a2,a3]`.  The new LLR coefficients `[B1,B2,B3]` are
-            $$B_3={1\over4}\ln\left[{\cosh(A_1+A_2+A_3)\cosh(A_1+A_2-A_3)\over\cosh(A_1-A_2+A_3)\cosh(A_1-A_2-A_3)}\right]$$
-            which can also be written as `B3=0.5*(A1+A2 [+] A3) +
-            0.5*(A1-A2 [+] A3)`.
-      - [ ] For now, we do not want to give a translation of the error
-            vectors, just the new `K` and `L` matrices and the
-            corresponding LLR coefficients.
-    - [ ] Go over `non-overlapping` weight-3 rows in `G` and create
-          new matrices; the rest of the columns just write `as is`.
-    - [ ] If wanted, the procedure can be repeated again, creating the
-          codewords list, the corresponding `G` matrix, and writing
-          out the new error model `(H, L, probabilities)`.
+  - [x] make a structure for "column", with `[col_number, K, colG,
+		colL]`, where `colG` and `colL` give sparse representation of
+		the corresponding matrix column; sortable by `col_number`, and
+		a routine to restore the sparse `H`, `L` matrices and the
+		error vector.
+  - [x] Start with `Ht`, `Lt`, and the `G` matrix (e.g., read from a
+        file) or even a list of codewords (not necessarily complete)
+        read from a file.
+  - [x] A weight-one row of `G` -- the corresponding column is dropped.
+  - [x] A weight-two row of `G` -- the corresponding columns are
+        combined, two bits of the error vector combined, and `K=K1 [+]
+        K2` (operation `boxplus`).
+  - [x] A weight-three row of `G` corresponding to columns
+        `[b1,b2,b3]` in `H` which sum to zero give columns
+        `[0,b2,b3]`, and an extra row `[1,1,1]` (this extra row
+        carries zero syndrome).  Columns `[a1,a2,a3]` in `L` (which
+        sum to `1`) are replaced with `[0,a2,a3]`.  The new LLR
+        coefficients `[B1,B2,B3]` are
+        $$B_3={1\over4}\ln\left[{\cosh(A_1+A_2+A_3)\cosh(A_1+A_2-A_3)\over\cosh(A_1-A_2+A_3)\cosh(A_1-A_2-A_3)}\right]$$
+        which can also be written as `B3=0.5*(A1+A2 [+] A3) +
+        0.5*(A1-A2 [+] A3)`.
+  - [ ] For now, we do not want to give a translation of the error
+        vectors, just the new `K` and `L` matrices and the
+        corresponding LLR coefficients.
+  - [x] Go over `non-overlapping` weight-3 rows in `G` and create new
+        matrices; the rest of the columns just write `as is`.
+  - [x] If wanted, the procedure can be repeated again, creating the
+        codewords list, the corresponding `G` matrix, and writing out
+        the new error model `(H, L, probabilities)`.
+  - [ ] Make sure that shorter syndrome vectors can be read and used (add zeros)
+        with the new matrices, along with the transformation matrix `T`
+  - [ ] Come up with "header" syntax to specify **existing** H, L, G, P, etc. matrices [e.g., `fin=tmp`]
   - [ ] Remove `w=4` degeneracies (rows of weight 4 in `G`)
   - [ ] Code for arbitrary row weight (exponentially large matrices may result)
 
@@ -275,10 +279,20 @@ stim sample_dem \
         decoding in this case).
 
 - [ ] verification and convenience
-  - [ ] add help specific for each `mode` (use `vecdec mode=2 help`)
-  - [ ] make sure `debug=1` prints the values relevant for each mode
-  - [ ] make sure `debug=1` complaints if a value not relevant to the current mode is set 
-  - [ ] more examples
+  - [ ] add help specific for each `mode` (use `vecdec mode=2 help`).
+        To this end, first scan for `mode` (complain if it is set more
+        than once), then scan for `debug` (set it), then scan for
+        `help`.
+  - [ ] Add the ability to read MTX complex matrices (non-CSS codes).
+        See `GAP` package `QDistRnd`.
+  - [ ] Add `alpha` for modified BP, rename current `alpha` to `beta`.
+  - [ ] make sure `debug=1` prints the values relevant for each mode,
+        and also give parameters of the matrices (dimensions, ranks,
+        etc)
+  - [ ] make `debug=2` show command line arguments
+  - [ ] make `debug=4` show additional information (e.g., `QLLR`)
+  - [ ] make sure program complaints if a value not relevant to the
+        current mode is set on the command line
   - [ ] verify matrix orthogonality and ranks
   - [ ] more usage examples in the documentation
   - [ ] testing facility 
@@ -292,3 +306,9 @@ stim sample_dem \
       given that the codewords are now read uniquely? **)
 - [ ] a special mode to process ( test / give the stats / select
       irreducible codewords ) in codewords files.
+
+### bugs to fix / features to add 
+- [ ] when reading a codewords file, ensure coordinates are not too big (also orthogonality)
+- [ ] OSD1 with `mode=2` can degrade the performance when number of `steps` is large.
+- [ ] better prefactor calculation in `mode=2`
+- [ ] 

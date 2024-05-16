@@ -386,9 +386,17 @@ csr_t *csr_free(csr_t *p){
  * check existing size and (re)allocate if  needded 
  */
 csr_t *csr_init(csr_t *mat, int rows, int cols, int nzmax){
-  if ((mat!=NULL)&&((mat->nzmax < nzmax)||(mat->nzmax < rows+1)))
-    mat=csr_free(mat);  /* allocated size was too small */  
-  if(mat==NULL){
+  if ((mat!=NULL)&&((mat->nzmax < nzmax)||(mat->nzmax < rows+1))){
+    // mat=csr_free(mat);  /* allocated size was too small */
+    /** keep allocated `mat` */
+    mat->p = realloc(mat->p,MAX(nzmax,(rows+1))*sizeof(int));
+    mat->i = realloc(mat->i, nzmax*sizeof(int));
+    if ((mat->p==NULL) || (mat->i==NULL))
+      ERROR("csr_init: failed to reallocate CSR rows=%d cols=%d nzmax=%d",
+            rows,cols,nzmax);
+    mat->nzmax=nzmax;
+  }
+  else if(mat==NULL){
     mat=malloc(sizeof(csr_t));  
     mat->p=calloc(MAX(nzmax,(rows+1)),sizeof(int));
     mat->i=calloc(nzmax,sizeof(int)); 
@@ -726,7 +734,7 @@ csr_t *csr_alist_read(const char fnam[], csr_t * mat, int transpose, int debug){
 
   if(debug &1)
     printf("# read alist file %s %s: rows=%d cols=%d nz=%d\n",
-	   fnam,!transpose?"(transposed)":"",mat->rows,mat->cols,mat->nz);
+	   fnam,!transpose?"(transposed)":"",mat->rows,mat->cols,nz);
 
   return mat;    
 }
@@ -1001,8 +1009,9 @@ int do_errors(mzd_t *mHe, mzd_t *mLe, const csr_t * const Ht, const csr_t * cons
   
   assert((mHe!=NULL) && (mLe!=NULL)); /** sanity check */
   assert(mHe->ncols == mLe->ncols);   /** how many errors to produce */
-  assert(Lt->cols == mLe->nrows);     /** rows `L` */
-  assert(Ht->cols == mHe->nrows);     /** rows `H` */
+  assert((Lt!=NULL) && (Lt->cols == mLe->nrows));     /** rows `L` */
+  assert((Ht!=NULL) && (Ht->cols == mHe->nrows));     /** rows `H` */
+  assert(vP!=NULL);
   
   int max = 100;  /** initial size of `vec` */
   int * vec = malloc(max * sizeof(int));
