@@ -306,3 +306,9 @@ stim sample_dem \
       given that the codewords are now read uniquely? **)
 - [ ] a special mode to process ( test / give the stats / select
       irreducible codewords ) in codewords files.
+
+### bugs to fix / features to add 
+- [ ] when reading a codewords file, ensure coordinates are not too big (also orthogonality)
+- [ ] OSD1 with `mode=2` can degrade the performance when number of `steps` is large.
+- [ ] better prefactor calculation in `mode=2`
+- [ ] 

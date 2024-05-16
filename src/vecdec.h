@@ -177,7 +177,7 @@ extern "C"{
 		      _maybe_unused const int debug);  
   
   csr_t * do_G_matrix(const csr_t * const mHt, const csr_t * const mLt, const qllr_t LLR[], 
-		      const int debug);
+		      const int rankG, const int debug);
 
   /** 
    * @brief The help message. 

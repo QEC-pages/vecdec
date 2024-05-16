@@ -189,8 +189,6 @@ int star_triangle(csr_t * Ht, csr_t * Lt, qllr_t *LLR, const one_vec_t * const c
   Lt->p[n1]=jL;
   Lt->nz = -1;  
 
-  printf("################ here!\n"); fflush(stdout);
-  
   /** memory clean-up */
   mzd_free(used);
   for(int i=0; i<n1; i++)
@@ -282,7 +280,7 @@ csr_t * do_G_from_C(const csr_t * const mLt, const one_vec_t * const codewords,
 		    _maybe_unused const int debug){
   assert(mLt);
   assert(codewords);
-  //printf("k=%d minW=%d maxW=%d\n",k,minW,maxW);
+  printf("num_need=%d row=%d minW=%d maxW=%d\n",num_need,mLt->rows, minW,maxW);
   mzd_t *mat = mzd_init(num_need, mLt->rows); /** needed to ensure the sufficient rank */
   mzd_t *vLt = mzd_init(1, mLt->cols); 
   one_vec_t const * pvec;
@@ -290,7 +288,8 @@ csr_t * do_G_from_C(const csr_t * const mLt, const one_vec_t * const codewords,
   int skip_checkW = minW > maxW ? 1 : 0; /** this may happen if `dW=-1`, i.e., include any weight */
   if (maxW < minW)
     maxW=minW;
-  printf("minW=%d maxW=%d \n",minW, maxW);
+  if(debug&4)
+    printf("minW=%d maxW=%d \n",minW, maxW);
   /** first round: count codewords, non-zero entries, and ensure sufficient rank */
   for(int iw = minW; iw <= maxW ; iw++){
     for(pvec = codewords; pvec != NULL; pvec=(one_vec_t *)(pvec->hh.next)){
@@ -318,7 +317,6 @@ csr_t * do_G_from_C(const csr_t * const mLt, const one_vec_t * const codewords,
   }
   if(rank<num_need)
     ERROR("Number of codewords is not sufficient to construct G=Hz matrix: rk=%d < rankG=%d",rank,num_need);
-  
   mzd_free(mat);
 
   /** second round: actually create the CSR matrix */

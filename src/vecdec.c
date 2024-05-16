@@ -276,8 +276,7 @@ int do_hash_verify_CW(const csr_t * const mHt, const csr_t * const mLt, const pa
   const int r=mHt->cols;
   if (k)
     assert(mHt->rows == mLt->rows);
-  else
-    assert(p->classical);
+  //  else    assert(p->classical);
   
   mzd_t *vHt = mzd_init(1, r);
   mzd_t *vLt = k>0 ? mzd_init(1, k) : NULL;
@@ -1791,7 +1790,7 @@ int main(int argc, char **argv){
       p->num_cws = nzlist_read(p->finC, p);
       if(p->debug&1)
 	printf("# %lld codewords read from %s ...",p->num_cws, p->finC);
-      do_hash_verify_CW(p->mHt, p->mLt, p);
+      do_hash_verify_CW(p->mHt, NULL, p);
       if(p->debug&1)
 	printf("all verified\n");
       do_hash_min(p); /** set values `minE` and `minW` from stored CWs */
@@ -1876,7 +1875,7 @@ int main(int argc, char **argv){
 	  if(p->finC)
 	    p->mG = do_G_from_C(p->mLt,p->codewords,p->rankG,p->minW, p->minW + p->dW, p->debug);
 	  else 
-	    p->mG = do_G_matrix(p->mHt,p->mLt,p->vLLR, p->debug);
+	    p->mG = do_G_matrix(p->mHt,p->mLt,p->vLLR, p->rankG, p->debug);
 	  comment[0]='G';
 	}
 	else{
@@ -1910,9 +1909,14 @@ int main(int argc, char **argv){
 	    p->mK = do_K_from_C(p->mLt, p->codewords, p->ncws, p->nvar, p->minW, p->minW+p->dW, p->debug);
 	    //	  csr_out(p->mK);
 	  }
-	  else
-	    p->mK=Lx_for_CSS_code(p->mG,p->mH);
-	  comment[0]='K';
+	  else{
+	    if ((p->mG)&&(p->mH)){
+	      p->mK=Lx_for_CSS_code(p->mG,p->mH);
+	      comment[0]='K';
+	    }
+	    else
+	      ERROR("use mode=3.3 or specify the codewords file `finC=...` or generator matrix `finG=...`");
+	  }
 	}
 	else{
 	  size_t size2 = snprintf(NULL, 0, "K matrix from file %s", p->finK);
