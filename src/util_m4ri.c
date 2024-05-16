@@ -830,7 +830,7 @@ int all_space(const char * str) {
  *
  */
 int read_01(mzd_t *M, FILE *fin, long long int *lineno, const char* fnam,
-	      const int debug){
+	    const int pads, const int debug){
   if(!M)
     ERROR("expected initialized matrix 'M'!\n");
   else
@@ -852,11 +852,12 @@ int read_01(mzd_t *M, FILE *fin, long long int *lineno, const char* fnam,
     (*lineno)++;
     switch(buf[0]){
     case '0': case '1':
-      if(linelen<=m)
-	ERROR("line is too short, expected %d 01 characters\n"
+      if((linelen<=m)&&(pads==0))
+	ERROR("line is too short, expected %d 01 characters or set 'pads=1'\n"
 	      "%s:%lld:1: '%s'\n", m,fnam,*lineno,buf);
       else{
-	for(int i=0; i<m; i++){
+	int len = linelen-1 < m ? linelen-1 : m;
+	for(int i=0; i<len; i++){
 	  if (buf[i]=='1')
 	    mzd_write_bit(M,i,il,1); /** row `i`, col `il` */
 	  else if (buf[i]!='0')

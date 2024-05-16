@@ -25,7 +25,7 @@
 #include "vecdec.h"
 #include "qllr.h"
 
-params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50,
+params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50, .pads=0,
   .rankH=0, .rankG=-1, .rankL=-1, 
   .lerr=-1, .maxosd=100, .bpalpha=0.5, .bpretry=1, .swait=0, .maxC=0,
   .dW=0, .minW=INT_MAX, .maxW=0, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
@@ -42,7 +42,7 @@ params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50,
   .nzH=0, .nzL=0
 };
 
-params_t prm_default={  .steps=50,
+params_t prm_default={  .steps=50, .pads=0, 
   .lerr=-1, .maxosd=100, .bpalpha=0.5, .bpretry=1, .swait=0, .maxC=0,
   .dW=0, .minW=INT_MAX, .maxW=0, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
   .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8, .useP=0, .dmin=0,
@@ -997,6 +997,11 @@ int var_init(int argc, char **argv, params_t *p){
       if (p->debug&1)
 	printf("# read %s, nvec=%d\n",argv[i],p-> nvec);
     }
+    else if (sscanf(argv[i],"pads=%d",&dbg)==1){ /** `pads` */
+      p -> pads = dbg;
+      if (p->debug&1)
+	printf("# read %s, pads=%d\n",argv[i],p-> pads);
+    }
     else if (sscanf(argv[i],"dmin=%d",&dbg)==1){ /** `dmin` */
       p -> dmin = dbg;
       if (dbg<0)
@@ -1532,9 +1537,9 @@ int do_err_vecs(params_t * const p){
   /** prepare error vectors ************************************************************/
   switch(p->internal){
   case 0: /** read `det` and `obs` files */
-    il1=read_01(p->mHe,p->file_det, &p->line_det, p->fdet, p->debug);
+    il1=read_01(p->mHe,p->file_det, &p->line_det, p->fdet, p->pads, p->debug);
     /** TODO: enable external processing of observables */
-    il2=read_01(p->mLe,p->file_obs, &p->line_obs, p->fobs, p->debug);
+    il2=read_01(p->mLe,p->file_obs, &p->line_obs, p->fobs, 0, p->debug);
     if(il1!=il2)
       ERROR("mismatched DET %s (line %lld) and OBS %s (line %lld) files!",
 	    p->fdet,p->line_det,p->fobs,p->line_obs);
@@ -1554,7 +1559,7 @@ int do_err_vecs(params_t * const p){
 
     break;
   case 2: /** read errors from file and generate corresponding `obs` and `det` matrices */
-    il1=read_01(p->mE,p->file_err, &p->line_err, p->ferr, p->debug);
+    il1=read_01(p->mE,p->file_err, &p->line_err, p->ferr, 0, p->debug);
     if(p->debug&1)
       printf("# read %d errors from file %s\n",il1,p->ferr);
     csr_mzd_mul(p->mHe,p->mH,p->mE,1);
@@ -1661,7 +1666,7 @@ int main(int argc, char **argv){
 	break;
     }
     if(p->debug&1)
-      printf("# fail_fraction total_cnt sycces_cnt\n");
+      printf("# fail_fraction total_cnt succes_cnt\n");
     printf(" %g %lld %lld # %s\n",(double) synd_fail/synd_tot, synd_tot, synd_tot-synd_fail, p->fdem ? p->fdem : p->finH );
       
     break;
