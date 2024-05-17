@@ -951,6 +951,7 @@ int var_init(int argc, char **argv, params_t *p){
   p->d1=12; p->d2=300; p->d3=7; /** recommended values */
 #endif   
 
+  /** scan for `debug` and `mode` first */
   for(int i=1; i<argc; i++){  
     int pos=0;
     if(sscanf(argv[i],"debug=%d",& dbg)==1){/** `debug` */
@@ -961,7 +962,7 @@ int var_init(int argc, char **argv, params_t *p){
           p->debug = dbg; /** just assign if in the `1st position` */
         else
           p->debug ^= dbg; /** otherwise `XOR` */
-        if(p->debug &1)
+        if(p->debug &4)
 	  printf("# read %s, debug=%d octal=%o\n",argv[i],p->debug,p->debug);
       }
     }
@@ -973,160 +974,203 @@ int var_init(int argc, char **argv, params_t *p){
 	 else
 	   ERROR("invalid format argv[%d]: %s\n",i,argv[i]);
       }
-      if(p->debug&1)
+      if(p->debug&4)
 	printf("# read %s, mode=%d submode=%d [octal=%o]\n",argv[i],
 	       p->mode,p->submode,p->submode);      
     }
+  }
+  
+  for(int i=1; i<argc; i++){  
+    if (0==strncmp(argv[i],"debug=",6)){ /** `debug` */
+      /** do nothing */
+    }
+    else if (0==strncmp(argv[i],"mode=",5)){ /** `debug` */
+      /** do nothing */
+    }
     else if (sscanf(argv[i],"qllr1=%d",&dbg)==1){ /** QLLR `d1` param */
       p -> d1 = dbg;
-      if (p->debug&1)
+      if (p->debug&4)
 	printf("# read %s, QLLR parameter d1=%d\n",argv[i],p-> d1);
+#ifndef USE_QLLR
+      ERROR("program was compiled without \"USE_QLLR\" define")
+#endif       
     }
     else if (sscanf(argv[i],"qllr2=%d",&dbg)==1){ /** QLLR `d2` param */
       p -> d2 = dbg;
-      if (p->debug&1)
+      if (p->debug&4)
 	printf("# read %s, QLLR parameter d2=%d\n",argv[i],p-> d2);
+#ifndef USE_QLLR
+      ERROR("program was compiled without \"USE_QLLR\" define")
+#endif       
     }
     else if (sscanf(argv[i],"qllr3=%d",&dbg)==1){ /** QLLD `d3` param */
       p -> d3 = dbg;
-      if (p->debug&1)
+      if (p->debug&4)
 	printf("# read %s, QLLR parameter d3=%d\n",argv[i],p-> d3);
+#ifndef USE_QLLR
+      ERROR("program was compiled without \"USE_QLLR\" define")
+#endif       
     }
     else if (sscanf(argv[i],"nvec=%d",&dbg)==1){ /** `nvec` */
       p -> nvec = dbg;
-      if (p->debug&1)
+      if (p->debug&4)
 	printf("# read %s, nvec=%d\n",argv[i],p-> nvec);
+      if(p->mode>1)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
     }
     else if (sscanf(argv[i],"pads=%d",&dbg)==1){ /** `pads` */
       p -> pads = dbg;
-      if (p->debug&1)
+      if (p->debug&4)
 	printf("# read %s, pads=%d\n",argv[i],p-> pads);
+      if(p->mode>1)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
     }
     else if (sscanf(argv[i],"dmin=%d",&dbg)==1){ /** `dmin` */
       p -> dmin = dbg;
       if (dbg<0)
 	ERROR("command line argument %d dmin=%d must be non-negative\n",i,dbg);
-      if (p->debug&1)
+      if (p->debug&4)
 	printf("# read %s, dmin=%d\n",argv[i],p-> dmin);
+      if(p->mode != 2)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
     }
     else if (sscanf(argv[i],"steps=%d",&dbg)==1){ /** `steps` */
       p -> steps = dbg;
-      if (p->debug&1)
+      if (p->debug&4)
 	printf("# read %s, steps=%d\n",argv[i],p-> steps);
+      if(p->mode>2)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
     }
     else if (sscanf(argv[i],"swait=%d",&dbg)==1){ /** `swait` */
       p -> swait = dbg;
-      if (p->debug&1)
+      if (p->debug&4)
 	printf("# read %s, swait=%d\n",argv[i],p-> swait);
+      if((p->mode >0)|| (p->mode!=2))
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
     }
     else if (sscanf(argv[i],"lerr=%d",&dbg)==1){ /** `lerr` */
       p -> lerr = dbg;
-      if (p->debug&1)
+      if (p->debug&4)
 	printf("# read %s, lerr=%d\n",argv[i],p-> lerr);
+      if(p->mode>1)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
     }
     else if (sscanf(argv[i],"maxosd=%d",&dbg)==1){ /** `maxosd` */
       p -> maxosd = dbg;
-      if (p->debug&1)
+      if (p->debug&4)
 	printf("# read %s, maxosd=%d\n",argv[i],p-> maxosd);
+      if(p->mode!=1)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
     }
     else if (sscanf(argv[i],"ntot=%lld",&lldbg)==1){ /** `ntot` */
       p -> ntot = lldbg;
-      if (p->debug&1)
+      if (p->debug&4)
 	printf("# read %s, ntot=%lld\n",argv[i],p-> ntot);
+      if(p->mode>1)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
     }
     else if (sscanf(argv[i],"maxC=%lld",&lldbg)==1){ /** `maxC` */
       p -> maxC = lldbg;
-      if (p->debug&1)
+      if (p->debug&4)
 	printf("# read %s, maxC=%lld\n",argv[i],p-> maxC);
+      if(p->mode<2)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
     }
     else if (sscanf(argv[i],"nfail=%lld",&lldbg)==1){ /** `nfail` */
       p -> nfail = lldbg;
-      if (p->debug&1)
+      if (p->debug&4)
 	printf("# read %s, nfail=%lld\n",argv[i],p-> nfail);
+      if(p->mode>1)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
     }
     else if (sscanf(argv[i],"seed=%lld",&lldbg)==1){ /** `seed` */
       p->seed=lldbg;
-      if (p->debug&1)
+      if (p->debug&4)
 	printf("# read %s, seed=%lld\n",argv[i],p->seed);
     }
     else if (sscanf(argv[i],"bpalpha=%lg",&val)==1){ /** `bpalpha` */
       p -> bpalpha = val; /** WARNING: no value verification!!! */
-      if (p->debug&1)
+      if (p->debug&4)
 	printf("# read %s, bpalpha=%g\n",argv[i],p-> bpalpha);
+      if(p->mode!=1)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
     }
     else if (sscanf(argv[i],"bpretry=%d",&dbg)==1){ /** `bpretry` */
       p -> bpretry = dbg;
       if(dbg<1)
 	ERROR("read arg[%d]=%s, bpretry=%d should be at least 1",i,argv[i],dbg);
-      if (p->debug&1)
+      if (p->debug&4)
 	printf("# read %s, bpretry=%d\n",argv[i],p-> bpretry);
+      if(p->mode!=1)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
     }
     else if (sscanf(argv[i],"epsilon=%lg",&val)==1){ /** `epsilon` */
       p->epsilon = val;
-      if (p->debug&1)
+      if (p->debug&4)
 	printf("# read %s, epsilon=%g\n",argv[i],p-> epsilon);
       if((val<0) || (val>1))
 	ERROR("arg[%d]=%s invalid probability cut-off, read %g",i,argv[i],val);
+      if(p->mode>=0)
+	ERROR("mode=%d, this parameter %s is irrelevant (for any mode)\n",p->mode,argv[i]);
     }
     else if (sscanf(argv[i],"useP=%lg",&val)==1){ /** `useP` */
       p->useP = val;
-      if (p->debug&1)
+      if (p->debug&4)
 	printf("# read %s, useP=%g\n",argv[i],p-> useP);
     }
     else if (sscanf(argv[i],"dE=%lg",&val)==1){ /** `dE` */
       p -> dEdbl = val;
-      if (p->debug&1){
+      if (p->debug&4){
 	printf("# read %s, dE=%g\n", argv[i], p->dEdbl);
 	if (p->dEdbl < 0)
 	  printf("# no limit on error/codeword energies to store\n");
 	else
 	  printf("# setting upper limit on error/codeword energies to store\n");
       }
-
+      if(p->mode!=2)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
     }
     else if (sscanf(argv[i],"dW=%d",&dbg)==1){ /** `dW` */
       p -> dW = dbg;
-      if (p->debug&1){
+      if (p->debug&4){
 	printf("# read %s, dW=%d\n",argv[i],p-> dW);
 	if (p->dW < 0)
 	  printf("# no limit on error/codeword weight to store\n");
 	else
 	  printf("# setting upper limit 'minW+%d' on error/codeword weight to store\n",p->dW);
       }	
+      if(p->mode!=2)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
     }
     else if (sscanf(argv[i],"maxW=%d",&dbg)==1){ /** `maxW` */
       p -> maxW = dbg;
-      if (p->debug&1){
+      if (p->debug&4){
 	printf("# read %s, maxW=%d\n",argv[i],p-> maxW);
 	if (p->maxW <= 0)
 	  printf("# no hard limit on error/codeword weight\n");
 	else
 	  printf("# hard upper limit w<=%d on codeword weight\n",p->maxW);
       }	
+      if(p->mode<2)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
     }
     else if (0==strncmp(argv[i],"fout=",5)){ /** `fout` */
       if(strlen(argv[i])>5){
         p->fout = argv[i]+5;
-	if (p->debug&1)
+	if (p->debug&4)
 	  printf("# read %s, fout=%s\n",argv[i],p->fout);
       }
       else
 	ERROR("Please specify argument for 'fout=[string]' w/o space\n");
-    }
-    else if (0==strncmp(argv[i],"f=",2)){/** back compatibility */
-      if(strlen(argv[i])>2)
-        p->fdem = argv[i]+2;
-      else
-        p->fdem = argv[++i]; /**< allow space before file name */
-      if (p->debug&1)
-	printf("# read %s, (fdem) f=%s\n",argv[i],p->fdem);
+      if(p->mode!=3)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
     }
     else if (0==strncmp(argv[i],"fdem=",5)){ /** fdem */
       if(strlen(argv[i])>5)
         p->fdem = argv[i]+5;
       else
         p->fdem = argv[++i]; /**< allow space before file name */
-      if (p->debug&1)
+      if (p->debug&4)
 	printf("# read %s, fdem=%s\n",argv[i],p->fdem);
     }
     else if (0==strncmp(argv[i],"finH=",5)){ /** `finH` */
@@ -1134,7 +1178,7 @@ int var_init(int argc, char **argv, params_t *p){
         p->finH = argv[i]+5;
       else
         p->finH = argv[++i]; /**< allow space before file name */
-      if (p->debug&1)
+      if (p->debug&4)
 	printf("# read %s, finH=%s\n",argv[i],p->finH);
     }
     else if (0==strncmp(argv[i],"finP=",5)){ /** `finP` probabilities */
@@ -1142,7 +1186,7 @@ int var_init(int argc, char **argv, params_t *p){
         p->finP = argv[i]+5;
       else
         p->finP = argv[++i]; /**< allow space before file name */
-      if (p->debug&1)
+      if (p->debug&4)
 	printf("# read %s, finP=%s\n",argv[i],p->finP);
     }
     else if (0==strncmp(argv[i],"finL=",5)){ /** `finL` logical */
@@ -1150,7 +1194,7 @@ int var_init(int argc, char **argv, params_t *p){
         p->finL = argv[i]+5;
       else
         p->finL = argv[++i]; /**< allow space before file name */
-      if (p->debug&1)
+      if (p->debug&4)
 	printf("# read %s, finL=%s\n",argv[i],p->finL);
     }
     else if (0==strncmp(argv[i],"finK=",5)){ /** `finK` logical */
@@ -1158,7 +1202,7 @@ int var_init(int argc, char **argv, params_t *p){
         p->finK = argv[i]+5;
       else
         p->finK = argv[++i]; /**< allow space before file name */
-      if (p->debug&1)
+      if (p->debug&4)
 	printf("# read %s, finK=%s\n",argv[i],p->finK);
     }
     else if (0==strncmp(argv[i],"finC=",5)){ /** `finC` in low-weight codeword list */
@@ -1166,7 +1210,7 @@ int var_init(int argc, char **argv, params_t *p){
         p->finC = argv[i]+5;
       else
         p->finC = argv[++i]; /**< allow space before file name */
-      if (p->debug&1)
+      if (p->debug&4)
 	printf("# read %s, finC=%s\n",argv[i],p->finC);
     }
     else if (0==strncmp(argv[i],"outC=",5)){ /** `outC` out low-weight codeword list */
@@ -1174,7 +1218,7 @@ int var_init(int argc, char **argv, params_t *p){
         p->outC = argv[i]+5;
       else
         p->outC = argv[++i]; /**< allow space before file name */
-      if (p->debug&1)
+      if (p->debug&4)
 	printf("# read %s, outC=%s\n",argv[i],p->outC);
     }
     else if (0==strncmp(argv[i],"finG=",5)){/** `finG` degeneracy generator matrix */
@@ -1182,7 +1226,7 @@ int var_init(int argc, char **argv, params_t *p){
         p->finG = argv[i]+5;
       else
         p->finG = argv[++i]; /**< allow space before file name */
-      if (p->debug&1)
+      if (p->debug&4)
 	printf("# read %s, finG=%s\n",argv[i],p->finG);
     }
     else if (0==strncmp(argv[i],"fdet=",5)){ /** detector events / 01 file */
@@ -1190,29 +1234,47 @@ int var_init(int argc, char **argv, params_t *p){
         p->fdet = argv[i]+5;
       else
         p->fdet = argv[++i]; /**< allow space before file name */
-      if (p->debug&1)
+      if (p->debug&4)
 	printf("# read %s, fdet=%s\n",argv[i],p->fdet);
+      if(p->mode>1)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
     }
     else if (0==strncmp(argv[i],"fobs=",5)){/** observable events / 01 file */
       if(strlen(argv[i])>5)
         p->fobs = argv[i]+5;
       else
         p->fobs = argv[++i]; /**< allow space before file name */
-      if (p->debug&1)
+      if (p->debug&4)
 	printf("# read %s, fobs=%s\n",argv[i],p->fobs);
+      if(p->mode>1)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
     }
     else if (0==strncmp(argv[i],"ferr=",5)){ /** errors / 01 file */
       if(strlen(argv[i])>5)
         p->ferr = argv[i]+5;
       else
         p->ferr = argv[++i]; /**< allow space before file name */
-      if (p->debug&1)
+      if (p->debug&4)
 	printf("# read %s, ferr=%s\n",argv[i],p->ferr);
+      if(p->mode>1)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
     }
     else if((strcmp(argv[i],"--help")==0)
             ||(strcmp(argv[i],"-h")==0)
             ||(strcmp(argv[i],"help")==0)){
       switch(p->mode){
+      case 0:
+	printf( HELP0);
+	break;	
+      case 1:
+	printf( HELP1);
+	break;	
+      case 2:
+	printf( HELP2);
+	break;	
+      case 3:
+	printf( HELP3);
+	break;	
       case -1:  /** todo: insert help messages specific to each mode */
       default:
 	printf( USAGE , argv[0],argv[0]);
@@ -1223,7 +1285,6 @@ int var_init(int argc, char **argv, params_t *p){
     else if((strcmp(argv[i],"--morehelp")==0)
             ||(strcmp(argv[i],"-mh")==0)
             ||(strcmp(argv[i],"morehelp")==0)){
-      printf( USAGE "\n", argv[0],argv[0]);
       printf( MORE_HELP,argv[0]);
       exit (-1);
     }    
@@ -1231,7 +1292,6 @@ int var_init(int argc, char **argv, params_t *p){
       printf("# unrecognized parameter \"%s\" at position %d\n",argv[i],i);
       ERROR("try \"%s -h\" for help",argv[0]);
     }
-
   }
   
   if(p->mode==-1)
@@ -1501,6 +1561,30 @@ int var_init(int argc, char **argv, params_t *p){
       iter2[i]=0;
     }
 
+  }
+  if(p->debug &1){
+    printf("# using variables: mode=%d submode=%d\n",p->mode, p->submode);
+    switch(p->mode){
+    case 1:
+      printf("# BP decoder parameters: bpalpha=%g bpretry=%d OSD level lerr=%d maxosd=%d\n",
+	     p->bpalpha, p->bpretry, p->lerr,p->maxosd);
+      /* fall through */      
+    case 0:
+      if(p->mode==0)
+	printf("# RIS decoder parameters: swait=%d\n",p->swait);
+      printf("# ntot=%lld nvec=%d steps=%d nfail=%lld lerr=%d\n",p->ntot,p->nvec,p->steps,p->nfail,p->lerr);
+      break;
+    case 2:
+      printf("# Analyze small-weight codewords in %d RIS steps; swait=%d\n",p->steps,p->swait);
+      printf("# maxC=%lld dE=%g dW=%d maxW=%d\n",p->maxC, dbl_from_llr(p->dE), p->dW, p->maxW);
+      break;
+    case 3:
+      printf("# Output matrices codewords in %d RIS steps; swait=%d\n",p->steps,p->swait);
+      printf("# maxC=%lld dE=%g dW=%d maxW=%d\n",p->maxC, dbl_from_llr(p->dE), p->dW, p->maxW);
+      break;
+    default:
+      ERROR("mode=%d not defined\n",p->mode);
+    }
   }
 
   return 0;
@@ -1772,7 +1856,7 @@ int main(int argc, char **argv){
 	name=p->finH;
       else
 	name="(unknown source)";
-      size_t size = 1 + snprintf(NULL, 0, "codewords computed from '%s', maxW=%d ", name, p->maxW);
+      size_t size = 1 + snprintf(NULL, 0, "# codewords computed from '%s', maxW=%d ", name, p->maxW);
       char *buf = malloc(size * sizeof(char));
       if(!buf)
 	ERROR("memory allocation");
