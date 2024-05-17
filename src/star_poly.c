@@ -77,74 +77,87 @@ int star_triangle(csr_t * Ht, csr_t * Lt, qllr_t *LLR, const one_vec_t * const c
   assert(Ht->rows == Lt->rows);
   const int n=Ht->rows;
   mzd_t *used = mzd_init(1,n);
+  mzd_t *vLt = mzd_init(1, Lt->cols);
+
   one_prob_t **cols = calloc(n, sizeof(one_prob_t *)); /* storage for processed columns */
   int n1=0, r1=Ht->cols, nzH1=0, nzL1=0; /** new `n`, rows of new `H`, and non-zero elements */
   if((!used) || (!cols))
     ERROR("memory allocation failed!");
 
   for(one_vec_t const * pvec = codewords; pvec != NULL; pvec=(one_vec_t *)(pvec->hh.next)){
-
-    if((pvec->weight ==1) && (mzd_read_bit(used, 0, pvec->arr[0])==0)){
-      /** `zero-column removal`: just mark off this column */
-      mzd_flip_bit(used, 0, pvec->arr[0]); 
+    /** ensure that the vector gives zero product with `Lt` */
+    mzd_row_clear_offset(vLt, 0, 0); 
+    for(int i=0; i < pvec->weight; i++){
+      const int pos = pvec->arr[i];
+      for(int j=Lt->p[pos]; j < Lt->p[pos+1] ; j++)
+	mzd_flip_bit(vLt,0,Lt->i[j]);
     }
-    else if((pvec->weight ==2) &&
-	    (mzd_read_bit(used, 0, pvec->arr[0])==0) &&
-	    (mzd_read_bit(used, 0, pvec->arr[1])==0)){
-      /** `inverse decoration transformation`: combine two identical columns into one */
-      for(int i=0; i<2; i++)
-	mzd_flip_bit(used, 0, pvec->arr[i]);
-      int idx = pvec->arr[0]; /** working on this column */      
-      int wH =  Ht->p[idx+1] - Ht->p[idx] ;
-      nzH1 += wH;
-      int wL = Lt->p[idx+1] - Lt->p[idx];
-      nzL1 += wL;
-      if((cols[n1] = malloc(sizeof(one_prob_t)+(wH+wL)*sizeof(int)))==NULL)
-	ERROR("memory allocation failed!");
-      cols[n1]->llr = boxplus(LLR[pvec->arr[0]],LLR[pvec->arr[0]]);
-      cols[n1]->wH = wH;
-      cols[n1]->wL = wL;
-      int nz=0;
-      for(int j=Ht->p[idx]; j < Ht->p[idx+1]; j++)
-	cols[n1]->idx[nz++] = Ht->i[j];
-      for(int j=Lt->p[idx]; j < Lt->p[idx+1]; j++)
-	cols[n1]->idx[nz++] = Lt->i[j];
-      n1++;
-    }
-    else if((pvec->weight ==3) &&
-	    (mzd_read_bit(used, 0, pvec->arr[0])==0) &&
-	    (mzd_read_bit(used, 0, pvec->arr[1])==0) &&
-	    (mzd_read_bit(used, 0, pvec->arr[2])==0)){
-      for(int i=0; i<3; i++)
-	mzd_flip_bit(used, 0, pvec->arr[i]); 
-
-      for(int i=0; i<3; i++){
-	const int i0=(i+1)%3, i1=(i+2)%3, i2=(i+0)%3; 
-	int idx = pvec->arr[i2]; /** working on this column */
-	qllr_t llr = transform3(LLR[pvec->arr[i0]], LLR[pvec->arr[i1]], LLR[pvec->arr[i2]]);
-	int wH = i2==0 ? 1 : Ht->p[idx+1] - Ht->p[idx] + 1 ;
+    if(mzd_row_is_zero(vLt,0)){/** only work with trivial vectors */
+      /** ************ w=1 ****************************************************/
+      if((pvec->weight ==1) && (mzd_read_bit(used, 0, pvec->arr[0])==0)){
+	/** `zero-column removal`: just mark off this column */
+	mzd_flip_bit(used, 0, pvec->arr[0]); 
+      }
+      /** ************ w=2 ****************************************************/
+      else if((pvec->weight ==2) &&
+	      (mzd_read_bit(used, 0, pvec->arr[0])==0) &&
+	      (mzd_read_bit(used, 0, pvec->arr[1])==0)){
+	/** `inverse decoration transformation`: combine two identical columns into one */
+	for(int i=0; i<2; i++)
+	  mzd_flip_bit(used, 0, pvec->arr[i]);
+	int idx = pvec->arr[0]; /** working on this column */      
+	int wH =  Ht->p[idx+1] - Ht->p[idx] ;
 	nzH1 += wH;
-	int wL = i2==0 ? 0 : Lt->p[idx+1] - Lt->p[idx];
+	int wL = Lt->p[idx+1] - Lt->p[idx];
 	nzL1 += wL;
 	if((cols[n1] = malloc(sizeof(one_prob_t)+(wH+wL)*sizeof(int)))==NULL)
 	  ERROR("memory allocation failed!");
-	cols[n1]->llr = llr;
+	cols[n1]->llr = boxplus(LLR[pvec->arr[0]],LLR[pvec->arr[1]]);
 	cols[n1]->wH = wH;
 	cols[n1]->wL = wL;
 	int nz=0;
-	if(i2!=0)
-	  for(int j=Ht->p[idx]; j < Ht->p[idx+1]; j++)
-	    cols[n1]->idx[nz++] = Ht->i[j];
-	cols[n1]->idx[nz++] = r1; /** new (1,1,1) row */
-	assert(nz==wH);
-	if(i2!=0)
-	  for(int j=Lt->p[idx]; j < Lt->p[idx+1]; j++)
-	    cols[n1]->idx[nz++] = Lt->i[j];
-	assert(nz==wH+wL);
+	for(int j=Ht->p[idx]; j < Ht->p[idx+1]; j++)
+	  cols[n1]->idx[nz++] = Ht->i[j];
+	for(int j=Lt->p[idx]; j < Lt->p[idx+1]; j++)
+	  cols[n1]->idx[nz++] = Lt->i[j];
 	n1++;
       }
-      r1++;
-    }     
+      /** ************ w=3 ****************************************************/
+      else if((pvec->weight ==3) &&
+	      (mzd_read_bit(used, 0, pvec->arr[0])==0) &&
+	      (mzd_read_bit(used, 0, pvec->arr[1])==0) &&
+	      (mzd_read_bit(used, 0, pvec->arr[2])==0)){
+	for(int i=0; i<3; i++)
+	  mzd_flip_bit(used, 0, pvec->arr[i]); 
+
+	for(int i=0; i<3; i++){
+	  const int i0=(i+1)%3, i1=(i+2)%3, i2=(i+0)%3; 
+	  int idx = pvec->arr[i2]; /** working on this column */
+	  qllr_t llr = transform3(LLR[pvec->arr[i0]], LLR[pvec->arr[i1]], LLR[pvec->arr[i2]]);
+	  int wH = i2==0 ? 1 : Ht->p[idx+1] - Ht->p[idx] + 1 ;
+	  nzH1 += wH;
+	  int wL = i2==0 ? 0 : Lt->p[idx+1] - Lt->p[idx];
+	  nzL1 += wL;
+	  if((cols[n1] = malloc(sizeof(one_prob_t)+(wH+wL)*sizeof(int)))==NULL)
+	    ERROR("memory allocation failed!");
+	  cols[n1]->llr = llr;
+	  cols[n1]->wH = wH;
+	  cols[n1]->wL = wL;
+	  int nz=0;
+	  if(i2!=0)
+	    for(int j=Ht->p[idx]; j < Ht->p[idx+1]; j++)
+	      cols[n1]->idx[nz++] = Ht->i[j];
+	  cols[n1]->idx[nz++] = r1; /** new (1,1,1) row */
+	  assert(nz==wH);
+	  if(i2!=0)
+	    for(int j=Lt->p[idx]; j < Lt->p[idx+1]; j++)
+	      cols[n1]->idx[nz++] = Lt->i[j];
+	  assert(nz==wH+wL);
+	  n1++;
+	}
+	r1++;
+      }     
+    }
   }
   /** go over the remaining columns */
   for (int idx=0; idx<n; idx++){
@@ -190,6 +203,7 @@ int star_triangle(csr_t * Ht, csr_t * Lt, qllr_t *LLR, const one_vec_t * const c
   Lt->nz = -1;  
 
   /** memory clean-up */
+  mzd_free(vLt);
   mzd_free(used);
   for(int i=0; i<n1; i++)
     if(cols[i])
