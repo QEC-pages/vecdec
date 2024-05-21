@@ -30,14 +30,20 @@ params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50, .pads=0,
   .lerr=-1, .maxosd=100, .bpalpha=0.5, .bpretry=1, .swait=0, .maxC=0,
   .dW=0, .minW=INT_MAX, .maxW=0, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
   .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8, .useP=0, .dmin=0,
-  .debug=1, .fdem=NULL, .fdet=NULL, .fobs=NULL, .fout="tmp", .ferr=NULL,
+  .debug=1, .fdem=NULL, .fout="tmp",
+  .fdet=NULL, .fobs=NULL,  .ferr=NULL,
+  .gdet=NULL, .gobs=NULL,  .gerr=NULL,
+  .pdet=NULL, .pobs=NULL,  .perr=NULL,  
   .mode=-1, .submode=0, .use_stdout=0, 
   .LLRmin=0, .LLRmax=0, .codewords=NULL, .num_cws=0,
   .finH=NULL, .finL=NULL, .finG=NULL, .finK=NULL, .finP=NULL,
   .finC=NULL, .outC=NULL, 
   .vP=NULL, .vLLR=NULL, .mH=NULL, .mHt=NULL,
   .mL=NULL, .mLt=NULL, .internal=0, 
-  .file_det=NULL, .file_obs=NULL, .line_det=0, .line_obs=0,
+  .file_err=NULL,  .file_det=NULL, .file_obs=NULL,
+  .file_err_g=NULL,  .file_det_g=NULL, .file_obs_g=NULL,
+  .file_err_p=NULL,  .file_det_p=NULL, .file_obs_p=NULL,
+  .line_err=0,  .line_det=0, .line_obs=0,
   .mE=NULL, .mHe=NULL, .mLe=NULL, .mHeT=NULL, .mLeT=NULL,
   .nzH=0, .nzL=0
 };
@@ -1256,6 +1262,66 @@ int var_init(int argc, char **argv, params_t *p){
         p->ferr = argv[++i]; /**< allow space before file name */
       if (p->debug&4)
 	printf("# read %s, ferr=%s\n",argv[i],p->ferr);
+      if(p->mode>1)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
+    }
+    else if (0==strncmp(argv[i],"gdet=",5)){ /** detector events / 01 file */
+      if(strlen(argv[i])>5)
+        p->gdet = argv[i]+5;
+      else
+        p->gdet = argv[++i]; /**< allow space before file name */
+      if (p->debug&4)
+	printf("# read %s, gdet=%s\n",argv[i],p->gdet);
+      if(p->mode>1)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
+    }
+    else if (0==strncmp(argv[i],"gobs=",5)){/** observable events / 01 file */
+      if(strlen(argv[i])>5)
+        p->gobs = argv[i]+5;
+      else
+        p->gobs = argv[++i]; /**< allow space before file name */
+      if (p->debug&4)
+	printf("# read %s, gobs=%s\n",argv[i],p->gobs);
+      if(p->mode>1)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
+    }
+    else if (0==strncmp(argv[i],"gerr=",5)){ /** errors / 01 file */
+      if(strlen(argv[i])>5)
+        p->gerr = argv[i]+5;
+      else
+        p->gerr = argv[++i]; /**< allow space before file name */
+      if (p->debug&4)
+	printf("# read %s, gerr=%s\n",argv[i],p->gerr);
+      if(p->mode>1)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
+    }
+    else if (0==strncmp(argv[i],"pdet=",5)){ /** detector events / 01 file */
+      if(strlen(argv[i])>5)
+        p->pdet = argv[i]+5;
+      else
+        p->pdet = argv[++i]; /**< allow space before file name */
+      if (p->debug&4)
+	printf("# read %s, pdet=%s\n",argv[i],p->pdet);
+      if(p->mode>1)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
+    }
+    else if (0==strncmp(argv[i],"pobs=",5)){/** observable events / 01 file */
+      if(strlen(argv[i])>5)
+        p->pobs = argv[i]+5;
+      else
+        p->pobs = argv[++i]; /**< allow space before file name */
+      if (p->debug&4)
+	printf("# read %s, pobs=%s\n",argv[i],p->pobs);
+      if(p->mode>1)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
+    }
+    else if (0==strncmp(argv[i],"perr=",5)){ /** errors / 01 file */
+      if(strlen(argv[i])>5)
+        p->perr = argv[i]+5;
+      else
+        p->perr = argv[++i]; /**< allow space before file name */
+      if (p->debug&4)
+	printf("# read %s, perr=%s\n",argv[i],p->perr);
       if(p->mode>1)
 	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
     }

@@ -884,6 +884,46 @@ int read_01(mzd_t *M, FILE *fin, long long int *lineno, const char* fnam,
 }
 
 
+/** @brief write rows from `lmin` to `lmax` (inclusive) of `M` to file in `01` format
+
+ * file `fout` should already be open for writing.
+ *
+ * @param M initialized input matrix with `lmax` rows and `m` columns
+ * @param fout file  open for writing
+ * @param lmin, lmax lines of the matrix to output
+ * @param fnam file name (for debugging purposes)
+ * @param debug bitmap on information to output.
+ * @return the number of rows actually written.
+ *
+ */
+int write_01(const mzd_t * const M, FILE *fout, const int lmin, const int lmax, const char* fnam,
+	     const int debug){
+  if(!M)
+    ERROR("expected initialized matrix 'M'!\n");
+  int m = M->nrows;
+  int n = M->ncols;
+  if(n < lmax)
+    ERROR("not enough data in %d x %d matrix, lmax=%d\n",m,n,lmax);
+  if(!fout)
+    ERROR("file 'fout' named '%s' must be open for writing\n",fnam);
+  if(debug&8) /** file io */
+    printf("# about to write %d lines of 01 data to file '%s'\n",
+           lmax-lmin,fnam);
+  for(int i = lmin; i <= lmax; i++){
+    for (int j=0; j<n; j++)
+      if (mzd_read_bit(M,i,j))
+	fputc('1',fout);
+      else
+	fputc('0',fout);
+    fputc('\n',fout);
+  }
+  /** TODO: add `ferror(fout)` diagnostic */
+  if(debug&8) /** file io */
+    printf("# wrote %d 01 rows to file '%s'\n",lmax-lmin+1,fnam);
+  
+  return 1+lmax-lmin;
+}
+
 /** 
  * Permute columns of a CSR matrix with permutation perm.
  */

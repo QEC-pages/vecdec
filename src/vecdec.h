@@ -72,6 +72,12 @@ extern "C"{
     char *fdet; /** `input file` name for detector events */
     char *fobs; /** `input file` name for observables */
     char *ferr; /** `input file` name for error vectors */
+    char *gdet; /** `output file` name for `generated` detector events */
+    char *gobs; /** `output file` name for `generated` observables */
+    char *gerr; /** `output file` name for `generated` error vectors */
+    char *pdet; /** `output file` name for `predicted` detector events */
+    char *pobs; /** `output file` name for `predicted` observables */
+    char *perr; /** `output file` name for `predicted` error vectors */
     int classical; /** `1` if this is a classical code? */
     int internal; /** `1` to generate obs/det internally, `2` to generate from `err` file */
     long long int seed;  /** rng `seed`, set<=0 for automatic */
@@ -105,9 +111,15 @@ extern "C"{
     FILE *file_err;
     FILE *file_det;
     FILE *file_obs;
-    long long int line_err; /** current line of the err file */
-    long long int line_det; /** current line of the det file */
-    long long int line_obs; /** current line of the obs file */
+    FILE *file_err_g; /** out file, `generated` errors */
+    FILE *file_det_g;
+    FILE *file_obs_g;
+    FILE *file_err_p; /** out file, `predicted` errors */
+    FILE *file_det_p;
+    FILE *file_obs_p;
+    long long int line_err; /** current line of `file_err` */
+    long long int line_det; /** current line of `file_det` */
+    long long int line_obs; /** current line of `file_obs` */
     mzd_t *mE;
     mzd_t *mHe;
     mzd_t *mLe;
@@ -215,6 +227,8 @@ extern "C"{
   "\t fobs=[string]\t: input file with observables (01 matching lines in fdet)\n" \
   "\t fdet=[string]\t: input file with detector events (01 format)\n"   \
   "\t\t specify either 'ferr' OR a pair of 'ferr' and 'fdet' (or none for internal)\n" \
+  "\t gerr, gobs, gdet=[string]\t: out file for generated vectors (01 format)\n" \
+  "\t perr, pobs, pdet=[string]\t: out file for predicted vectors (01 format)\n" \
   "\t pads=[integer]\t: if non-zero, pad vectors from `fdet` file with zeros (0)\n" \
   "\t fout=[string]\t: header for output file names ('tmp', see 'mode=3')\n" \
   "\t steps=[integer]\t: num of RIS or BP decoding steps (default: 50)\n" \
