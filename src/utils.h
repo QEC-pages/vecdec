@@ -20,6 +20,8 @@ extern "C"{
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <m4ri/m4ri.h>
+#include "util_m4ri.h"
 
 #include "tinymt64.h"
 #include "uthash.h" /** hashing storage macros */
@@ -113,7 +115,10 @@ static inline int by_energy(void *a, void *b){
  * @return the pointer to the structure containing the data or NULL. */
   one_vec_t * nzlist_r_one(FILE *f, one_vec_t * vec, const char fnam[], long long int *lineno);  
 
-  /** extra io functions ******************************************************************/
+/** extra io functions ******************************************************************/
+void write_dem_file(char *fout, const char fext[],
+		    const csr_t * const mHt, const csr_t * const mLt, const double * const vP,
+		    const char * const comment);
 void read_dem_file(char *fnam, void * ptrs[3], int debug);
   
 double * dbl_mm_read(const char * const fin, int *nrows, int *ncols, int *siz, double *  arr);

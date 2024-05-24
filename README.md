@@ -462,7 +462,7 @@ weight found:
 ```
 
 
-### Export code matrices to Matrix Market (`MMX`) files 
+### Export code matrices to Matrix Market (`MMX`) or `DEM` files 
 
 Use `mode=3`.  Create all five matrices (`H=Hx`, `G=Hz`, `L=Lx`, `K=Lz`) 
 and the probability vector `P` from the DEM file
@@ -499,6 +499,13 @@ created from the same set of codewords, e.g.,
 which creates both `G` and `K` matrices.  Of course, to create a
 `K=Lz` matrix, *quantum* codewords created directly from the `DEM` file can also be used.
 
+To create a DEM file (e.g., from `H` and `L` matrices and `P` vector), use `mode=3.64`.
+Bit `6` must be the only bit set in the `submode` bitmap (otherwise an error will result).
+```
+./src/vecdec mode=3.64 fout=tmp finH=H.mmx finL=L.mmx finP=P.mmx fout=tmp
+```
+This will create a DEM file `tmpD.dem`.  It can be used, e.g., as an input to `Stim`, 
+to generate errors/det/obs files externally 
 
 ## Vectorized decoder
 

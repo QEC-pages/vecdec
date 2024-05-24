@@ -348,5 +348,13 @@ debug 1 possibly relevant information
 debug 2 output matrix ranks
 debug 4 parsing input variables 
 
+## operation modes
+1. ferr specified (usual operation)
+2. both fdet and fobs specified (usual operation)
+3. fobs specified; generate (pobs and pdet) or (perr) (new)
+4. none is specified, generate gerr (and/or others), do no decoding. (new)
+   make it "mode=0" ???
+
+
 
 ```

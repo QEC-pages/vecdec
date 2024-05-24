@@ -32,7 +32,7 @@ params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50, .pads=0,
   .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8, .useP=0, .dmin=0,
   .debug=1, .fdem=NULL, .fout="tmp",
   .fdet=NULL, .fobs=NULL,  .ferr=NULL,
-  .gdet=NULL, .gobs=NULL,  .gerr=NULL,
+  //  .gdet=NULL, .gobs=NULL,  .gerr=NULL,
   .pdet=NULL, .pobs=NULL,  .perr=NULL,  
   .mode=-1, .submode=0, .use_stdout=0, 
   .LLRmin=0, .LLRmax=0, .codewords=NULL, .num_cws=0,
@@ -41,7 +41,7 @@ params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50, .pads=0,
   .vP=NULL, .vLLR=NULL, .mH=NULL, .mHt=NULL,
   .mL=NULL, .mLt=NULL, .internal=0, 
   .file_err=NULL,  .file_det=NULL, .file_obs=NULL,
-  .file_err_g=NULL,  .file_det_g=NULL, .file_obs_g=NULL,
+  //  .file_err_g=NULL,  .file_det_g=NULL, .file_obs_g=NULL,
   .file_err_p=NULL,  .file_det_p=NULL, .file_obs_p=NULL,
   .line_err=0,  .line_det=0, .line_obs=0,
   .mE=NULL, .mHe=NULL, .mLe=NULL, .mHeT=NULL, .mLeT=NULL,
@@ -1265,36 +1265,6 @@ int var_init(int argc, char **argv, params_t *p){
       if(p->mode>1)
 	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
     }
-    else if (0==strncmp(argv[i],"gdet=",5)){ /** detector events / 01 file */
-      if(strlen(argv[i])>5)
-        p->gdet = argv[i]+5;
-      else
-        p->gdet = argv[++i]; /**< allow space before file name */
-      if (p->debug&4)
-	printf("# read %s, gdet=%s\n",argv[i],p->gdet);
-      if(p->mode>1)
-	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
-    }
-    else if (0==strncmp(argv[i],"gobs=",5)){/** observable events / 01 file */
-      if(strlen(argv[i])>5)
-        p->gobs = argv[i]+5;
-      else
-        p->gobs = argv[++i]; /**< allow space before file name */
-      if (p->debug&4)
-	printf("# read %s, gobs=%s\n",argv[i],p->gobs);
-      if(p->mode>1)
-	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
-    }
-    else if (0==strncmp(argv[i],"gerr=",5)){ /** errors / 01 file */
-      if(strlen(argv[i])>5)
-        p->gerr = argv[i]+5;
-      else
-        p->gerr = argv[++i]; /**< allow space before file name */
-      if (p->debug&4)
-	printf("# read %s, gerr=%s\n",argv[i],p->gerr);
-      if(p->mode>1)
-	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
-    }
     else if (0==strncmp(argv[i],"pdet=",5)){ /** detector events / 01 file */
       if(strlen(argv[i])>5)
         p->pdet = argv[i]+5;
@@ -1562,14 +1532,17 @@ int var_init(int argc, char **argv, params_t *p){
   case 3: /** read in DEM file and output the H, L, G, K matrices and P vector */
     if(strcmp(p->fout,"stdout")==0)
       p->use_stdout=1;
-    if (p->submode>=64)
+    if (p->submode>64)
       ERROR(" mode=%d : submode='%d' unsupported\n",
 	    p->mode, p->submode);
     if(p->submode & 32){ // matrix modification
-      if(!(p->submode &31))
+      if(!(p->submode & (31 | 64)))
 	p->submode ^= (4+8+16);
       else 
 	ERROR("mode=%d : submode=%d should equal 32 ('mode=3.32' for matrix modification)\n",p->mode,p->submode);
+    }
+    else if(p->submode & 64){ // write DEM model 
+      /* no checks needed */
     }
     break;
     
@@ -1645,8 +1618,18 @@ int var_init(int argc, char **argv, params_t *p){
       printf("# maxC=%lld dE=%g dW=%d maxW=%d\n",p->maxC, dbl_from_llr(p->dE), p->dW, p->maxW);
       break;
     case 3:
-      printf("# Output matrices codewords in %d RIS steps; swait=%d\n",p->steps,p->swait);
-      printf("# maxC=%lld dE=%g dW=%d maxW=%d\n",p->maxC, dbl_from_llr(p->dE), p->dW, p->maxW);
+      if(p->submode<32){
+	printf("# Output %s%s%s%smatrices %s\n",
+	       p->submode&1 ? "G=Hz " : "",
+	       p->submode&2 ? "K=Lz " : "",
+	       p->submode&4 ? "H=Hx " : "",
+	       p->submode&8 ? "L=Lx " : "",
+	       p->submode&16 ? "and probabilities vector" : "");
+      }
+      else if (p->submode &32)
+	printf("# Do code modification\n");
+      else if (p->submode &64)
+	printf("# Write DEM file\n");
       break;
     default:
       ERROR("mode=%d not defined\n",p->mode);
@@ -1936,6 +1919,22 @@ int main(int argc, char **argv){
     break;
     
   case 3: /** read in DEM file and output the H, L, G matrices and P vector */
+    if(p->submode&64){ /** write DEM */
+      if((p->classical)||(!(p->mL)))
+	ERROR("mode=%d submode=64 (bit 6 set) must be a quantum code",p->mode);
+      if(!p->mHt)
+	p->mHt = csr_transpose(NULL,p->mH);
+      if(!p->mLt)
+	p->mLt = csr_transpose(NULL,p->mL);
+      size_t size = snprintf(NULL, 0, "DEM model from H file %s", p->finH);
+      if(!(comment = malloc(size + 1)))
+	ERROR("memory allocation");
+      sprintf(comment, "DEM model from H file %s", p->finH);
+
+      write_dem_file(p->fout,"D.dem",p->mHt, p->mLt, p->vP, comment);
+      free(comment);
+      break;
+    }
     if(p->submode&32){ /** matrix transformation */
       if(!p->finC)
 	ERROR("mode=%d submode=%d (bit 5 set) must set 'finC' for matrix transformation",

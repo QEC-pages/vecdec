@@ -72,9 +72,9 @@ extern "C"{
     char *fdet; /** `input file` name for detector events */
     char *fobs; /** `input file` name for observables */
     char *ferr; /** `input file` name for error vectors */
-    char *gdet; /** `output file` name for `generated` detector events */
-    char *gobs; /** `output file` name for `generated` observables */
-    char *gerr; /** `output file` name for `generated` error vectors */
+    //    char *gdet; /** `output file` name for `generated` detector events */
+    //    char *gobs; /** `output file` name for `generated` observables */
+    //    char *gerr; /** `output file` name for `generated` error vectors */
     char *pdet; /** `output file` name for `predicted` detector events */
     char *pobs; /** `output file` name for `predicted` observables */
     char *perr; /** `output file` name for `predicted` error vectors */
@@ -111,9 +111,9 @@ extern "C"{
     FILE *file_err;
     FILE *file_det;
     FILE *file_obs;
-    FILE *file_err_g; /** out file, `generated` errors */
-    FILE *file_det_g;
-    FILE *file_obs_g;
+    //    FILE *file_err_g; /** out file, `generated` errors */
+    //    FILE *file_det_g;
+    //    FILE *file_obs_g;
     FILE *file_err_p; /** out file, `predicted` errors */
     FILE *file_det_p;
     FILE *file_obs_p;
@@ -377,9 +377,10 @@ extern "C"{
   "\t .8 (bit 3) write L=Lx matrix\n"					\
   "\t .16 (bit 4) write P vector\n"					\
   "\t Codewords file 'finC', if given, will be used to create 'G' and 'K'\n" \
-  "\t   matrices with rows of smallest possible weight.\n"				\
-  "\t In addition, mode=3.32 (just one bit set) in combination with\n" \
+  "\t   matrices with rows of smallest possible weight.\n"		\
+  "\t In addition, mode=3.32 (just bit 5 set) in combination with\n"	\
   "\t  codewords file 'finC' forces code transformation mode.\n"	\
+  "\t Similarly, use mode=3.64 (just bit 6 set) to create DEM file '${fout}D.dem'\n" \
   "\t Use 'fout=' command line argument to generate file names\n"	\
   "\t ${fout}H.mmx, ${fout}G.mmx, ${fout}L.mmx, ${fout}K.mmx, and ${fout}P.mmx\n" \
   "\t with 'fout=stdout' all output is sent to 'stdout'\n"		\
