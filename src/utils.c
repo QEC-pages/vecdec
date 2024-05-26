@@ -259,6 +259,69 @@ void dbl_mm_write( char * const fout, const char fext[],
   }
 }
 
+/** @brief write detector error model (DEM) created by `stim`.
+ * @param fout base file name for writing DEM to
+ * @param fext extension for file name
+ * @param mHt matrix Hx transposed
+ * @param mLt matrix Lx transposed
+ * @param vP column probabilities
+ * @param comment comment string
+ */ 
+void write_dem_file(char *fout, const char fext[],
+		    const csr_t * const mHt, const csr_t * const mLt, const double * const vP,
+		    const char * const comment){
+  int result=0; /**< non-zero if write error */
+  size_t len=strlen(fout)+strlen(fext)+1;
+  char *str;
+
+  if((mHt==NULL)||(mLt==NULL)||(vP==NULL))
+    ERROR("one or more input matrices not defined");
+  if(mHt->rows != mLt->rows)
+    ERROR("mismatched dimensions!");
+  
+  FILE *f;
+  if(strncmp(fout,"stdout",7)!=0){
+    str=calloc(len, sizeof(char));
+    sprintf(str,"%s%s",fout,fext);
+    f=fopen(str,"w");
+  }
+  else{/** fout == "stdout" */
+    str=fout;
+    f=stdout;
+  }
+  if(!f){
+    printf("FILE I/O ERROR: %s\n", strerror(errno)); 
+    ERROR("can't open file '%s' for writing",str);
+  }
+  if(fprintf(f,"# Detector Error Model\n")<0)
+    result++;
+  if(comment!=NULL){
+    if(fprintf(f,"# %s\n",comment)<1)
+      result++;
+  }
+  for(int i=0; i < mHt->rows; i++){
+    if(fprintf(f,"error(%g) ",vP[i])<1)
+      result++;
+    for(int j=mHt->p[i]; j<mHt->p[i+1]; j++)
+      if(fprintf(f,"D%d ",mHt->i[j])<1)
+	result++;
+    for(int j=mLt->p[i]; j<mLt->p[i+1]; j++)
+      if(fprintf(f,"L%d ",mLt->i[j])<1)
+	result++;
+    if(fprintf(f,"\n")<0)
+      result++;
+  }
+  if(result)
+    ERROR("error writing to file '%s'",str);
+  
+  if(strcmp(fout,"stdout")!=0){
+    fclose(f);
+    free(str);
+  }
+}
+
+
+
 /** @brief read detector error model (DEM) created by `stim`.
  * Immediately create CSR matrices `mH` and `mL` and vector `vP`; 
  * return the corresponding pointers via `ptrs` (in this order).

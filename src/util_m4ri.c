@@ -235,6 +235,7 @@ mzd_t * csr_mzd_mul(mzd_t *C, const csr_t *S, const mzd_t *B, int clear){
 #if 0
 /** @brief calculate `C = C + A*B`, optimized to the case where `A` is a single row */
 mzd_t * mzd_csr_mul(mzd_t *C, const mzd_t *A, const csr_t *B, int clear){
+  /** use mzd_row_csr_mul() */
   return NULL;  
 }
 #endif 
@@ -883,6 +884,57 @@ int read_01(mzd_t *M, FILE *fin, long long int *lineno, const char* fnam,
   return il;
 }
 
+
+/** @brief write rows or cols of `M` to file in `01` format
+ *
+ * file `fout` named `fnam` should already be open for writing.
+ *
+ * @param M initialized input matrix with at least `lmax` = `lmin` + `count` cols 
+ * @param by_cols if non-zero, write one column per line, otherwise one row per line 
+ * @param fout file  open for writing
+ * @param fnam file name (for debugging purposes)
+ *
+ */
+void mzd_write_01(FILE *fout, const mzd_t * const M, const int by_cols, const char* fnam){
+  if(!M)
+    ERROR("expected initialized matrix 'M'!\n");
+  if(!fout)
+    ERROR("file 'fout' named %s must be open for writing\n",fnam);
+  const int n1 = by_cols ? M->ncols : M->nrows ;
+  const int n2 = by_cols ? M->nrows : M->ncols ;  
+  for(int i = 0; i < n1; i++){
+    for (int j=0; j < n2; j++){
+      int bit = by_cols ? mzd_read_bit(M,j,i) : mzd_read_bit(M,i,j) ;
+      unsigned char ch = bit ? '1' : '0';
+	if(ch != fputc(ch,fout)){
+	  int err=ferror(fout);
+	  printf("file write error %d:\n%s\n",err,strerror(err));
+	  ERROR("error writing to file %s\n",fnam); 
+	};
+      }
+      if('\n' != fputc('\n',fout)){
+	int err=ferror(fout);
+	printf("file write error %d:\n%s\n",err,strerror(err));
+	ERROR("error writing to file %s\n",fnam); 
+      };
+    }  
+}
+
+/** @brief write a line of `count` zeros to open file `fout` named `fnam` */
+void write_01_zeros(FILE *fout, const int count, const char * fnam){
+  for (int j=0; j < count; j++){
+    if('0' != fputc('0',fout)){
+      int err=ferror(fout);
+      printf("file write error %d:\n%s\n",err,strerror(err));
+      ERROR("error writing to file %s\n",fnam); 
+    };
+  }
+  if('\n' != fputc('\n',fout)){
+    int err=ferror(fout);
+    printf("file write error %d:\n%s\n",err,strerror(err));
+    ERROR("error writing to file %s\n",fnam); 
+  };
+}
 
 /** 
  * Permute columns of a CSR matrix with permutation perm.

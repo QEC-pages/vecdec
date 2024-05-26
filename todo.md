@@ -312,3 +312,49 @@ stim sample_dem \
 - [ ] OSD1 with `mode=2` can degrade the performance when number of `steps` is large.
 - [ ] better prefactor calculation in `mode=2`
 - [ ] 
+
+### All command-line parameters 
+```
+debug
+mode
+seed
+qllr1
+qllr2
+qllr3
+
+ntot // mode 0,1
+nvec // mode 0.1
+pads // mode 0,1 reading syndrome vectors only (fdet)
+nfail // mode 0,1 early termination condition 
+steps // mode 0,1,2 
+swait // mode 0 and mode 2   early termination condition 
+lerr  // mode 1 max OSD level (-1 for no OSD)
+// mode 0 (-1 is same as 0)
+
+useP DEM parameter
+
+dmin // early termination with mode=2
+
+maxosd // only for BP
+maxC // error if too long nz file, limit the number of CWs in do_LLR_dist (RIS)
+bpalpha
+bpretry
+epsilon // not used 
+dE  // only mode=2 
+dW  // mode=2 and mode=3 when constructing G and L matrix
+maxW // upper bound for creating / reading CWs / mode=2 and mode=3
+
+debug 1 possibly relevant information
+debug 2 output matrix ranks
+debug 4 parsing input variables 
+
+## operation modes
+1. ferr specified (usual operation)
+2. both fdet and fobs specified (usual operation)
+3. fobs specified; generate (pobs and pdet) or (perr) (new)
+4. none is specified, generate gerr (and/or others), do no decoding. (new)
+   make it "mode=0" ???
+
+
+
+```
