@@ -884,44 +884,52 @@ int read_01(mzd_t *M, FILE *fin, long long int *lineno, const char* fnam,
 }
 
 
-/** @brief write rows from `lmin` to `lmax` (inclusive) of `M` to file in `01` format
-
+/** @brief write `count` cols of `M` starting from `lmin` to `fout` in `01` format
+ *
  * file `fout` should already be open for writing.
  *
- * @param M initialized input matrix with `lmax` rows and `m` columns
+ * @param M initialized input matrix with at least `lmax` = `lmin` + `count` cols 
  * @param fout file  open for writing
- * @param lmin, lmax lines of the matrix to output
+ * @param count how many columns to output
+ * @param lmin starting column of the matrix to output
  * @param fnam file name (for debugging purposes)
  * @param debug bitmap on information to output.
- * @return the number of rows actually written.
+ * @return the number of cols actually written.
  *
  */
-int write_01(const mzd_t * const M, FILE *fout, const int lmin, const int lmax, const char* fnam,
-	     const int debug){
+int write_01_cols(const mzd_t * const M, FILE *fout, const int count, const int lmin,
+		  const char* fnam, const int debug){
   if(!M)
     ERROR("expected initialized matrix 'M'!\n");
-  int m = M->nrows;
-  int n = M->ncols;
-  if(n < lmax)
-    ERROR("not enough data in %d x %d matrix, lmax=%d\n",m,n,lmax);
+  int n = M->nrows;
+  int m = M->ncols;
+  const int lmax = lmin+count;
+  if(m < lmax)
+    ERROR("not enough data in %d x %d matrix, lmax=%d\n",n,m,lmax);
   if(!fout)
-    ERROR("file 'fout' named '%s' must be open for writing\n",fnam);
+    ERROR("file 'fout' named %s must be open for writing\n",fnam);
   if(debug&8) /** file io */
-    printf("# about to write %d lines of 01 data to file '%s'\n",
-           lmax-lmin,fnam);
-  for(int i = lmin; i <= lmax; i++){
-    for (int j=0; j<n; j++)
-      if (mzd_read_bit(M,i,j))
-	fputc('1',fout);
-      else
-	fputc('0',fout);
-    fputc('\n',fout);
+    printf("# about to write %d cols of 01 data to file '%s'\n",
+           count,fnam);
+  for(int i = lmin; i < lmax; i++){
+    for (int j=0; j<n; j++){
+      unsigned char ch = mzd_read_bit(M,j,i) ? '1' : '0';
+      if(ch != fputc(ch,fout)){
+	int err=ferror(fout);
+	printf("file write error %d:\n%s\n",err,strerror(err));
+	ERROR("error writing to file %s\n",fnam); 
+      };
+    }
+    if('\n' != fputc('\n',fout)){
+      int err=ferror(fout);
+      printf("file write error %d:\n%s\n",err,strerror(err));
+      ERROR("error writing to file %s\n",fnam); 
+    };
   }
-  /** TODO: add `ferror(fout)` diagnostic */
   if(debug&8) /** file io */
     printf("# wrote %d 01 rows to file '%s'\n",lmax-lmin+1,fnam);
   
-  return 1+lmax-lmin;
+  return count;
 }
 
 /** 

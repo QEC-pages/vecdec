@@ -1481,6 +1481,22 @@ int var_init(int argc, char **argv, params_t *p){
       p->mL=do_L_classical(p->mH, p);
       p->ncws = p->mL->rows;
     }
+
+    if(p->perr){/** output predicted errors */
+      p->file_err_p = fopen(p->perr, "w");
+      if(p->file_err_p==NULL)
+	ERROR("can't open the (predicted err) file %s for writing\n",p->perr);
+    }
+    if(p->pdet){/** output predicted syndrome (only really `makes sense for BP`) */
+      p->file_det_p = fopen(p->pdet, "w");
+      if(p->file_det_p==NULL)
+	ERROR("can't open the (predicted det) file %s for writing\n",p->pdet);
+    }
+    if(p->pobs){/** output predicted observables */
+      p->file_obs_p = fopen(p->pobs, "w");
+      if(p->file_obs_p==NULL)
+	ERROR("can't open the (predicted obs) file %s for writing\n",p->pobs);
+    }
     
     if((p->ferr) && (p->fobs))
       ERROR("With ferr=%s cannot specify fobs=%s (will calculate)\n",p->fdem, p->fobs);
@@ -1641,6 +1657,9 @@ int var_init(int argc, char **argv, params_t *p){
 
 /** @brief clean up variables and open files */
 void var_kill(params_t *p){
+  if(p->file_det_p)  fclose(p->file_det_p);
+  if(p->file_obs_p)  fclose(p->file_obs_p);  
+  if(p->file_err_p)  fclose(p->file_err_p);  
   if(p->file_det)  fclose(p->file_det);
   if(p->file_obs)  fclose(p->file_obs);  
   if(p->file_err)  fclose(p->file_err);  
@@ -1758,6 +1777,9 @@ int main(int argc, char **argv){
         
 #ifndef NDEBUG
       mzd_t *prodHe = csr_mzd_mul(NULL,p->mH,mE0t,1);
+      if(p->pdet)
+	write_01_cols(prodHe,p->file_det_p,mE0t->ncols,0,p->pdet,p->debug);
+	
       mzd_add(prodHe, prodHe, p->mHe);
       if(!mzd_is_zero(prodHe)){
 	if((p->debug&512)||(p->nvec <=64)){
@@ -1768,16 +1790,19 @@ int main(int argc, char **argv){
       }
       mzd_free(prodHe); prodHe = NULL;
       //      mzd_free(p->mHe);    mHe    = NULL;
+#else /* NDEBUG defined */
+      if(p->pdet){
+	mzd_t *prodHe = csr_mzd_mul(NULL,p->mH,mE0t,1);
+	write_01_cols(prodHe,p->file_det_p,mE0t->ncols,0,p->pdet,p->debug);
+	mzd_free(prodHe);
+      }
 #endif
 
+      if(p->perr)
+	write_01_cols(mE0t,  p->file_err_p,mE0t->ncols,0,p->perr,p->debug);
       mzd_t *prodLe = csr_mzd_mul(NULL,p->mL,mE0t,1);
-
-      if(p->debug & 512){ /** print matrices */
-	printf("prodLe:\n");
-	mzd_print(prodLe);
-	printf("mLe:\n");
-	mzd_print(p->mLe);
-      }
+      if(p->pobs)
+	write_01_cols(prodLe,p->file_obs_p,mE0t->ncols,0,p->pobs,p->debug);
 
       mzd_add(prodLe, prodLe, p->mLe);
       //      mzd_free(mLe); mLe=NULL;

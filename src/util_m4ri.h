@@ -435,7 +435,10 @@ void csr_mm_write( char * const fout, const char fext[], const csr_t * const mat
 		  const char comment[]);
 
 int read_01(mzd_t *M, FILE *fin, long long int *lineno, const char* fnam,
-	    const int pads, const int debug);  
+	    const int pads, const int debug);
+
+int write_01_cols(const mzd_t * const M, FILE *fout, const int count, const int lmin,
+		  const char* fnam, const int debug);  
   
 /** 
  * Permute columns of a CSR matrix with permutation perm.

@@ -227,7 +227,6 @@ extern "C"{
   "\t fobs=[string]\t: input file with observables (01 matching lines in fdet)\n" \
   "\t fdet=[string]\t: input file with detector events (01 format)\n"   \
   "\t\t specify either 'ferr' OR a pair of 'ferr' and 'fdet' (or none for internal)\n" \
-  "\t gerr, gobs, gdet=[string]\t: out file for generated vectors (01 format)\n" \
   "\t perr, pobs, pdet=[string]\t: out file for predicted vectors (01 format)\n" \
   "\t pads=[integer]\t: if non-zero, pad vectors from `fdet` file with zeros (0)\n" \
   "\t fout=[string]\t: header for output file names ('tmp', see 'mode=3')\n" \
