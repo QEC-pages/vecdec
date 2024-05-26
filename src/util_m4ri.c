@@ -884,52 +884,55 @@ int read_01(mzd_t *M, FILE *fin, long long int *lineno, const char* fnam,
 }
 
 
-/** @brief write `count` cols of `M` starting from `lmin` to `fout` in `01` format
+/** @brief write rows or cols of `M` to file in `01` format
  *
- * file `fout` should already be open for writing.
+ * file `fout` named `fnam` should already be open for writing.
  *
  * @param M initialized input matrix with at least `lmax` = `lmin` + `count` cols 
+ * @param by_cols if non-zero, write one column per line, otherwise one row per line 
  * @param fout file  open for writing
- * @param count how many columns to output
- * @param lmin starting column of the matrix to output
  * @param fnam file name (for debugging purposes)
- * @param debug bitmap on information to output.
- * @return the number of cols actually written.
  *
  */
-int write_01_cols(const mzd_t * const M, FILE *fout, const int count, const int lmin,
-		  const char* fnam, const int debug){
+void mzd_write_01(FILE *fout, const mzd_t * const M, const int by_cols, const char* fnam){
   if(!M)
     ERROR("expected initialized matrix 'M'!\n");
-  int n = M->nrows;
-  int m = M->ncols;
-  const int lmax = lmin+count;
-  if(m < lmax)
-    ERROR("not enough data in %d x %d matrix, lmax=%d\n",n,m,lmax);
   if(!fout)
     ERROR("file 'fout' named %s must be open for writing\n",fnam);
-  if(debug&8) /** file io */
-    printf("# about to write %d cols of 01 data to file '%s'\n",
-           count,fnam);
-  for(int i = lmin; i < lmax; i++){
-    for (int j=0; j<n; j++){
-      unsigned char ch = mzd_read_bit(M,j,i) ? '1' : '0';
-      if(ch != fputc(ch,fout)){
+  const int n1 = by_cols ? M->ncols : M->nrows ;
+  const int n2 = by_cols ? M->nrows : M->ncols ;  
+  for(int i = 0; i < n1; i++){
+    for (int j=0; j < n2; j++){
+      int bit = by_cols ? mzd_read_bit(M,j,i) : mzd_read_bit(M,i,j) ;
+      unsigned char ch = bit ? '1' : '0';
+	if(ch != fputc(ch,fout)){
+	  int err=ferror(fout);
+	  printf("file write error %d:\n%s\n",err,strerror(err));
+	  ERROR("error writing to file %s\n",fnam); 
+	};
+      }
+      if('\n' != fputc('\n',fout)){
 	int err=ferror(fout);
 	printf("file write error %d:\n%s\n",err,strerror(err));
 	ERROR("error writing to file %s\n",fnam); 
       };
-    }
-    if('\n' != fputc('\n',fout)){
+    }  
+}
+
+/** @brief write a line of `count` zeros to open file `fout` named `fnam` */
+void write_01_zeros(FILE *fout, const int count, const char * fnam){
+  for (int j=0; j < count; j++){
+    if('0' != fputc('0',fout)){
       int err=ferror(fout);
       printf("file write error %d:\n%s\n",err,strerror(err));
       ERROR("error writing to file %s\n",fnam); 
     };
   }
-  if(debug&8) /** file io */
-    printf("# wrote %d 01 rows to file '%s'\n",lmax-lmin+1,fnam);
-  
-  return count;
+  if('\n' != fputc('\n',fout)){
+    int err=ferror(fout);
+    printf("file write error %d:\n%s\n",err,strerror(err));
+    ERROR("error writing to file %s\n",fnam); 
+  };
 }
 
 /** 

@@ -1778,7 +1778,7 @@ int main(int argc, char **argv){
 #ifndef NDEBUG
       mzd_t *prodHe = csr_mzd_mul(NULL,p->mH,mE0t,1);
       if(p->pdet)
-	write_01_cols(prodHe,p->file_det_p,mE0t->ncols,0,p->pdet,p->debug);
+	mzd_write_01(p->file_det_p, prodHe, 1, p->pdet);
 	
       mzd_add(prodHe, prodHe, p->mHe);
       if(!mzd_is_zero(prodHe)){
@@ -1793,19 +1793,18 @@ int main(int argc, char **argv){
 #else /* NDEBUG defined */
       if(p->pdet){
 	mzd_t *prodHe = csr_mzd_mul(NULL,p->mH,mE0t,1);
-	write_01_cols(prodHe,p->file_det_p,mE0t->ncols,0,p->pdet,p->debug);
+	mzd_write_01(p->file_det_p, prodHe, 1, p->pdet);
 	mzd_free(prodHe);
       }
 #endif
 
       if(p->perr)
-	write_01_cols(mE0t,  p->file_err_p,mE0t->ncols,0,p->perr,p->debug);
+	mzd_write_01(p->file_err_p, mE0t, 1,   p->perr);
       mzd_t *prodLe = csr_mzd_mul(NULL,p->mL,mE0t,1);
       if(p->pobs)
-	write_01_cols(prodLe,p->file_obs_p,mE0t->ncols,0,p->pobs,p->debug);
+	mzd_write_01(p->file_obs_p, prodLe, 1,p->pobs);
 
       mzd_add(prodLe, prodLe, p->mLe);
-      //      mzd_free(mLe); mLe=NULL;
 
       int fails=0;
       for(rci_t ic=0; ic< ierr_tot; ic++){
@@ -1831,8 +1830,12 @@ int main(int argc, char **argv){
 
   case 1: /** `mode=1` various BP flavors */    
     ans = calloc(p->nvar, sizeof(qllr_t));
-      if(!ans) ERROR("memory allocation failed!"); 
-
+    if(!ans) ERROR("memory allocation failed!"); 
+    const int do_file_output = (p->perr) || (p->pdet) || (p->pobs);
+    mzd_t *perr;
+    if(do_file_output)
+      perr=mzd_init(1,p->nvar);
+    
     for(long long int iround=0; iround < rounds; iround++){
       if(p->debug &1)
 	printf("# starting round %lld of %lld\n", iround, rounds);
@@ -1846,7 +1849,12 @@ int main(int argc, char **argv){
 	int succ_BP = 0, succ_OSD = 0;
 	if(mzd_row_is_zero(p->mHeT,ierr)){
 	  //	  printf("ierr=%d of tot=%d\n",ierr,ierr_tot);
-
+	  if(p->perr) 
+	    write_01_zeros(p->file_err_p, p->mH->cols, p->perr); /** trivial prediction */
+	  if(p->pdet) 
+	    write_01_zeros(p->file_det_p, p->mH->rows, p->pdet); /** trivial prediction */
+	  if(p->pobs) 
+	    write_01_zeros(p->file_det_p, p->mL->rows, p->pobs); /** trivial prediction */
 	  cnt_update(CONV_TRIVIAL,0); /** trivial convergence after `0` steps */
 	  if(mzd_row_is_zero(p->mLeT,ierr)){
 	    cnt[SUCC_TRIVIAL]++;
@@ -1879,11 +1887,11 @@ int main(int argc, char **argv){
 	    succ_BP = do_parallel_BP(ans, srow, p->mH, p->mHt, p->vLLR, p);	   
 	  }
 	  if((!succ_BP) && (p->lerr >=0)){
-	      if(p->debug&128)
-		printf("ierr=%lld starting OSD lerr=%d maxosd=%d\n",ierr,p->lerr, p->maxosd);
-	      do_osd_start(ans,srow,p->mH,p);
-	      succ_OSD=1;
-	    }
+	    if(p->debug&128)
+	      printf("ierr=%lld starting OSD lerr=%d maxosd=%d\n",ierr,p->lerr, p->maxosd);
+	    do_osd_start(ans,srow,p->mH,p);
+	    succ_OSD=1;
+	  }
 
 	  if((succ_BP)||(succ_OSD)){              /** `convergence success`  */
 	    mzd_t * const obsrow = mzd_init_window(p->mLeT, ierr,0, ierr+1,p->mLeT->ncols);
