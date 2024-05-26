@@ -354,6 +354,29 @@ mzd_t *mzd_generator_from_csr(mzd_t *G, const csr_t * const H);
 mzd_t * csr_mzd_mul(mzd_t *C, const csr_t *S, const mzd_t *B, int clear);
 
 /**
+ * @brief mzd row by sparse multiplication 
+ */
+static inline mzd_t * mzd_row_csr_mul(mzd_t *C, const int rowC,
+			const mzd_t *B, const int rowB, const csr_t *const S, int clear){
+  assert((C!=NULL)&&(B!=NULL)&&(S!=NULL));
+  assert(C->ncols == S->cols);
+  assert(B->ncols == S->rows);
+  assert(rowC < C->nrows);
+  assert(rowB < B->nrows);
+  if(clear)
+    mzd_row_clear_offset(C,rowC,0);
+  for(int i=0; i < S->rows; i++){
+    if(mzd_read_bit(B,rowB, i))
+      for(int ji = S->p[i]; ji < S->p[i+1]; ji++){
+	int j = S->i[ji];
+	mzd_flip_bit(C,rowC,j);
+      }
+  }
+  return C;
+}
+  
+
+/**
  * helper function to compute the weight of the product 
  * A*B (transpose == 0) or A*B^T (transpose == 1)
  * with A sparse, B dense binary matrices

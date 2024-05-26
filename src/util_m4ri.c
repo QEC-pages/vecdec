@@ -235,6 +235,7 @@ mzd_t * csr_mzd_mul(mzd_t *C, const csr_t *S, const mzd_t *B, int clear){
 #if 0
 /** @brief calculate `C = C + A*B`, optimized to the case where `A` is a single row */
 mzd_t * mzd_csr_mul(mzd_t *C, const mzd_t *A, const csr_t *B, int clear){
+  /** use mzd_row_csr_mul() */
   return NULL;  
 }
 #endif 

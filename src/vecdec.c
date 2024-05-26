@@ -1831,10 +1831,16 @@ int main(int argc, char **argv){
   case 1: /** `mode=1` various BP flavors */    
     ans = calloc(p->nvar, sizeof(qllr_t));
     if(!ans) ERROR("memory allocation failed!"); 
+
     const int do_file_output = (p->perr) || (p->pdet) || (p->pobs);
-    mzd_t *perr;
-    if(do_file_output)
-      perr=mzd_init(1,p->nvar);
+    mzd_t *pErr=NULL, *pHerr=NULL, *pLerr=NULL;
+    if(do_file_output){
+      pErr=mzd_init(1,p->nvar);
+      if(p->pdet)
+	pHerr=mzd_init(1,p->mHt->cols);
+      if(p->pobs)
+	pLerr=mzd_init(1,p->mLt->cols);
+    }
     
     for(long long int iround=0; iround < rounds; iround++){
       if(p->debug &1)
@@ -1854,7 +1860,7 @@ int main(int argc, char **argv){
 	  if(p->pdet) 
 	    write_01_zeros(p->file_det_p, p->mH->rows, p->pdet); /** trivial prediction */
 	  if(p->pobs) 
-	    write_01_zeros(p->file_det_p, p->mL->rows, p->pobs); /** trivial prediction */
+	    write_01_zeros(p->file_obs_p, p->mL->rows, p->pobs); /** trivial prediction */
 	  cnt_update(CONV_TRIVIAL,0); /** trivial convergence after `0` steps */
 	  if(mzd_row_is_zero(p->mLeT,ierr)){
 	    cnt[SUCC_TRIVIAL]++;
@@ -1893,6 +1899,23 @@ int main(int argc, char **argv){
 	    succ_OSD=1;
 	  }
 
+	  if(do_file_output){ /** output predicted values */
+	    mzd_row_clear_offset(pErr,0,0);
+	    for(int i=0; i < p->nvar; i++)
+	      if(ans[i]<0)
+		mzd_flip_bit(pErr,0,i);
+	    if(p->perr)
+	      mzd_write_01(p->file_err_p, pErr, 0, p->perr);
+	    if(p->pdet){
+	      mzd_row_csr_mul(pHerr,0, pErr,0, p->mHt, 1);
+	      mzd_write_01(p->file_det_p, pHerr, 0, p->pdet);
+	    }
+	    if(p->pobs){
+	      mzd_row_csr_mul(pLerr,0, pErr,0, p->mLt, 1);
+	      mzd_write_01(p->file_obs_p, pLerr, 0, p->pobs);
+	    }
+	  }
+
 	  if((succ_BP)||(succ_OSD)){              /** `convergence success`  */
 	    mzd_t * const obsrow = mzd_init_window(p->mLeT, ierr,0, ierr+1,p->mLeT->ncols);
 	    if(syndrome_check(ans, obsrow, p->mL, p)){
@@ -1912,8 +1935,14 @@ int main(int argc, char **argv){
 	if((p->nfail) && cnt[TOTAL]-cnt[SUCC_TOT] >= p->nfail)
 	  break;
       }
-    }
+    }    
     cnt_out(p->debug&1);
+    if(pErr)
+      mzd_free(pErr);
+    if(pHerr)
+      mzd_free(pHerr);
+    if(pLerr)
+      mzd_free(pLerr);
     free(ans);
     break;
   case 2: /** `mode=2` */
