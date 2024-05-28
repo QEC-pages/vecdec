@@ -166,12 +166,12 @@ performance, with BER of `0.0390918` (`4003` out of `102400`).
   `tmp.nz`.
 ```
 vecdec=./src/vecdec
-$vecdec mode=2 steps=100000 finH= ./examples/96.3.963.alist useP=0.05 outC=tmp.nz dW=10
+$vecdec mode=2.1 steps=100000 finH= ./examples/96.3.963.alist useP=0.05 outC=tmp.nz dW=10
 ```
 In a particular run, `195769` codewords have been generated; more
   codewords can be found by repeating the runs using the command line
 ```
-$vecdec mode=2 steps=100000 finH= ./examples/96.3.963.alist useP=0.05 \
+$vecdec mode=2.1 steps=100000 finH= ./examples/96.3.963.alist useP=0.05 \
   finC=tmp.nz outC=tmp.nz dW=10
 ```
 In a particular set of three subsequent runs, `210822`, `212203`, and
@@ -179,8 +179,8 @@ In a particular set of three subsequent runs, `210822`, `212203`, and
 can be used to estimate the BER, e.g, by running a `bash` script 
 ```
 for ((w=6; w<=16; w++)) ; do 
-  echo $w `$vecdec debug=0 mode=2 steps=0 \
-  finH= ./examples/96.3.963.alist useP=0.05 finC=tmp.nz maxW=$w`  
+  echo $w `$vecdec debug=0 mode=2.1 steps=0 \
+  finH= ./examples/96.3.963.alist useP=0.05 finC=tmp.nz maxW=$w` 
 done
 ```
 which gives the output
@@ -294,9 +294,9 @@ reported by `vecdec`.
 vecdec=./src/vecdec 
 $vecdec debug=1 mode=0 finH= ./input/GB_10_w6_X.mtx \
                        finG= ./input/GB_10_w6_Z.mtx \
-					useP=0.005 lerr=1 nvec=10240 ntot=102400 steps=5000 
+					   useP=0.005 lerr=1 nvec=100000 ntot=1000000 steps=5000
 ```
-  which gives the BER of `0.000908203` (`93` errors out of `102400`).
+  which gives the BER of `0.000814` (`814` errors out of `1000000`).
 
 - Use BP decoder with serial-`V` schedule based on average LLR
 ```
@@ -308,30 +308,35 @@ $vecdec debug=1 mode=0 finH= ./input/GB_10_w6_X.mtx \
 
 - Estimate the BER by generating the list of codewords 
 ```
-$vecdec debug=1 mode=2 finH= ./input/GB_10_w6_X.mtx \
+$vecdec debug=1 mode=2.0 finH= ./input/GB_10_w6_X.mtx \
                        finG= ./input/GB_10_w6_Z.mtx \
 				    useP=0.005 steps=1000000 finC=tmp.nz outC=tmp.nz dW=7
 ```
-  and a subsequent cycle over the maximum weight:
+this generates a list of 32 codewords.  A subsequent cycle over the maximum weight:
 ```
-for ((w=3; w<=10; w++)) ; do 
-  echo $w `$vecdec debug=0 mode=2 finH=./input/GB_10_w6_X.mtx \
+for ((w=3; w<=6; w++)) ; do 
+  echo $w `$vecdec debug=0 mode=2.3 finH=./input/GB_10_w6_X.mtx \
       finG=./input/GB_10_w6_Z.mtx useP=0.005 steps=0 finC=tmp.nz  maxW=$w` 
 done
 ```
   which gives 
 ```
-3 0.0280724 0.00280724 3 10
-4 0.0320325 0.00280724 3 20
-5 0.0327029 0.00280724 3 32
-6 0.0327029 0.00280724 3 32
-7 0.0327029 0.00280724 3 32
-8 0.0327029 0.00280724 3 32
-9 0.0327029 0.00280724 3 32
-10 0.0327029 0.00280724 3 32
+3 0.0280724 0.00280724 0.00074625 7.4625e-05 3 10 10 10
+4 0.0320325 0.00280724 0.000751225 7.4625e-05 3 10 20 20
+5 0.0327029 0.00280724 0.000766113 7.4625e-05 3 10 32 32
+6 0.0327029 0.00280724 0.000766113 7.4625e-05 3 10 32 32
+```
+Here the column titles (except for the first one which is the maximum
+codeword weight used) can be generated using `debug=1` option; they
+are
+```
+# sumP(fail) maxP(fail) sumP_exact(fail) maxP_exact(fail) min_weight N_min N_use N_tot
 ```
 Again, the estimated contribution from a single codeword is about
-twice the LER computed.
+twice the LER computed.  However, the `sumP_exact(fail)` appears to
+converge at `0.000766113`, which is numerically close to the
+fail probability computed using RIS decoder (not clear why the
+difference) and about a half of the fail probability given by the BP decoder.
 
 ### Simulate quantum Clifford circuit (given a detector error model)
 
@@ -410,30 +415,25 @@ Finally, to estimate the decoding
 performance at small error probabilities, `mode=2` can be used:
 ```
 vecdec=./src/vecdec 
-$vecdec mode=2 fdem=sd5.dem steps=100000 dW=7 outC=tmp.nz 
-for ((w=5; w<=12; w++)) ; do 
-  echo $w `$vecdec debug=0 mode=2 fdem=sd5.dem steps=0 maxW=$w finC=tmp.nz`
+$vecdec mode=2.0 fdem=sd5.dem steps=100000 dW=7 outC=tmp.nz 
+for ((w=5; w<=10; w++)) ; do 
+  echo $w `$vecdec debug=0 mode=2.2 fdem=sd5.dem steps=0 maxW=$w finC=tmp.nz`
 done
 ```
 This the output (truncated at the top)
 ```
-# sumP(fail) maxP(fail) min_weight num_found
-0.184833 0.000686607 5 5458643
-# wrote 5458643 computed codewords to file tmp.nz
-5 0.0757023 0.000686607 5 13785
-6 0.164425 0.000686607 5 175286
-7 0.182536 0.000686607 5 531246
-8 0.18459 0.000686607 5 1085981
-9 0.184808 0.000686607 5 1853386
-10 0.184829 0.000686607 5 2838376
-11 0.184832 0.000686607 5 4042564
-12 0.184833 0.000686607 5 5458643
+# min_weight N_min N_use N_tot
+5 13800 5471523 5471523
+# wrote 5471523 computed codewords to file tmp.nz
+5 0.00258921 2.71648e-05 5 13800 13800 13800
+6 0.00880308 2.71648e-05 5 13800 175887 175887
+7 0.009567 2.71648e-05 5 13800 533481 533481
+8 0.00968002 2.71648e-05 5 13800 1090400 1090400
+9 0.00968931 2.71648e-05 5 13800 1858982 1858982
+10 0.00969025 2.71648e-05 5 13800 2845251 2845251
 ```
-While the expansion converges, clearly, the greedy estimate is nearly
-two orders of magnitude bigger than the actual error rate, while the
-single largest contribution to the sum is several orders of magnitude
-too small.  Evidently, the reason is the large number (`13785`) of
-minimum-weight vectors associated with this particular DEM.
+Clearly, the expansion converges, and the greedy estimate is
+numerically close to the actual error rate.
 
 ## Use matrix transformations to simplify the error model
 
@@ -501,21 +501,38 @@ number of steps.  For example, for the DEM file
 `./examples/surf_d7.dem` (it was originally generated with the help of
 `Stim`) we run
 ```
-$vecdec debug=0 mode=2 steps=10000 fdem= ./examples/surf_d7.dem
+$vecdec debug=1 mode=2 steps=10000 fdem= ./examples/surf_d7.dem
 ```
 to get the output 
 ```
-8.53809e-06 1.26044e-06 7 19
+# initializing seed=211030872039 from time(NULL)+1000000ul*getpid()+0
+# opening DEM file ./examples/surf_d7.dem
+# read DEM: r=336 k=1 n=5473
+# using variables: mode=2 submode=0
+# Analyze small-weight codewords in 10000 RIS steps; swait=0
+# maxC=0 dE=-1 dW=0 maxW=0
+# calculating minimum weight
+# mode=2 submode=0 debug=1
+# mode=2, estimating fail probability in 10000 steps
+nz=1 cnt=7 energ=36.8401
+nz=1 cnt=7 energ=36.7964
+# min_weight N_min N_use N_tot
+7 875 875 875
 ```
-where the third number (`7`) is the minimum weight of a codeword
-found, and `19` is the number of codewords found.  Re-run with the
+where the first number (`7`) is the minimum weight of a codeword
+found, and `875` is the number of codewords found.  Re-run with the
 additional parameter `maxW=7` to give the number of codewords of this
-weight found:
+weight found, e.g.
 ```
-./src/vecdec debug=0 mode=2 steps=1000 fout=tmp2 fdem= ./examples/surf_d7.dem maxW=7
-9.12457e-06 1.26044e-06 7 99
+./src/vecdec debug=0 mode=2 steps=1000 fdem= ./examples/surf_d7.dem maxW=8 dW=2
 ```
-
+which gives the output (fewer codewords are found after a fewer steps)
+```
+7 71 336 1053
+```
+Here `71` is the number of found codewords of the minimum weight `7`,
+`336` is the number of codewords of weight not exceeding `maxW=8`, and 
+`1321` is the total number of codewords found.
 
 ### Export code matrices to Matrix Market (`MMX`) or `DEM` files 
 
@@ -708,6 +725,8 @@ in a table for LLR operations.  With `qllr2=0` (no table), the
 ## LER and code distance estimator
 
 This section describes operation with the command-line switch `mode=2`.
+(**TODO:** update the submode options.  Description below applies to
+current `mode=2.1`).
 
 Given the error model, i.e., the matrices $H$, $L$, and the vector of column
 probability values $p_i$, the program tries to enumerate the likely binary
@@ -924,7 +943,9 @@ corresponding output:
 ### run `./vecdec mode=2 --help`
 ```sh
  mode=2 : Generate most likely fault vectors, estimate Prob(Fail).
-	 (no submode is currently used)
+	Submode bitmap values:
+			 .1 (bit 0) calculate original fail probability estimate
+			 .2 (bit 1) calculate exact greedy probability estimate
 	 Use up to 'steps' random information set (RIS) steps
 	 unless no new codewords (fault vectors) have been found for 'swait' steps.
 	 Use 'steps=0' to just use the codewords from the file 

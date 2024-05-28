@@ -1680,7 +1680,7 @@ int var_init(int argc, char **argv, params_t *p){
     case 2:
       printf("# Analyze small-weight codewords in %d RIS steps; swait=%d\n",p->steps,p->swait);
       printf("# maxC=%lld dE=%g dW=%d maxW=%d\n",p->maxC, dbl_from_llr(p->dE), p->dW, p->maxW);
-      printf("# calculating %s%sminimum weight\n",p->submode&1 ? "est fail prob, ":"", p->submode&1 ? "exact fail prob ":"");
+      printf("# calculating %s%sminimum weight\n",p->submode&1 ? "est fail prob, ":"", p->submode&1 ? "exact fail prob, ":"");
       break;
     case 3:
       if(p->submode<32){
@@ -1805,7 +1805,8 @@ int main(int argc, char **argv){
     synd_tot=0, synd_fail=0;
     for(long long int iround=1; iround <= rounds; iround++){
       if(p->debug &1){
-	printf("# starting round %lld of %lld fail=%lld total=%lld\n", iround, rounds, synd_fail,synd_tot);
+	printf("# starting round %lld of %lld pfail=%g fail=%lld total=%lld\n",
+	       iround, rounds, synd_tot>0 ? (double) synd_fail/synd_tot : 0.5 , synd_fail,synd_tot);
 	fflush(stdout);
       }
     
@@ -1891,9 +1892,12 @@ int main(int argc, char **argv){
 	pLerr=mzd_init(1,p->mLt->cols);
     }
     
-    for(long long int iround=0; iround < rounds; iround++){
-      if(p->debug &1)
-	printf("# starting round %lld of %lld\n", iround, rounds);
+    for(long long int iround=1; iround <= rounds; iround++){
+      if(p->debug &1){
+	printf("# starting round %lld of %lld pfail=%g fail=%lld total=%lld\n", iround, rounds,
+	       cnt[TOTAL] ? (double) (cnt[TOTAL]-cnt[SUCC_TOT])/cnt[TOTAL] : 0.5, cnt[TOTAL]-cnt[SUCC_TOT], cnt[TOTAL]);
+	fflush(stdout);
+      }
     
       if( !(ierr_tot = do_err_vecs(p)))
 	break; /** no more rounds */
