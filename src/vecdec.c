@@ -144,8 +144,10 @@ static inline double do_prob_one_vec_exact(const one_vec_t * const pvec, const p
 	prod1 *= (1-prob);
       }
     }
-    if (prod1>prod0)
+    if (prod1 > 1.000001*prod0)
       ans += prod0;
+    else if ((prod1 < 1.000001*prod0) && (prod1 > 0.999999*prod0))
+      ans += 0.5*prod0; /** almost the same; added for numerical stability */
   }
   return ans;
 }
