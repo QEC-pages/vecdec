@@ -348,7 +348,9 @@ extern "C"{
 
 #define HELP2 /** help for `mode=2` */  \
   " mode=2 : Generate most likely fault vectors, estimate Prob(Fail).\n" \
-  "\t (no submode is currently used)\n"					\
+  "\tSubmode bitmap values:\n"						\
+  "\t\t\t .1 (bit 0) calculate original fail probability estimate\n"	\
+  "\t\t\t .2 (bit 1) calculate exact greedy probability estimate\n"	\
   "\t Use up to 'steps' random information set (RIS) steps\n"		\
   "\t unless no new codewords (fault vectors) have been found for 'swait' steps.\n" \
   "\t Use 'steps=0' to just use the codewords from the file \n"		\
