@@ -16,6 +16,7 @@
 #include <strings.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <limits.h>
 #include <time.h>
 #include <unistd.h>
 #include <m4ri/m4ri.h>
@@ -117,7 +118,37 @@ static inline double do_prob_one_vec(const one_vec_t * const pvec, const params_
   return ans;
 }
 
-
+/** @brief calculate exact fail probability for one vector */
+static inline double do_prob_one_vec_exact(const one_vec_t * const pvec, const params_t * const p){
+  const int max_len = sizeof(unsigned long)*8 -1; 
+  double ans=0;
+  const int w = pvec->weight;
+  assert(w<=max_len);
+  const unsigned long min = 1;
+  const unsigned long max = (1<<w)-1;
+  /** TODO: accurately estimate limits using `min_llr` and `max_llar` */
+  for(unsigned long bitmap=min; bitmap<max; bitmap++){
+    double prod0=1, prod1=1;
+    unsigned long bit = 1<<(w-1);
+    const int *idx = pvec->arr;
+    /** TODO: speed-up this loop to calculate faster.  Use array of
+     * previously computed values and only start with the last bit changed. */
+    for(int i=w-1; i>=0; i--, bit>>=1, idx++){
+      const double prob = p->vP[*idx];
+      if(bitmap&bit){
+	prod1 *= prob;
+	prod0 *= (1-prob);
+      }
+      else{ 
+	prod0 *= prob;
+	prod1 *= (1-prob);
+      }
+    }
+    if (prod1>prod0)
+      ans += prod0;
+  }
+  return ans;
+}
  
 /** @brief return permutation = decreasing probabilities (increasing LLR) */
 mzp_t * sort_by_llr(mzp_t *perm, const qllr_t vLLR[], params_t const * const p){
@@ -327,8 +358,8 @@ int do_hash_verify_CW(const csr_t * const mHt, const csr_t * const mLt, const pa
   return 0;
 }
 
-/** @brief using codewords in the hash, estimate fail probability */
-double do_hash_fail_prob( params_t * const p){
+/** @brief using codewords in the hash, estimate fail probability and min weigth */
+int do_hash_fail_prob( params_t * const p){
 
   one_vec_t *pvec;
   
@@ -340,24 +371,43 @@ double do_hash_fail_prob( params_t * const p){
   }
   /** finally calculate and output fail probability here */
   /** TODO: use the limit on `W` and `E` (just ignore codewords outside the limit) */
-  double pfail=0, pmax=0;
+  double pfail=0, pfail_two=0, pmax=0, pmax_two=0;
+  int count = 0, count_min = 0, count_tot = 0;
   int minW=p->nvar + 1;
   for(pvec = p->codewords; pvec != NULL; pvec=(one_vec_t *)(pvec->hh.next)){
     if ((p->maxW==0) || ((p->maxW != 0) && (pvec->weight <= p->maxW))){
-      double prob=do_prob_one_vec(pvec, p);
-      pfail += prob;
-      if(prob>pmax)
-	pmax=prob;
-      if(minW> pvec->weight)
+      if(p->submode &1){ /* original simple estimate */
+	double prob=do_prob_one_vec(pvec, p);
+	pfail += prob;
+	if(prob>pmax)
+	  pmax=prob;
+      }
+      if(p->submode &2){ /* exact fail prob */      
+	double prob_two=do_prob_one_vec_exact(pvec, p);
+	pfail_two += prob_two;
+	if(prob_two>pmax_two)
+	  pmax_two=prob_two;
+      }
+      if(minW > pvec->weight){
 	minW=pvec->weight;
+	count_min=1;
+      }
+      else if (minW == pvec->weight)
+	count_min++;
+      count ++;
     }
-  }
+    count_tot++;
+  }  
   /** todo: prefactor calculation */
   if(p->debug&1)
-    printf("# sumP(fail) maxP(fail) min_weight num_found\n");
-  printf("%g %g %d %lld\n", pfail, pmax, minW, p->num_cws);
+    printf("# %s%smin_weight N_min N_use N_tot\n",p->submode&1 ?"sumP(fail) maxP(fail) ":"", p->submode&2 ?"sumP_exact(fail) maxP_exact(fail) ":"" );
+  if (p->submode & 1)
+    printf("%g %g ",pfail, pmax);
+  if (p->submode & 2)
+    printf("%g %g ",pfail_two, pmax_two);
+  printf("%d %d %d %d\n", minW, count_min, count, count_tot);
   
-  return pfail; 
+  return minW; 
 }
 
 void do_hash_clear(params_t *const p){
@@ -367,8 +417,6 @@ void do_hash_clear(params_t *const p){
     HASH_DEL(p->codewords, cw);
     free(cw);
   }
-
-
 }
 
 /** @brief see if the codeword needs to be added to hash, return pointer */
@@ -1540,8 +1588,8 @@ int var_init(int argc, char **argv, params_t *p){
     if((p->fdet!=NULL)||(p->fobs!=NULL) ||(p->ferr!=NULL))
       ERROR(" mode=%d, must not specify 'ferr' or 'fobs' or 'fdet' files\n",
 	    p->mode);
-    if (p->submode!=0)
-      ERROR(" mode=%d : non-zero submode='%d' unsupported\n",
+    if (p->submode>3)
+      ERROR(" mode=%d : submode='%d' unsupported\n",
 	    p->mode, p->submode);
     break;
     
@@ -1632,6 +1680,7 @@ int var_init(int argc, char **argv, params_t *p){
     case 2:
       printf("# Analyze small-weight codewords in %d RIS steps; swait=%d\n",p->steps,p->swait);
       printf("# maxC=%lld dE=%g dW=%d maxW=%d\n",p->maxC, dbl_from_llr(p->dE), p->dW, p->maxW);
+      printf("# calculating %s%sminimum weight\n",p->submode&1 ? "est fail prob, ":"", p->submode&1 ? "exact fail prob ":"");
       break;
     case 3:
       if(p->submode<32){
