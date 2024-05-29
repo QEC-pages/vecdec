@@ -96,6 +96,72 @@ format (the format is recognized automatically).
 
 ## Common tasks 
 
+### Use externally generated error vectors, detector events, or observables 
+
+In addition to internal sampler, externally generated error vectors,
+detector events, or observables can be used.  This can be done, e.g., with the help of `Stim`:
+```bash 
+stim=../Stim/out/stim # location of `stim` command-line binary
+vecdec=src/vecdec     # location of `vecdec`
+$stim sample_dem --shots 5000 --in ./examples/surf_d3.dem \
+	--out tmp_det.01 --out_format 01 \
+	--obs_out tmp_obs.01 --obs_out_format 01
+$vecdec mode=0 fdet=tmp_det.01 fobs=tmp_obs.01 fdem= ./examples/surf_d3.dem nvec=2500 steps=1000 ntot=5000 
+```
+
+Alternatively, generated or constructed detector events and
+observables in `mode=0` and `mode=1` can be written to files.  The
+file names are set by the command line arguments `gdet=...` and
+`gobs=...`  For example:
+```
+./src/vecdec fdem= input/rep_code3.dem gdet=tmpA.01 gobs=tmpB.01 ntot=1500 nvec=1000 steps=0
+```
+Note that since `ntot` and `nvec` are not commensurate, this would write `2000` lines to 
+each of the output files `tmpA.01` and `tmpB.01`.  When exact count is important, make 
+sure `ntot` be divisible by `nvec`. 
+
+In addition, actual error vectors can be read from a file using the
+command line argument `ferr=[file_name]`.  As a reminder, with a binary error vector `e`, 
+the corresponding detector events are the syndrome bits `H*e`, and observable bits are `L*e`.
+
+Similarly, in `mode=0` and `mode=1`, the predicted error vectors,
+detector events, and observables can be written to `01` files.  For example, with the files created above, run  
+```
+$vecdec mode=0 fdet=tmp_det.01 fobs=tmp_obs.01 fdem= ./examples/surf_d3.dem nvec=2500 steps=1000 ntot=5000 \
+  perr=tmp_E.01 pdet=tmp_D.01 pobs=tmp_L.01 
+det_mism=`diff  tmp_D.01 tmp_det.01 | grep -c -e "^<"`
+obs_mism=`diff  tmp_L.01 tmp_obs.01 | grep -c -e "^<"`
+echo mismatch detector: $det_mism obs: $obs_mism
+```
+In a particular run, the last three lines of the output are 
+```
+# fail_fraction total_cnt succes_cnt
+ 0.0024 5000 4988 # ./examples/surf_d3.dem
+mismatch detector: 0 obs: 12 
+```
+That is, all detector events are recovered correctly (as expected),
+but there are `12` logical errors, in agreement with the
+`fail_fraction` and `success_cnt` reported by the program.
+
+A similar run with `mode=1.12 lerr=-1` (serial-V BP without OSD) gives
+output with the last three lines 
+```
+# FAIL_FRAC TOTAL  C_TRIVIAL S_TRIVIAL  C_BP C_BP_AVG C_BP_TOT S_BP   S_OSD S_TOT
+     0.0106 5000  3530 3530      1337 86 1423 1417  0 4947
+mismatch detector: 47 obs: 21
+```
+That is, the decoder failed to converge `47` times (in agreement with
+`C_TRIVIAL`+`C_BP_TOT`), and `21` times the observable was incorrect.
+To reproduce the total number of logical errors, the files must be
+compared column-by-column, e.g., by running 
+```
+paste tmp_det.01 tmp_obs.01 > tmp1.01
+paste tmp_D.01 tmp_L.01 > tmp2.01
+diff tmp1.01 tmp2.01 | grep -c -e "^>"
+```
+which returns `53`, in agreement with the `FAIL_FRAC` or `S_TOT`
+reported by `vecdec`.
+
 ### Simulate the performance of a classical code 
 
 - **Use the internal random information set (RIS) decoder.** Use a
@@ -228,61 +294,6 @@ magnitude below the greedy estimate and even factor of two below the estimate ba
 on a single codeword.  This is the result of a very rough prefactor
 value used in the estimate.  (**FIXME:** Come up with a more accurate
 prefactor calculation.)
-
-### Use externally generated error vectors, detector events, or observables 
-
-In addition to internal sampler, externally generated error vectors,
-detector events, or observables can be used.  This can be done, e.g., with the help of `Stim`:
-```bash 
-stim=../Stim/out/stim # location of `stim` command-line binary
-vecdec=src/vecdec     # location of `vecdec`
-$stim sample_dem --shots 5000 --in ./examples/surf_d3.dem \
-	--out tmp_det.01 --out_format 01 \
-	--obs_out tmp_obs.01 --obs_out_format 01
-$vecdec mode=0 fdet=tmp_det.01 fobs=tmp_obs.01 fdem= ./examples/surf_d3.dem nvec=2500 steps=1000 ntot=5000 
-```
-
-In addition, actual error vectors can be read from a file using the
-command line argument `ferr=[file_name]`.  As a reminder, with a binary error vector `e`, 
-the corresponding detector events are the syndrome bits `H*e`, and observable bits are `L*e`.
-
-Similarly, in `mode=0` and `mode=1`, the predicted error vectors,
-detector events, and observables can be written to `01` files.  For example, with the files created above, run 
-```
-$vecdec mode=0 fdet=tmp_det.01 fobs=tmp_obs.01 fdem= ./examples/surf_d3.dem nvec=2500 steps=1000 ntot=5000 \
-  perr=tmp_E.01 pdet=tmp_D.01 pobs=tmp_L.01 
-det_mism=`diff  tmp_D.01 tmp_det.01 | grep -c -e "^<"`
-obs_mism=`diff  tmp_L.01 tmp_obs.01 | grep -c -e "^<"`
-echo mismatch detector: $det_mism obs: $obs_mism
-```
-In a particular run, the last three lines of the output are 
-```
-# fail_fraction total_cnt succes_cnt
- 0.0024 5000 4988 # ./examples/surf_d3.dem
-mismatch detector: 0 obs: 12 
-```
-That is, all detector events are recovered correctly (as expected),
-but there are `12` logical errors, in agreement with the
-`fail_fraction` and `success_cnt` reported by the program.
-
-A similar run with `mode=1.12 lerr=-1` (serial-V BP without OSD) gives
-output with the last three lines 
-```
-# FAIL_FRAC TOTAL  C_TRIVIAL S_TRIVIAL  C_BP C_BP_AVG C_BP_TOT S_BP   S_OSD S_TOT
-     0.0106 5000  3530 3530      1337 86 1423 1417  0 4947
-mismatch detector: 47 obs: 21
-```
-That is, the decoder failed to converge `47` times (in agreement with
-`C_TRIVIAL`+`C_BP_TOT`), and `21` times the observable was incorrect.
-To reproduce the total number of logical errors, the files must be
-compared column-by-column, e.g., by running 
-```
-paste tmp_det.01 tmp_obs.01 > tmp1.01
-paste tmp_D.01 tmp_L.01 > tmp2.01
-diff tmp1.01 tmp2.01 | grep -c -e "^>"
-```
-which returns `53`, in agreement with the `FAIL_FRAC` or `S_TOT`
-reported by `vecdec`.
 
 ### Simulate the performance of a quantum CSS code 
 

@@ -786,33 +786,35 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
   mzp_t * pivs=mzp_init(p->nvar); /** list of pivot columns */
   if((!pivs) || (!perm))
     ERROR("memory allocation failed!\n");
+  mzd_set_ui(mE,0); /** zero matrix to store `errors by column` */
 
   /** first pass ******************************************* */
-  perm = sort_by_llr(perm, p->vLLR, p);   /** order of decreasing `p` */
-  /** full row echelon form (gauss elimination) using the order of `p`,
-   * on the block matrix `[H|S]` (in fact, two matrices).
-   */
   int rank=0;
-  for(int i=0; i< p->nvar; i++){
-    int col=perm->values[i];
-    int ret=twomat_gauss_one(mH,mS, col, rank);
-    if(ret)
-      pivs->values[rank++]=col;
+  if (p->steps > 0){
+    perm = sort_by_llr(perm, p->vLLR, p);   /** order of decreasing `p` */
+    /** full row echelon form (gauss elimination) using the order of `p`,
+     * on the block matrix `[H|S]` (in fact, two matrices).
+     */
+    for(int i=0; i< p->nvar; i++){
+      int col=perm->values[i];
+      int ret=twomat_gauss_one(mH,mS, col, rank);
+      if(ret)
+	pivs->values[rank++]=col;
+    }
+    if((p->debug &4)&&(p->debug &512)){ /** debug gauss */
+      printf("rank=%d\n",rank);
+      //    printf("perm: "); mzp_out(perm);
+      //    printf("pivs: "); mzp_out(pivs);
+      //    printf("mH:\n");
+      //    mzd_print(mH);
+      //    printf("mS:\n");
+      //    mzd_print(mS);
+    }
+    
+    // for each syndrome, calculate error vector and energy
+    for(int i=0;i< rank; i++)
+      mzd_copy_row(mE,pivs->values[i],mS,i);
   }
-  if((p->debug &4)&&(p->debug &512)){ /** debug gauss */
-    printf("rank=%d\n",rank);
-    //    printf("perm: "); mzp_out(perm);
-    //    printf("pivs: "); mzp_out(pivs);
-    //    printf("mH:\n");
-    //    mzd_print(mH);
-    //    printf("mS:\n");
-    //    mzd_print(mS);
-  }
-
-  // for each syndrome, calculate error vector and energy
-  mzd_set_ui(mE,0); /** zero matrix to store `errors by column` */
-  for(int i=0;i< rank; i++)
-    mzd_copy_row(mE,pivs->values[i],mS,i);
   mzd_t *mEt0 = mzd_transpose(NULL,mE);
   for(int i=0; i< mS->ncols; i++)
     vE[i]=mzd_row_energ(p->vLLR,mEt0,i);
@@ -822,7 +824,7 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
     mzd_print(mEt0);
   }
 
-  if(p->lerr>0){  /** do information-set decoding `**********************` */
+  if((p->steps > 0) &&(p->lerr > 0)){  /** do information-set decoding `**********************` */
     mzp_t * skip_pivs = do_skip_pivs(rank, pivs);
     mzd_t * mEt1=NULL;
     qllr_t *vE1=NULL;
@@ -1813,9 +1815,9 @@ int do_err_vecs(params_t * const p){
     ERROR("internal=%d, this should not happen",p->internal);
   }
   if(p->gdet)
-    mzd_write_01(p->file_det_g, p->mHe, 1, p->gdet);
+    mzd_write_01(p->file_det_g, p->mHe, 1, p->gdet, p->debug);
   if(p->gobs)
-    mzd_write_01(p->file_det_g, p->mLe, 1, p->gobs);
+    mzd_write_01(p->file_obs_g, p->mLe, 1, p->gobs, p->debug);
   
   return il1;
 }
@@ -1868,7 +1870,7 @@ int main(int argc, char **argv){
 #ifndef NDEBUG
       mzd_t *prodHe = csr_mzd_mul(NULL,p->mH,mE0t,1);
       if(p->pdet)
-	mzd_write_01(p->file_det_p, prodHe, 1, p->pdet);
+	mzd_write_01(p->file_det_p, prodHe, 1, p->pdet, p->debug);
 	
       mzd_add(prodHe, prodHe, p->mHe);
       if(!mzd_is_zero(prodHe)){
@@ -1876,23 +1878,24 @@ int main(int argc, char **argv){
 	  printf("syndromes difference:\n");
 	  mzd_print(prodHe);
 	}
-	ERROR("some syndromes are not matched!\n");
+	if(p->steps > 0) /** otherwise we do not care */
+	  ERROR("some syndromes are not matched!\n");
       }
       mzd_free(prodHe); prodHe = NULL;
       //      mzd_free(p->mHe);    mHe    = NULL;
 #else /* NDEBUG defined */
       if(p->pdet){
 	mzd_t *prodHe = csr_mzd_mul(NULL,p->mH,mE0t,1);
-	mzd_write_01(p->file_det_p, prodHe, 1, p->pdet);
+	mzd_write_01(p->file_det_p, prodHe, 1, p->pdet, p->debug);
 	mzd_free(prodHe);
       }
 #endif
 
       if(p->perr)
-	mzd_write_01(p->file_err_p, mE0t, 1,   p->perr);
+	mzd_write_01(p->file_err_p, mE0t, 1,   p->perr, p->debug);
       mzd_t *prodLe = csr_mzd_mul(NULL,p->mL,mE0t,1);
       if(p->pobs)
-	mzd_write_01(p->file_obs_p, prodLe, 1,p->pobs);
+	mzd_write_01(p->file_obs_p, prodLe, 1,p->pobs, p->debug);
 
       mzd_add(prodLe, prodLe, p->mLe);
 
@@ -1912,9 +1915,12 @@ int main(int argc, char **argv){
       if((p->nfail > 0) && (synd_fail >= p->nfail))
 	break;
     }
-    if(p->debug&1)
-      printf("# fail_fraction total_cnt succes_cnt\n");
-    printf(" %g %lld %lld # %s\n",(double) synd_fail/synd_tot, synd_tot, synd_tot-synd_fail, p->fdem ? p->fdem : p->finH );
+    if(p->steps > 0){/** otherwise results are invalid as we assume syndromes to match */
+      if(p->debug&1)
+	printf("# fail_fraction total_cnt succes_cnt\n");
+      printf(" %g %lld %lld # %s\n",(double) synd_fail/synd_tot, synd_tot, synd_tot-synd_fail,
+	     p->fdem ? p->fdem : p->finH );
+    }   
       
     break;
 
@@ -1998,14 +2004,14 @@ int main(int argc, char **argv){
 	      if(ans[i]<0)
 		mzd_flip_bit(pErr,0,i);
 	    if(p->perr)
-	      mzd_write_01(p->file_err_p, pErr, 0, p->perr);
+	      mzd_write_01(p->file_err_p, pErr, 0, p->perr, p->debug);
 	    if(p->pdet){
 	      mzd_row_csr_mul(pHerr,0, pErr,0, p->mHt, 1);
-	      mzd_write_01(p->file_det_p, pHerr, 0, p->pdet);
+	      mzd_write_01(p->file_det_p, pHerr, 0, p->pdet, p->debug);
 	    }
 	    if(p->pobs){
 	      mzd_row_csr_mul(pLerr,0, pErr,0, p->mLt, 1);
-	      mzd_write_01(p->file_obs_p, pLerr, 0, p->pobs);
+	      mzd_write_01(p->file_obs_p, pLerr, 0, p->pobs, p->debug);
 	    }
 	  }
 

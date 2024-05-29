@@ -376,6 +376,7 @@ maxW // upper bound for creating / reading CWs / mode=2 and mode=3
 debug 1 possibly relevant information
 debug 2 output matrix ranks
 debug 4 parsing input variables 
+debug 8 file i/o messages
 
 ## operation modes
 1. ferr specified (usual operation)

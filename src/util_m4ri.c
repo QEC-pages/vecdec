@@ -895,7 +895,7 @@ int read_01(mzd_t *M, FILE *fin, long long int *lineno, const char* fnam,
  * @param fnam file name (for debugging purposes)
  *
  */
-void mzd_write_01(FILE *fout, const mzd_t * const M, const int by_cols, const char* fnam){
+void mzd_write_01(FILE *fout, const mzd_t * const M, const int by_cols, const char* fnam, const int debug){
   if(!M)
     ERROR("expected initialized matrix 'M'!\n");
   if(!fout)
@@ -917,7 +917,9 @@ void mzd_write_01(FILE *fout, const mzd_t * const M, const int by_cols, const ch
 	printf("file write error %d:\n%s\n",err,strerror(err));
 	ERROR("error writing to file %s\n",fnam); 
       };
-    }  
+    }
+  if (debug&8)
+    printf("# wrote %d rows to 01 file %s\n", n1, fnam);
 }
 
 /** @brief write a line of `count` zeros to open file `fout` named `fnam` */
