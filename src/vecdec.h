@@ -72,8 +72,8 @@ extern "C"{
     char *fdet; /** `input file` name for detector events */
     char *fobs; /** `input file` name for observables */
     char *ferr; /** `input file` name for error vectors */
-    //    char *gdet; /** `output file` name for `generated` detector events */
-    //    char *gobs; /** `output file` name for `generated` observables */
+    char *gdet; /** `output file` name for `generated` detector events */
+    char *gobs; /** `output file` name for `generated` observables */
     //    char *gerr; /** `output file` name for `generated` error vectors */
     char *pdet; /** `output file` name for `predicted` detector events */
     char *pobs; /** `output file` name for `predicted` observables */
@@ -112,8 +112,8 @@ extern "C"{
     FILE *file_det;
     FILE *file_obs;
     //    FILE *file_err_g; /** out file, `generated` errors */
-    //    FILE *file_det_g;
-    //    FILE *file_obs_g;
+    FILE *file_det_g;
+    FILE *file_obs_g;
     FILE *file_err_p; /** out file, `predicted` errors */
     FILE *file_det_p;
     FILE *file_obs_p;
@@ -227,6 +227,7 @@ extern "C"{
   "\t fobs=[string]\t: input file with observables (01 matching lines in fdet)\n" \
   "\t fdet=[string]\t: input file with detector events (01 format)\n"   \
   "\t\t specify either 'ferr' OR a pair of 'ferr' and 'fdet' (or none for internal)\n" \
+  "\t gobs, gdet=[string]\t: out file for generated vectors (01 format)\n" \
   "\t perr, pobs, pdet=[string]\t: out file for predicted vectors (01 format)\n" \
   "\t pads=[integer]\t: if non-zero, pad vectors from `fdet` file with zeros (0)\n" \
   "\t fout=[string]\t: header for output file names ('tmp', see 'mode=3')\n" \

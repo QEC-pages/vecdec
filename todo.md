@@ -279,26 +279,32 @@ stim sample_dem \
         decoding in this case).
 
 - [ ] verification and convenience
-  - [ ] add help specific for each `mode` (use `vecdec mode=2 help`).
+  - [x] add help specific for each `mode` (use `vecdec mode=2 help`).
         To this end, first scan for `mode` (complain if it is set more
         than once), then scan for `debug` (set it), then scan for
         `help`.
   - [ ] Add the ability to read MTX complex matrices (non-CSS codes).
         See `GAP` package `QDistRnd`.
-  - [ ] Add `alpha` for modified BP, rename current `alpha` to `beta`.
+  - [ ] Also, ensure that `QDistRnd` `MTX` format is fully compatible
+        with `vecdec`.
+  - [ ] Add `alpha` for modified BP, rename current `alpha` to
+        `gamma`.  Also, introduce the parameter `beta` (see Kuo+Lai
+        papers on modified BP).
   - [ ] make sure `debug=1` prints the values relevant for each mode,
         and also give parameters of the matrices (dimensions, ranks,
         etc)
   - [ ] make `debug=2` show command line arguments
   - [ ] make `debug=4` show additional information (e.g., `QLLR`)
-  - [ ] make sure program complaints if a value not relevant to the
+  - [x] make sure program complaints if a value not relevant to the
         current mode is set on the command line
   - [ ] verify matrix orthogonality and ranks
   - [ ] more usage examples in the documentation
   - [ ] testing facility 
 
 - [ ] syndrome transformations / detector events creation
-  - [ ] syndrome transformation matrix (e.g., for subcode decoding)
+  - [ ] syndrome transformation matrix `T` (e.g., for subcode
+        decoding).  Possibly, also for transforming measurement
+        results to detection events.
 
 - [x] convenience feature: with negative seed, combine `time(null)` with the number provided
 - [ ] convenience feature: ability to combine several files with
@@ -307,11 +313,34 @@ stim sample_dem \
 - [ ] a special mode to process ( test / give the stats / select
       irreducible codewords ) in codewords files.
 
+### Enhance `mode=2` 
+- [ ] write Gaussian prefactor calculation routine for codeword
+      contribution to fail probability (in addition to current upper
+      bound and `exact`.)  Perhaps only use it for codewords of
+      sufficiently large weights.
+- [ ] Speed-up the `exact` routine
+- [ ] Enable probability `matrices` with several probability vectors
+      in `mode=2` for faster operation.  Come up with a "label" (e.g.,
+      "p=0.001", or just "0.001 0.01") string to distinguish between
+      different probability vectors (prepend the row with regular output).
+- [ ] Enable creation of such matrices (or come up with a shell script
+      to do it).
+- [ ] See if `Stim` has a guarantee on the structure of `DEM` matrices
+      as the probabilities change (but remain non-zero).
+- [ ] make a routine to keep only irreducible codewords.
+- [ ] Try to write more accurate estimates on BER beyond simple union
+      bound.  See *Bonferroni inequalities*, e.g., here
+      (https://www.probabilitycourse.com/chapter6/6_2_1_union_bound_and_exten.php)
+- [ ] In particular, account for pair correlations and construct an accurate lower
+      bound on fail probability.
 ### bugs to fix / features to add 
 - [ ] when reading a codewords file, ensure coordinates are not too big (also orthogonality)
-- [ ] OSD1 with `mode=2` can degrade the performance when number of `steps` is large.
-- [ ] better prefactor calculation in `mode=2`
-- [ ] 
+- [ ] OSD1 with `mode=2` can degrade the performance when number of
+      `steps` is large. (???)
+- [ ] verify OSD with `mode=0` and `mode=1`
+- [ ] ~~better~~ faster prefactor calculation in `mode=2`
+- [ ] use `istty()` to detect screen vs.\ redirected output in
+      `ERROR()` macro; make it color where appropriate.
 
 ### All command-line parameters 
 ```

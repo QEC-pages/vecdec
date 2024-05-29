@@ -33,7 +33,7 @@ params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50, .pads=0,
   .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8, .useP=0, .dmin=0,
   .debug=1, .fdem=NULL, .fout="tmp",
   .fdet=NULL, .fobs=NULL,  .ferr=NULL,
-  //  .gdet=NULL, .gobs=NULL,  .gerr=NULL,
+  .gdet=NULL, .gobs=NULL, // .gerr=NULL,
   .pdet=NULL, .pobs=NULL,  .perr=NULL,  
   .mode=-1, .submode=0, .use_stdout=0, 
   .LLRmin=0, .LLRmax=0, .codewords=NULL, .num_cws=0,
@@ -42,7 +42,8 @@ params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50, .pads=0,
   .vP=NULL, .vLLR=NULL, .mH=NULL, .mHt=NULL,
   .mL=NULL, .mLt=NULL, .internal=0, 
   .file_err=NULL,  .file_det=NULL, .file_obs=NULL,
-  //  .file_err_g=NULL,  .file_det_g=NULL, .file_obs_g=NULL,
+  //  .file_err_g=NULL,
+  .file_det_g=NULL, .file_obs_g=NULL,
   .file_err_p=NULL,  .file_det_p=NULL, .file_obs_p=NULL,
   .line_err=0,  .line_det=0, .line_obs=0,
   .mE=NULL, .mHe=NULL, .mLe=NULL, .mHeT=NULL, .mLeT=NULL,
@@ -1315,6 +1316,26 @@ int var_init(int argc, char **argv, params_t *p){
       if(p->mode>1)
 	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
     }
+    else if (0==strncmp(argv[i],"gdet=",5)){ /** generated detector events / 01 file */
+      if(strlen(argv[i])>5)
+        p->gdet = argv[i]+5;
+      else
+        p->gdet = argv[++i]; /**< allow space before file name */
+      if (p->debug&4)
+	printf("# read %s, gdet=%s\n",argv[i],p->gdet);
+      if(p->mode>1)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
+    }
+    else if (0==strncmp(argv[i],"gobs=",5)){/** generated observable events / 01 file */
+      if(strlen(argv[i])>5)
+        p->gobs = argv[i]+5;
+      else
+        p->gobs = argv[++i]; /**< allow space before file name */
+      if (p->debug&4)
+	printf("# read %s, gobs=%s\n",argv[i],p->gobs);
+      if(p->mode>1)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
+    }
     else if (0==strncmp(argv[i],"pdet=",5)){ /** detector events / 01 file */
       if(strlen(argv[i])>5)
         p->pdet = argv[i]+5;
@@ -1547,6 +1568,16 @@ int var_init(int argc, char **argv, params_t *p){
       if(p->file_obs_p==NULL)
 	ERROR("can't open the (predicted obs) file %s for writing\n",p->pobs);
     }
+    if(p->gdet){/** output generated syndrome */
+      p->file_det_g = fopen(p->gdet, "w");
+      if(p->file_det_g==NULL)
+	ERROR("can't open the (generated det) file %s for writing\n",p->gdet);
+    }
+    if(p->gobs){/** output generated observables */
+      p->file_obs_g = fopen(p->gobs, "w");
+      if(p->file_obs_g==NULL)
+	ERROR("can't open the (generated obs) file %s for writing\n",p->gobs);
+    }
     
     if((p->ferr) && (p->fobs))
       ERROR("With ferr=%s cannot specify fobs=%s (will calculate)\n",p->fdem, p->fobs);
@@ -1708,6 +1739,8 @@ int var_init(int argc, char **argv, params_t *p){
 
 /** @brief clean up variables and open files */
 void var_kill(params_t *p){
+  if(p->file_det_g)  fclose(p->file_det_g);
+  if(p->file_obs_g)  fclose(p->file_obs_g);  
   if(p->file_det_p)  fclose(p->file_det_p);
   if(p->file_obs_p)  fclose(p->file_obs_p);  
   if(p->file_err_p)  fclose(p->file_err_p);  
@@ -1779,6 +1812,11 @@ int do_err_vecs(params_t * const p){
   default:
     ERROR("internal=%d, this should not happen",p->internal);
   }
+  if(p->gdet)
+    mzd_write_01(p->file_det_g, p->mHe, 1, p->gdet);
+  if(p->gobs)
+    mzd_write_01(p->file_det_g, p->mLe, 1, p->gobs);
+  
   return il1;
 }
 
