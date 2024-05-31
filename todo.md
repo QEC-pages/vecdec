@@ -327,7 +327,7 @@ stim sample_dem \
       to do it).
 - [ ] See if `Stim` has a guarantee on the structure of `DEM` matrices
       as the probabilities change (but remain non-zero).
-- [ ] make a routine to keep only irreducible codewords.
+- [ ] make a routine to **keep only irreducible codewords.**
 - [ ] Try to write more accurate estimates on BER beyond simple union
       bound.  See *Bonferroni inequalities*, e.g., here
       (https://www.probabilitycourse.com/chapter6/6_2_1_union_bound_and_exten.php)
