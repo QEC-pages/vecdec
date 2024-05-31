@@ -460,7 +460,7 @@ void csr_mm_write( char * const fout, const char fext[], const csr_t * const mat
 int read_01(mzd_t *M, FILE *fin, long long int *lineno, const char* fnam,
 	    const int pads, const int debug);
 
-void mzd_write_01(FILE *fout, const mzd_t * const M, const int by_cols, const char* fnam);
+void mzd_write_01(FILE *fout, const mzd_t * const M, const int by_cols, const char* fnam, const int debug);
 void write_01_zeros(FILE *fout, const int count, const char * fnam);  
   
 /** 
