@@ -19,6 +19,7 @@
 #include <limits.h>
 #include <time.h>
 #include <unistd.h>
+#include <errno.h>
 #include <m4ri/m4ri.h>
 #include <m4ri/mzd.h>
 #include "utils.h"
@@ -29,7 +30,7 @@
 params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50, .pads=0,
   .rankH=0, .rankG=-1, .rankL=-1, 
   .lerr=-1, .maxosd=100, .bpalpha=0.5, .bpretry=1, .swait=0, .maxC=0,
-  .dW=0, .minW=INT_MAX, .maxW=0, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
+  .dW=-1, .minW=INT_MAX, .maxW=0, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
   .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8, .useP=0, .dmin=0,
   .debug=1, .fdem=NULL, .fout="tmp",
   .fdet=NULL, .fobs=NULL,  .ferr=NULL,
@@ -52,7 +53,7 @@ params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50, .pads=0,
 
 params_t prm_default={  .steps=50, .pads=0, 
   .lerr=-1, .maxosd=100, .bpalpha=0.5, .bpretry=1, .swait=0, .maxC=0,
-  .dW=0, .minW=INT_MAX, .maxW=0, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
+  .dW=-1, .minW=INT_MAX, .maxW=0, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
   .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8, .useP=0, .dmin=0,
   .debug=1, .fout="tmp", .ferr=NULL,
   .mode=-1, .submode=0, .use_stdout=0, 
@@ -107,6 +108,25 @@ qllr_t mzd_row_energ(qllr_t *coeff, const mzd_t *A, const int i){
 }
 #endif /* if 1 */
 
+/** @brief return `1` if `one` is a subvector of `two`.  
+ *  @details input vectors  `one` and `two` should have  sorted coordinates */
+static inline int is_subvec(const one_vec_t *const one, const one_vec_t *const two){
+  assert(one->weight < two->weight); /* sanity check */
+  for(int i=0, j=0; i<one->weight; i++, j++){
+    while(one->arr[i] > two->arr[j]){
+      if((++j) == two->weight)
+	return 0; 
+    }
+    if(one->arr[i] < two->arr[j])
+      return 0;
+  }
+  return 1;
+}
+
+/** @brief remove all entries from hash which contain smaller weight vector as subvectors
+ * 
+ */
+
 
 /** @brief calculate the probability of codeword in `one_vec_t` */
 static inline double do_prob_one_vec(const one_vec_t * const pvec, const params_t * const p){
@@ -121,7 +141,7 @@ static inline double do_prob_one_vec(const one_vec_t * const pvec, const params_
 
 /** @brief calculate exact fail probability for one vector */
 static inline double do_prob_one_vec_exact(const one_vec_t * const pvec, const params_t * const p){
-  const int max_len = sizeof(unsigned long)*8 -1; 
+  _maybe_unused const int max_len = sizeof(unsigned long)*8 -1; 
   double ans=0;
   const int w = pvec->weight;
   assert(w<=max_len);
@@ -245,6 +265,14 @@ long long int nzlist_read(const char fnam[], params_t *p){
   long long int count = 0, lineno;
   assert(fnam);
   FILE * f=nzlist_r_open(fnam, &lineno); /** no need to check if open */
+  if(!f){
+    if ((p->outC ==NULL) || (strcmp(fnam,p->outC)!=0)){      
+      printf("codeword input file I/O ERROR: %s, outC=%s\n", strerror(errno),p->outC);
+      ERROR("can't open file %s for writing",fnam);
+    }
+    else
+      return 0; /** not an error: `finC = outC` */
+  }
   one_vec_t *entry=NULL;
   while((entry=nzlist_r_one(f,NULL, fnam, &lineno))){
     if((p->maxC) && (count >= p->maxC))
@@ -421,6 +449,91 @@ void do_hash_clear(params_t *const p){
     free(cw);
   }
 }
+
+/** @brief remove reducible codewords from hash
+ * @input min_dW the minimum weight of a `trivial` codeword (weight increment) */
+void do_hash_remove_reduc(const int min_dW, params_t *const p){
+  int max=0, siz = p->maxW > 0 ? p->maxW+1 : 30 ;
+ 
+  one_vec_t *** by_w = calloc(siz, sizeof(one_vec_t **));
+  if(!by_w) ERROR("memory allocation");
+  one_vec_t *cw, *tmp;
+  
+  HASH_SORT(p->codewords, by_weight_pos);
+
+  /** distribute `irreducible` vectors by weight and 1st entry position */
+  int w;
+  for(w = p->minW; p->codewords != NULL ; w++){
+    if (w >= siz){
+      siz=2*siz;
+      by_w = realloc(by_w, sizeof(one_vec_t **) * siz);
+      if(!by_w) ERROR("memory allocation");
+    }
+    const size_t keylen = w * sizeof(int);
+    by_w[w]=calloc(p->nvar, sizeof(one_vec_t **));
+    HASH_ITER(hh, p->codewords, cw, tmp) {
+      if(cw->weight == w){
+	int good=1;  /** verify irreducibility */
+	for(int w1=p->minW; w1 + min_dW <= w; w1++){
+	  const int b1max = cw->arr[w-1] - w + 2 > p->nvar ? cw->arr[w-1] - w + 2 : p->nvar - 1;
+	  for(int beg1 = cw->arr[0]; beg1 < b1max; beg1++){
+	    one_vec_t *cw1, *tmp1;
+	    HASH_ITER(hh, by_w[w1][beg1], cw1, tmp1){
+	      if(is_subvec(cw1, cw)){
+		good=0;
+		break;	       
+	      }
+	    }
+	    if(!good)
+	      break;
+	  }
+	  if(!good)
+	    break;
+	}
+	HASH_DEL(p->codewords,cw);
+	if(good){
+	  //	  	  printf("adding to w=%d b=%d cw: ",w,cw->arr[0]); print_one_vec(cw);
+	  HASH_ADD(hh, by_w[w][cw->arr[0]], arr, keylen, cw);
+	}
+	else{
+	  //	  printf("skipping cw: "); print_one_vec(cw);
+	  free(cw);
+	}
+      }
+      else
+	break;
+    }
+  }
+  max=w;
+  if(p->codewords !=NULL)
+    ERROR("unexpected");
+  long long int count=0;
+  /** and now move the entries back to `codewords` */
+  for(w=p->minW; w < max; w++){
+    const int keylen = w*sizeof(int);
+    for(int beg = 0; beg < p->nvar; beg++){
+      if(by_w[w][beg]){
+	HASH_ITER(hh, by_w[w][beg], cw, tmp){
+	  HASH_DEL(by_w[w][beg],cw);
+	  HASH_ADD(hh, p->codewords, arr, keylen, cw);
+	  count++;
+	}
+      }
+    }
+    free(by_w[w]);
+  }
+  free(by_w);
+  if(p->debug & 1){
+    if (p->num_cws > count)
+      printf("# removed %lld reducible codewords count=%lld -> %lld\n",
+	     p->num_cws - count, p->num_cws, count);
+    else
+      printf("# scanned for reducible codewords, found none of %lld\n",
+	     p->num_cws);
+  }
+  p->num_cws = count;
+}
+  
 
 /** @brief see if the codeword needs to be added to hash, return pointer */
 one_vec_t * do_hash_check(const int ee[], int weight, params_t * const p){
@@ -2057,7 +2170,10 @@ int main(int argc, char **argv){
       do_hash_min(p); /** set values `minE` and `minW` from stored CWs */
     }
     do_LLR_dist(p, p->classical);
-    do_hash_fail_prob(p); /** output results */
+    //    do_hash_fail_prob(p); /** output results */
+    if(p->steps)
+      do_hash_remove_reduc(1,p);
+    do_hash_fail_prob(p); /** output results */    
     if(p->outC){
       char * name;
       if(p->fdem)
