@@ -89,7 +89,25 @@ static inline int by_energy(void *a, void *b){
   else /** Ea == Eb */
     return 0;
 }
+  
+  /** @brief compare two `one_vec_t` structures by weight and 1st position */
+static inline int by_weight_pos(void *a, void *b){
+  const one_vec_t *pa = (one_vec_t *) a;
+  const one_vec_t *pb = (one_vec_t *) b;
+  if (pa->weight < pb->weight)
+    return -1;
+  else if (pa->weight > pb->weight)
+    return +1;
+  else{ /** Wa == Wb */
+    if (pa->arr[0] < pb->arr[0])
+      return -1;
+    else if (pa->arr[0] > pb->arr[0])
+      return +1;
+  }
+  return 0;
+}
 
+  
   /** @brief helper function to sort `int`
    *  use `qsort(array, len, sizeof(rci_t), cmp_rci_t);`
    */

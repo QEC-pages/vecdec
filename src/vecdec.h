@@ -85,7 +85,7 @@ extern "C"{
     double *vP; /** probability vector (total of `n`) */
     qllr_t *vLLR; /** vector of LLRs (total of `n`) */
     int minW; /** minimum weight of a codeword or error vector found */
-    int dW; /** weight over `minW` to keep the CW or error vector in a hash (-1: no limit; default `0`) */
+    int dW; /** if non-negative, weight over `minW` to keep the CW or error vector in a hash (default: `0`, `minW` only) */
     int maxW; /** if non-zero, skip any vectors above this weight (default `0`, no upper limit) */
     qllr_t minE; /** minimum energy of a codeword or error vector found */
     qllr_t dE; /** energy over `minE` to keep the CW or error vector in a hash (default: -1, no limit on `E`) */
@@ -355,18 +355,17 @@ extern "C"{
   "\t Use up to 'steps' random information set (RIS) steps\n"		\
   "\t unless no new codewords (fault vectors) have been found for 'swait' steps.\n" \
   "\t Use 'steps=0' to just use the codewords from the file \n"		\
-  "\t Keep vectors of weight up to 'dW' above min weight found.\n"	\
-  "\t       and energy up to 'dE' above minimum E found (sum of LLRs).\n" \
+  "\t With `dW>=0`, keep vectors of weight up to 'dW' above min weight found.\n" \
+  "\t With `dE>=0`, keep vectors of energy up to 'dE' above minimum E found (sum of LLRs).\n" \
   "\t When 'maxC' is non-zero, generate up to 'maxC' unique codewords.\n" \
   "\t If 'outC' is set, write full list of CWs to this file.\n"		\
   "\t If 'finC' is set, read initial set of CWs from this file.\n"	\
   "\t Accuracy and performance are determined by parameters \n"		\
-  "\t 'steps' (number of BP rounds), 'lerr' (OSD level, defaul=-1, on OSD).\n" \
-  "\t and 'maxosd', the number of columns for OSD in levels 2 and above.\n" \
+  "\t 'steps' (number of BP rounds), 'lerr' (OSD level, defaul=-1, no OSD).\n" \
   "\t Specify a single DEM file 'fdem', or 'finH', 'finL', and 'finP'\n" \
   "\t separately (either 'finL' or 'finG' is needed for a quantum code).\n" \
   "\t Use 'useP' to override error probability values in DEM file.   \n" \
-  "\t                                                       \n"	
+  "\n"	
 
 #define HELP3 /** help for `mode=3` */  \
   " mode=3 : Export matrices associated with the code.\n" \
