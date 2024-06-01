@@ -268,7 +268,7 @@ long long int nzlist_read(const char fnam[], params_t *p){
   if(!f){
     if ((p->outC ==NULL) || (strcmp(fnam,p->outC)!=0)){      
       printf("codeword input file I/O ERROR: %s, outC=%s\n", strerror(errno),p->outC);
-      ERROR("can't open file %s for writing",fnam);
+      ERROR("can't open file %s for reading",fnam);
     }
     else
       return 0; /** not an error: `finC = outC` */
