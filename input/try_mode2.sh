@@ -18,7 +18,7 @@ maxW=12
 cnt0=0
 echo "# generating codewords for finH=$Hx finG=$Hz steps=100000"
 for((i=1; i<=10; i++)) ; do
-    $vecdec debug=0 mode=2 finH=$Hx finG=$Hz steps=100000 useP=0.01 maxW=$maxW finC=$cws outC=$cws
+    $vecdec debug=0 mode=2 finH=$Hx finG=$Hz steps=100000 useP=0.01 maxW=$maxW finC=$cws outC=$cws dW=-1
     cnt=`grep -c -e "^[1-9]" $cws`
     echo i=$i $cnt0 $cnt 
     if((cnt==cnt0)) ; then
