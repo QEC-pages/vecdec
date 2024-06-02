@@ -194,8 +194,8 @@ fi
 gnuplot <<EOF
 set logs x
 set logs y
-set key right bot
-plot "$outfile" index 0 us 2:3 tit "d=3 est maxW=3" with lines lc "red"
+set key left top
+plot [:][:1] "$outfile" index 0 us 2:3 tit "d=3 est maxW=3" with lines lc "red"
 replot "" index 1  us 2:3 tit "d=3 est maxW=4" with lines lc "red" dashtype (3,2)
 replot "" index 2  us 2:3 tit "d=3 est maxW=5" with lines lc "red" dashtype (4,2,1,2)
 replot "" index 3  us 2:3 tit "d=3 mode=0" with lines lc "purple" 
@@ -221,7 +221,7 @@ set term pdfcairo
 set out "surf_est.pdf"
 replot
 set out 
-
+set term pop
 EOF
     
 # Binary variables, StDev(x)=sqrt((x2-x1^2/n)/n)=sqrt(p(1-p))
