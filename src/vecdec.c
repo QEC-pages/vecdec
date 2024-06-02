@@ -112,7 +112,9 @@ qllr_t mzd_row_energ(qllr_t *coeff, const mzd_t *A, const int i){
  *  @details input vectors  `one` and `two` should have  sorted coordinates */
 static inline int is_subvec(const one_vec_t *const one, const one_vec_t *const two){
   assert(one->weight < two->weight); /* sanity check */
-  for(int i=0, j=0; i<one->weight; i++, j++){
+  for(int i=0, j=0; i < one->weight; i++){
+    if(++j == two->weight)
+      return 0; 
     while(one->arr[i] > two->arr[j]){
       if((++j) == two->weight)
 	return 0; 
@@ -480,6 +482,11 @@ void do_hash_remove_reduc(const int min_dW, params_t *const p){
 	    one_vec_t *cw1, *tmp1;
 	    HASH_ITER(hh, by_w[w1][beg1], cw1, tmp1){
 	      if(is_subvec(cw1, cw)){
+		if(p->debug & 1){
+		  printf("reducible pair w1=%d w=%d:\n",w1,w);
+		  print_one_vec(cw1);
+		  print_one_vec(cw);
+		}
 		good=0;
 		break;	       
 	      }
