@@ -2178,8 +2178,15 @@ int main(int argc, char **argv){
     }
     do_LLR_dist(p, p->classical);
     //    do_hash_fail_prob(p); /** output results */
-    if(p->steps)
-      do_hash_remove_reduc(1,p);
+    if(p->steps){
+      /** TODO: make more intelligent distance estimate or param */
+      int dx= p->fdem == NULL ? 1 : 3 ;      
+      if (p->debug&1)
+	printf("# try to remove reducible codewords dx=%d ...\n",dx);
+      do_hash_remove_reduc(dx,p);
+      if (p->debug&1)
+	printf("# done\n");
+    }
     do_hash_fail_prob(p); /** output results */    
     if(p->outC){
       char * name;
