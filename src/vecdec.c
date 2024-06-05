@@ -44,8 +44,8 @@ params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50, .pads=0,
   .mL=NULL, .mLt=NULL, .internal=0, 
   .file_err=NULL,  .file_det=NULL, .file_obs=NULL,
   //  .file_err_g=NULL,
-  .file_det_g=NULL, .file_obs_g=NULL,
-  .file_err_p=NULL,  .file_det_p=NULL, .file_obs_p=NULL,
+  .file_gdet=NULL, .file_gobs=NULL,
+  .file_perr=NULL,  .file_pdet=NULL, .file_pobs=NULL,
   .line_err=0,  .line_det=0, .line_obs=0,
   .mE=NULL, .mHe=NULL, .mLe=NULL, .mHeT=NULL, .mLeT=NULL,
   .nzH=0, .nzL=0
@@ -1676,28 +1676,28 @@ int var_init(int argc, char **argv, params_t *p){
     }
 
     if(p->perr){/** output predicted errors */
-      p->file_err_p = fopen(p->perr, "w");
-      if(p->file_err_p==NULL)
+      p->file_perr = fopen(p->perr, "w");
+      if(p->file_perr==NULL)
 	ERROR("can't open the (predicted err) file %s for writing\n",p->perr);
     }
     if(p->pdet){/** output predicted syndrome (only really `makes sense for BP`) */
-      p->file_det_p = fopen(p->pdet, "w");
-      if(p->file_det_p==NULL)
+      p->file_pdet = fopen(p->pdet, "w");
+      if(p->file_pdet==NULL)
 	ERROR("can't open the (predicted det) file %s for writing\n",p->pdet);
     }
     if(p->pobs){/** output predicted observables */
-      p->file_obs_p = fopen(p->pobs, "w");
-      if(p->file_obs_p==NULL)
+      p->file_pobs = fopen(p->pobs, "w");
+      if(p->file_pobs==NULL)
 	ERROR("can't open the (predicted obs) file %s for writing\n",p->pobs);
     }
     if(p->gdet){/** output generated syndrome */
-      p->file_det_g = fopen(p->gdet, "w");
-      if(p->file_det_g==NULL)
+      p->file_gdet = fopen(p->gdet, "w");
+      if(p->file_gdet==NULL)
 	ERROR("can't open the (generated det) file %s for writing\n",p->gdet);
     }
     if(p->gobs){/** output generated observables */
-      p->file_obs_g = fopen(p->gobs, "w");
-      if(p->file_obs_g==NULL)
+      p->file_gobs = fopen(p->gobs, "w");
+      if(p->file_gobs==NULL)
 	ERROR("can't open the (generated obs) file %s for writing\n",p->gobs);
     }
     
@@ -1861,11 +1861,11 @@ int var_init(int argc, char **argv, params_t *p){
 
 /** @brief clean up variables and open files */
 void var_kill(params_t *p){
-  if(p->file_det_g)  fclose(p->file_det_g);
-  if(p->file_obs_g)  fclose(p->file_obs_g);  
-  if(p->file_det_p)  fclose(p->file_det_p);
-  if(p->file_obs_p)  fclose(p->file_obs_p);  
-  if(p->file_err_p)  fclose(p->file_err_p);  
+  if(p->file_gdet)  fclose(p->file_gdet);
+  if(p->file_gobs)  fclose(p->file_gobs);  
+  if(p->file_pdet)  fclose(p->file_pdet);
+  if(p->file_pobs)  fclose(p->file_pobs);  
+  if(p->file_perr)  fclose(p->file_perr);  
   if(p->file_det)  fclose(p->file_det);
   if(p->file_obs)  fclose(p->file_obs);  
   if(p->file_err)  fclose(p->file_err);  
@@ -1935,9 +1935,9 @@ int do_err_vecs(params_t * const p){
     ERROR("internal=%d, this should not happen",p->internal);
   }
   if(p->gdet)
-    mzd_write_01(p->file_det_g, p->mHe, 1, p->gdet, p->debug);
+    mzd_write_01(p->file_gdet, p->mHe, 1, p->gdet, p->debug);
   if(p->gobs)
-    mzd_write_01(p->file_obs_g, p->mLe, 1, p->gobs, p->debug);
+    mzd_write_01(p->file_gobs, p->mLe, 1, p->gobs, p->debug);
   
   return il1;
 }
@@ -1990,7 +1990,7 @@ int main(int argc, char **argv){
 #ifndef NDEBUG
       mzd_t *prodHe = csr_mzd_mul(NULL,p->mH,mE0t,1);
       if(p->pdet)
-	mzd_write_01(p->file_det_p, prodHe, 1, p->pdet, p->debug);
+	mzd_write_01(p->file_pdet, prodHe, 1, p->pdet, p->debug);
 	
       mzd_add(prodHe, prodHe, p->mHe);
       if(!mzd_is_zero(prodHe)){
@@ -2006,16 +2006,16 @@ int main(int argc, char **argv){
 #else /* NDEBUG defined */
       if(p->pdet){
 	mzd_t *prodHe = csr_mzd_mul(NULL,p->mH,mE0t,1);
-	mzd_write_01(p->file_det_p, prodHe, 1, p->pdet, p->debug);
+	mzd_write_01(p->file_pdet, prodHe, 1, p->pdet, p->debug);
 	mzd_free(prodHe);
       }
 #endif
 
       if(p->perr)
-	mzd_write_01(p->file_err_p, mE0t, 1,   p->perr, p->debug);
+	mzd_write_01(p->file_perr, mE0t, 1,   p->perr, p->debug);
       mzd_t *prodLe = csr_mzd_mul(NULL,p->mL,mE0t,1);
       if(p->pobs)
-	mzd_write_01(p->file_obs_p, prodLe, 1,p->pobs, p->debug);
+	mzd_write_01(p->file_pobs, prodLe, 1,p->pobs, p->debug);
 
       mzd_add(prodLe, prodLe, p->mLe);
 
@@ -2075,11 +2075,11 @@ int main(int argc, char **argv){
 	if(mzd_row_is_zero(p->mHeT,ierr)){
 	  //	  printf("ierr=%d of tot=%d\n",ierr,ierr_tot);
 	  if(p->perr) 
-	    write_01_zeros(p->file_err_p, p->mH->cols, p->perr); /** trivial prediction */
+	    write_01_zeros(p->file_perr, p->mH->cols, p->perr); /** trivial prediction */
 	  if(p->pdet) 
-	    write_01_zeros(p->file_det_p, p->mH->rows, p->pdet); /** trivial prediction */
+	    write_01_zeros(p->file_pdet, p->mH->rows, p->pdet); /** trivial prediction */
 	  if(p->pobs) 
-	    write_01_zeros(p->file_obs_p, p->mL->rows, p->pobs); /** trivial prediction */
+	    write_01_zeros(p->file_pobs, p->mL->rows, p->pobs); /** trivial prediction */
 	  cnt_update(CONV_TRIVIAL,0); /** trivial convergence after `0` steps */
 	  if(mzd_row_is_zero(p->mLeT,ierr)){
 	    cnt[SUCC_TRIVIAL]++;
@@ -2124,14 +2124,14 @@ int main(int argc, char **argv){
 	      if(ans[i]<0)
 		mzd_flip_bit(pErr,0,i);
 	    if(p->perr)
-	      mzd_write_01(p->file_err_p, pErr, 0, p->perr, p->debug);
+	      mzd_write_01(p->file_perr, pErr, 0, p->perr, p->debug);
 	    if(p->pdet){
 	      mzd_row_csr_mul(pHerr,0, pErr,0, p->mHt, 1);
-	      mzd_write_01(p->file_det_p, pHerr, 0, p->pdet, p->debug);
+	      mzd_write_01(p->file_pdet, pHerr, 0, p->pdet, p->debug);
 	    }
 	    if(p->pobs){
 	      mzd_row_csr_mul(pLerr,0, pErr,0, p->mLt, 1);
-	      mzd_write_01(p->file_obs_p, pLerr, 0, p->pobs, p->debug);
+	      mzd_write_01(p->file_pobs, pLerr, 0, p->pobs, p->debug);
 	    }
 	  }
 

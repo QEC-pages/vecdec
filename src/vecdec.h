@@ -112,11 +112,11 @@ extern "C"{
     FILE *file_det;
     FILE *file_obs;
     //    FILE *file_err_g; /** out file, `generated` errors */
-    FILE *file_det_g;
-    FILE *file_obs_g;
-    FILE *file_err_p; /** out file, `predicted` errors */
-    FILE *file_det_p;
-    FILE *file_obs_p;
+    FILE *file_gdet;
+    FILE *file_gobs;
+    FILE *file_perr; /** out file, `predicted` errors */
+    FILE *file_pdet;
+    FILE *file_pobs;
     long long int line_err; /** current line of `file_err` */
     long long int line_det; /** current line of `file_det` */
     long long int line_obs; /** current line of `file_obs` */
