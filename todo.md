@@ -386,7 +386,38 @@ debug 8 file i/o messages
 3. fobs specified; generate (pobs and pdet) or (perr) (new)
 4. none is specified, generate gerr (and/or others), do no decoding. (new)
    make it "mode=0" ???
+```
 
+## `mode=0` to fix
 
+1. `wish1` disable `finL`, `fobs`, `useP` requirement if `steps=0` or
+   (`fdet` and `perr`) are specified
+2. `wish2` for some reason `gobs` returns nothing
+3. `wish3` with `mode=0` with `steps=0`,  `fobs`, `finL`, `ferr` count decoding success 
+   (do not require `useP` and `finH`)
+
+1. use `paste` to paste columns from two or more files together 
+2. use `cut` to cut columns from a file (specify a pattern).
+3. write a (shell ???) script to cut a sub block out of an `mtx` matrix (?)
+
+## here is an AWK script to replace positions except 1-5 with astericks 
+```sh
+awk '{print substr($0,1,5) gensub(/./,"*","g",substr($0,6))}'  tmpA.01
+## SED to achieve the same :
+sed -e 's/./*/g6' tmpA.01
+```
+
+overall the script:
+```
+input: intervals [(0 r1), (q2 r2), (q3 r3) ...] and [(0,c1), (b2,c2),,, ]; DEM
+1. generate initial DET and OBS files
+2. write H, L, P from DEM (vecdec mode=3)
+3. for each interval
+  - cut the DET rows (cut)
+  - cut the matrix: rowblock [A B 0] into A and B
+  - use A and existing errors `e` to construct modified DET (A e+s)
+  - use B to decode (vecdec); output error vector using `perr`
+  - use (cut) and (paste) to update errors `e`
+4. At the end use `e` as the predicted error to verify the observables 
 
 ```
