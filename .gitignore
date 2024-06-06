@@ -37,8 +37,8 @@ TAGS
 # Executables
 src/vecdec
 vecdec
-src/iter_dec
-iter_dec
+mtx_sub
+src/mtx_sub
 *.exe
 *.out
 *.app
