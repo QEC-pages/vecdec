@@ -41,12 +41,14 @@ params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50, .pads=0,
   .finH=NULL, .finL=NULL, .finG=NULL, .finK=NULL, .finP=NULL,
   .finC=NULL, .outC=NULL, 
   .vP=NULL, .vLLR=NULL, .mH=NULL, .mHt=NULL,
-  .mL=NULL, .mLt=NULL, .internal=0, 
+  .mL=NULL, .mLt=NULL,  .mA=NULL, .mAt=NULL,
+  .internal=0, 
   .file_err=NULL,  .file_det=NULL, .file_obs=NULL,
   //  .file_err_g=NULL,
   .file_gdet=NULL, .file_gobs=NULL,
   .file_perr=NULL,  .file_pdet=NULL, .file_pobs=NULL,
-  .line_err=0,  .line_det=0, .line_obs=0,
+  .line_err=0,   .line_er0=0,  .line_det=0, .line_obs=0,
+  .mE0=NULL,
   .mE=NULL, .mHe=NULL, .mLe=NULL, .mHeT=NULL, .mLeT=NULL,
   .nzH=0, .nzL=0
 };
@@ -1360,6 +1362,20 @@ int var_init(int argc, char **argv, params_t *p){
       if (p->debug&4)
 	printf("# read %s, finH=%s\n",argv[i],p->finH);
     }
+    else if (0==strncmp(argv[i],"finA=",5)){ /** `finA` */
+      if(strlen(argv[i])>5)
+        p->finA = argv[i]+5;
+      else
+        p->finA = argv[++i]; /**< allow space before file name */
+      if (p->debug&4)
+	printf("# read %s, finA=%s\n",argv[i],p->finA);
+      if(p->mode>1)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
+      p->mA=csr_mm_read(p->finA, p->mA, 0, p->debug);
+      if(p->mAt != NULL)
+	ERROR("must specify finA=%s only once\n",p->finA);
+      p->mAt=csr_transpose(NULL,p->mA);
+    }
     else if (0==strncmp(argv[i],"finP=",5)){ /** `finP` probabilities */
       if(strlen(argv[i])>5)
         p->finP = argv[i]+5;
@@ -1435,6 +1451,16 @@ int var_init(int argc, char **argv, params_t *p){
         p->ferr = argv[++i]; /**< allow space before file name */
       if (p->debug&4)
 	printf("# read %s, ferr=%s\n",argv[i],p->ferr);
+      if(p->mode>1)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
+    }
+    else if (0==strncmp(argv[i],"fer0=",5)){ /** errors / 01 file */
+      if(strlen(argv[i])>5)
+        p->fer0 = argv[i]+5;
+      else
+        p->fer0 = argv[++i]; /**< allow space before file name */
+      if (p->debug&4)
+	printf("# read %s, fer0=%s\n",argv[i],p->fer0);
       if(p->mode>1)
 	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
     }
@@ -1577,6 +1603,11 @@ int var_init(int argc, char **argv, params_t *p){
   }
   /** at this point we should have `H` matrix for sure */
   assert(p->mH);
+  
+  if(p->mA){
+    if(p->mA->rows != p->nchk)
+      ERROR("DET dimension mismatch nvar=%d and A %d by %d\n",p->nvar, p->mA->rows,p->mA->cols);
+  }
 
   if(p->finL){
     p->mL=csr_mm_read(p->finL, p->mL, 0, p->debug);
@@ -1700,6 +1731,15 @@ int var_init(int argc, char **argv, params_t *p){
       if(p->file_gobs==NULL)
 	ERROR("can't open the (generated obs) file %s for writing\n",p->gobs);
     }
+
+    if((p->fer0)||(p->finA)){
+      if((p->fer0==0)||(p->finA==NULL)||((p->fdet==0)&&(p->ferr==0))){
+	printf("The parameters fer0=%s [e0] and finA=%s [A] must be set together, \n"
+	       "also with either 'fdet' [s] or 'ferr' [e]; \n"
+	       "to modify det evens as s'=s+A*e0 or s'=H*e+A*e0\n",p->fer0,p->finA);      
+	ERROR("invalid input\n");
+      }
+    }
     
     if((p->ferr) && (p->fobs))
       ERROR("With ferr=%s cannot specify fobs=%s (will calculate)\n",p->fdem, p->fobs);
@@ -1712,6 +1752,11 @@ int var_init(int argc, char **argv, params_t *p){
       ERROR(" mode=%d fdet='%s' need observables file 'fobs'\n",
 	    p->mode, p->fdet);
 
+    if(p->fer0){
+      p->file_er0=fopen(p->fer0, "r");
+      if(p->file_er0==NULL)
+	ERROR("can't open the (er0) file %s for reading\n",p->fdet);
+    }
     if(p->fdet){/** expect both `fdet` and `fobs` to be defined */
       p->file_det=fopen(p->fdet, "r");
       if(p->file_det==NULL)
@@ -1729,6 +1774,7 @@ int var_init(int argc, char **argv, params_t *p){
     else{
       p->internal=1;
     }
+    
     if(p->ferr)
       p->internal=2; /* generate observables and detector events from errors provided */
     else if ((! p->fobs) && (! p->fdet))
@@ -1801,6 +1847,8 @@ int var_init(int argc, char **argv, params_t *p){
     p->mLe = mzd_init(p->ncws,  p->nvec); /** each column `L*e` vector */
     if(p->ferr)
       p->mE = mzd_init(p->nvar, p->nvec);
+    if(p->fer0)
+      p->mE0 = mzd_init(p->mA->cols, p->nvec);
     if(p->debug &1){
       printf("# mode=%d, running %s decoder ",  p->mode, p->mode==0 ? "vecdec RIS" : "BP");
       switch(p->internal){
@@ -1810,6 +1858,8 @@ int var_init(int argc, char **argv, params_t *p){
       default: ERROR("this should not happen");
 	break;
       }
+      if(p->fer0)
+	printf("modifying DET events +A*e0 with A %s and e0 %s files\n",p->finA, p->fer0);
     }
 
     /** initialize the counters */
@@ -1869,6 +1919,7 @@ void var_kill(params_t *p){
   if(p->file_det)  fclose(p->file_det);
   if(p->file_obs)  fclose(p->file_obs);  
   if(p->file_err)  fclose(p->file_err);  
+  if(p->file_er0)  fclose(p->file_er0);  
   if(p->vP){        free(p->vP);    p->vP = NULL;  }
   if(p->vLLR){      free(p->vLLR);  p->vLLR = NULL;}
   if(LLR_table){ free(LLR_table);  LLR_table = NULL;}
@@ -1894,15 +1945,28 @@ int do_err_vecs(params_t * const p){
   int il1=p->nvec, il2;
   /** prepare error vectors ************************************************************/
   switch(p->internal){
-  case 0: /** read `det` and `obs` files */
+  case 0: /** read `det` and `obs` files (each line a column) */
     il1=read_01(p->mHe,p->file_det, &p->line_det, p->fdet, p->pads, p->debug);
-    /** TODO: enable external processing of observables */
-    il2=read_01(p->mLe,p->file_obs, &p->line_obs, p->fobs, 0, p->debug);
-    if(il1!=il2)
-      ERROR("mismatched DET %s (line %lld) and OBS %s (line %lld) files!",
-	    p->fdet,p->line_det,p->fobs,p->line_obs);
-    if(p->debug&1)
-      printf("read %d det/obs pairs\n",il1);		 
+    if(p->fobs){
+      il2=read_01(p->mLe,p->file_obs, &p->line_obs, p->fobs, 0, p->debug);
+      if(il1!=il2)
+	ERROR("mismatched DET %s (line %lld) and OBS %s (line %lld) files!",
+	      p->fdet,p->line_det,p->fobs,p->line_obs);
+      if(p->debug&1)
+	printf("# read %d det/obs pairs\n",il1);
+    }
+    else
+      if(p->debug&1)
+	printf("# read %d det events\n",il1);
+    if(p->fer0){
+      il2=read_01(p->mE0,p->file_er0, &p->line_er0, p->fer0, 0, p->debug);
+      if(il1!=il2)
+	ERROR("mismatched DET %s (line %lld) and ER0 %s (line %lld) files!",
+	      p->fdet,p->line_det,p->fer0,p->line_er0);
+      csr_mzd_mul(p->mHe,p->mA,p->mE0,0);
+      if(p->debug&1)
+	printf("updated %d det += A*e0 events\n",il1);
+    }
     break;
   case 1: /** generate errors internally */
     do_errors(p->mHe,p->mLe,p->mHt, p->mLt, p->vP);
@@ -1921,15 +1985,19 @@ int do_err_vecs(params_t * const p){
     if(p->debug&1)
       printf("# read %d errors from file %s\n",il1,p->ferr);
     csr_mzd_mul(p->mHe,p->mH,p->mE,1);
-    csr_mzd_mul(p->mLe,p->mL,p->mE,1);
-    if((p->debug&128)&&(p->nvar <= 256)&&(p->nvec <= 256)&&(p->debug &512)){
-      printf("error columns read:\n");
-      mzd_print(p->mE);
-      //      printf("He:\n");
-      //      mzd_print(mHe);
-      //      printf("Le:\n");
-      //      mzd_print(mLe);
+    if(p->mL)
+      csr_mzd_mul(p->mLe,p->mL,p->mE,1);
+    if(p->fer0){
+      il2=read_01(p->mE0,p->file_er0, &p->line_er0, p->fer0, 0, p->debug);
+      if(il1!=il2)
+	ERROR("mismatched ERR %s (line %lld) and ER0 %s (line %lld) files!",
+	      p->ferr,p->line_err,p->fer0,p->line_er0);
+      csr_mzd_mul(p->mHe,p->mA,p->mE0,0);
+      if(p->debug&1)
+	printf("computed %d det events using H*e+A*e0\n",il1);
     }
+    else if(p->debug&1)
+      printf("computed %d det events H*e\n",il1);
     break;
   default:
     ERROR("internal=%d, this should not happen",p->internal);

@@ -140,6 +140,45 @@ csr_t * csr_transpose(csr_t *dst, const csr_t *p){
   return dst;
 }
 
+/** 
+ * @brief create a submatrix of a CSR matrix
+ * return resulting matrix
+ * TODO: add more detailed error messages
+ * TODO: add code for List of Pairs 
+ */
+
+csr_t * csr_submatrix(const csr_t * const p, int minR, int maxR, int minC, int maxC){
+  const int rows=p->rows, cols=p->cols;
+  if(p->nz != -1)
+    ERROR("nz=%d, List of Pairs format not supported\n",p->nz);
+  if((minR<0) || (minR >= maxR) || (maxR > rows)||
+     (minC<0) || (minC >= maxC) || (maxC > cols))
+    ERROR("invalid parameters specified");	  
+  int new_nz=0;
+  for(int j=minR; j< maxR; j++){
+    for(int i = p->p[j]; i < p->p[j+1]; i++){
+      int col = p->i[i];
+      if ((col >= minC) && (col < maxC))
+	new_nz++;
+    }
+  }
+  csr_t *submat = csr_init(NULL,maxR-minR,maxC-minC, new_nz);
+  
+  int idx=0, j, j0;
+  for(j0=minR, j=0; j< maxR; j0++, j++){
+    submat->p[j]=idx; 
+    for(int i = p->p[j0]; i < p->p[j0+1]; i++){
+      int col0 = p->i[i];
+      if ((col0 >= minC) && (col0 < maxC))
+	submat->i[idx++] = col0 - minC;
+    }
+  }
+  submat->p[j]=idx;
+  submat->nz=-1;
+  
+  return submat;
+}
+
 
 /**
  * Convert CSR sparse binary matrix to MZD

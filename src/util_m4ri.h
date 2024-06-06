@@ -332,6 +332,13 @@ static inline int twomat_gauss_one(mzd_t *M, mzd_t *S, const int idx, const int 
  */
   csr_t * csr_transpose(csr_t *dst, const csr_t *p);
 
+
+/** 
+ * @brief return a submatrix 
+ * 
+ * rows minR <= i < maxR, cols minC <= j < maxC
+ */
+  csr_t * csr_submatrix(const csr_t * const p, int minR, int maxR, int minC, int maxC);  
   
 /**
  * Convert CSR sparse binary matrix to MZD

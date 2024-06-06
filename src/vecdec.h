@@ -61,6 +61,7 @@ extern "C"{
     int use_stdout; /** with mode=3 */
     int debug; /** `debug` information */ 
     char *finH; /** `input file` name for Hx=H (if input separately or a classical code) */
+    char *finA; /** `input file` name for additional matrix A*e0+ H*e=s (for mode=0,1 only) with `s` given explicitly as `fdet` */
     char *finL; /** `input file` name for Lx=L (if input separately or a classical code) */
     char *finK; /** `input file` name for Lz=K (not used much) */
     char *finG; /** `input file` name for Hz=G (must use separate input) */
@@ -71,7 +72,8 @@ extern "C"{
     char *fdem; /** `input file` name for detector error model (`DEM`) */
     char *fdet; /** `input file` name for detector events */
     char *fobs; /** `input file` name for observables */
-    char *ferr; /** `input file` name for error vectors */
+    char *ferr; /** `input file` name for error vectors `e`  */
+    char *fer0; /** `input file` name for error vectors `e0` */
     char *gdet; /** `output file` name for `generated` detector events */
     char *gobs; /** `output file` name for `generated` observables */
     //    char *gerr; /** `output file` name for `generated` error vectors */
@@ -91,6 +93,7 @@ extern "C"{
     qllr_t dE; /** energy over `minE` to keep the CW or error vector in a hash (default: -1, no limit on `E`) */
     double dEdbl; /** temp value */
     int nzH, nzL; /** count of non-zero entries in `H` and `L` */
+    csr_t *mA, *mAt; /** sparse version of `A` (by rows) and its transposed */
     csr_t *mH; /** sparse version of `H`=`Hx` (by rows) */
     csr_t *mHt; /** sparse version of H (by columns) */
     csr_t *mL; /** sparse version of `L`=`Lx` (by rows) */
@@ -109,6 +112,7 @@ extern "C"{
     one_vec_t *codewords; /** `hash table` with found codewords */
     long long int num_cws; /** `number` of codewords in the `hash` */
     FILE *file_err;
+    FILE *file_er0;
     FILE *file_det;
     FILE *file_obs;
     //    FILE *file_err_g; /** out file, `generated` errors */
@@ -117,9 +121,11 @@ extern "C"{
     FILE *file_perr; /** out file, `predicted` errors */
     FILE *file_pdet;
     FILE *file_pobs;
+    long long int line_er0; /** current line of `file_er0` */
     long long int line_err; /** current line of `file_err` */
     long long int line_det; /** current line of `file_det` */
     long long int line_obs; /** current line of `file_obs` */
+    mzd_t *mE0;
     mzd_t *mE;
     mzd_t *mHe;
     mzd_t *mLe;
@@ -214,6 +220,7 @@ extern "C"{
   "\t finL=[string]\t: file with logical dual check matrix Lx (mm or alist)\n" \
   "\t finK=[string]\t: file with logical check matrix Lz (mm or alist)\n" \
   "\t finP=[string]\t: input file for probabilities (mm or a column of doubles)\n" \
+  "\t finA=[string]\t: additional matrix to correct syndromes (mm or alist)\n" \
   "\t finC=[string]\t: input file name for codewords in `nzlist` format\n" \
   "\t\t (space is OK in front of file names to enable shell completion)\n" \
   "\t outC=[string]\t: output file name for codewords in `nzlist` format\n" \
@@ -224,6 +231,9 @@ extern "C"{
   "\t\t for a quantum code specify 'fdem' OR 'finH' and ( 'finL' OR 'finG' );\n" \
   "\t\t for classical just 'finH' (and optionally the dual matrix 'finL')\n" \
   "\t ferr=[string]\t: input file with error vectors (01 format)\n"	\
+  "\t fer0=[string]\t: add'l error to correct det events 's+A*e0' (01 format)\n" \
+  "\t\t where matrix 'A' is given via 'finA', 's' via 'fdet', and 'e0'\n" \
+  "\t\t are the additional error vectors.\n"				\
   "\t fobs=[string]\t: input file with observables (01 matching lines in fdet)\n" \
   "\t fdet=[string]\t: input file with detector events (01 format)\n"   \
   "\t\t specify either 'ferr' OR a pair of 'ferr' and 'fdet' (or none for internal)\n" \
