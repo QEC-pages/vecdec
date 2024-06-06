@@ -68,5 +68,8 @@ src/mtx_sub
 # python cache directory
 __pycache__/
 
+# emacs created directory
+auto/
+
 # IDE files
 .idea/
