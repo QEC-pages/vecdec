@@ -191,12 +191,13 @@ int var_init(int argc, char **argv, par_t *p){
 	ERROR("should be a valid matrix row < %d\n",p->mat->rows);
       if (p->mat->p[dbg+1] == p->mat->p[dbg] )
 	ERROR("row %d is zero\n",dbg);
-      else{
-	if(p->debug & 1)
-	  printf("# row=%d, last column:\n",dbg);
-	int next = p->mat->p[dbg+1];
-	printf("%d\n", p->mat->i[next-1]);
-      }
+      long long pair = csr_min_max_blk(p->mat, dbg, dbg);
+      int min = pair % p->mat->cols;
+      int max = pair / p->mat->cols;
+      if(p->debug & 1)
+	printf("# row %d, first and last non-zero columns:\n",dbg);
+      printf("%d %d\n", min, max);      
+
     }
     else if (sscanf(argv[i],"rows=%d,%n",&dbg,&pos)==1){ /** `row1, row2` to check */
       int r1=dbg, r2;
@@ -207,23 +208,12 @@ int var_init(int argc, char **argv, par_t *p){
 	printf("# read %s, row range to check %d, %d\n",argv[i],r1,r2);
       if(!p->mat)
 	ERROR("must provide the matrix first, use fin=file_name\n");
-      if((r1 > r2) || (r2 >= p->mat->rows))
-	ERROR("should be a non-empty range of valid matrixs rows < %d\n",p->mat->rows);
-      int max=-1;
-      for(int j=r1; j<= r2; j++){
-	if (p->mat->p[j+1] != p->mat->p[j] ){
-	  int next = p->mat->p[j+1];
-	  if(max < p->mat->i[next-1])
-	    max = p->mat->i[next-1];
-	}
-      }
-      if(max<0)
-	ERROR("empty row range specified r1=%d r2=%d\n",r1,r2);
-      else{
-	if(p->debug & 1)
-	  printf("# row range %d<= i < %d, last column:\n",r1,r2);
-	printf("%d\n", max);
-      }
+      long long pair = csr_min_max_blk(p->mat, r1, r2);
+      int min = pair % p->mat->cols;
+      int max = pair / p->mat->cols;
+      if(p->debug & 1)
+	printf("# row range [%d .. %d], first and last non-zero columns:\n",r1,r2);
+      printf("%d %d\n", min, max);      
     }
     else if((strcmp(argv[i],"--help")==0)
             ||(strcmp(argv[i],"-h")==0)

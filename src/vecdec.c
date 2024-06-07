@@ -1587,7 +1587,7 @@ int var_init(int argc, char **argv, params_t *p){
 
   if(p->finH){
     if(! p->finL){
-      if((p->fobs) || (p->fdet))
+      if(((p->fobs) || (p->fdet)) && (p->perr == NULL))
 	ERROR("Without L matrix, cannot specify fdet=%s or fobs=%s\n",
 	      p->fdet ? p->fdet : "",  p->fobs ? p->fobs : "");      
     }
@@ -1748,7 +1748,7 @@ int var_init(int argc, char **argv, params_t *p){
     if((p->fdet==NULL)&&(p->fobs!=NULL))
       ERROR(" mode=%d fobs='%s' need detection events file 'fdet'\n",
 	    p->mode, p->fobs);
-    if ((p->fdet!=NULL)&&(p->fobs==NULL))
+    if ((p->fdet!=NULL)&&(p->fobs==NULL)&&(p->perr == NULL))
       ERROR(" mode=%d fdet='%s' need observables file 'fobs'\n",
 	    p->mode, p->fdet);
 
@@ -1761,9 +1761,11 @@ int var_init(int argc, char **argv, params_t *p){
       p->file_det=fopen(p->fdet, "r");
       if(p->file_det==NULL)
 	ERROR("can't open the (det) file %s for reading\n",p->fdet);
-      p->file_obs=fopen(p->fobs, "r");
-      if(p->file_obs==NULL)
-	ERROR("can't open the (obs) file %s for reading\n",p->fobs);
+      if(p->fobs){
+	p->file_obs=fopen(p->fobs, "r");
+	if(p->file_obs==NULL)
+	  ERROR("can't open the (obs) file %s for reading\n",p->fobs);
+      }
     }
     else if (p->ferr){
       p->file_err=fopen(p->ferr, "r");
@@ -1837,9 +1839,11 @@ int var_init(int argc, char **argv, params_t *p){
     p->file_det=fopen(p->fdet, "r");
     if(p->file_det==NULL)
       ERROR("can't open the (det) file %s for reading\n",p->fdet);
-    p->file_obs=fopen(p->fobs, "r");
-    if(p->file_obs==NULL)
-      ERROR("can't open the (obs) file %s for reading\n",p->fobs);
+    if(p->fobs){
+      p->file_obs=fopen(p->fobs, "r");
+      if(p->file_obs==NULL)
+	ERROR("can't open the (obs) file %s for reading\n",p->fobs);
+    }
   }
 
   if(p->mode<=1){ /* vecdec RIS or BP decoder */
@@ -1852,7 +1856,7 @@ int var_init(int argc, char **argv, params_t *p){
     if(p->debug &1){
       printf("# mode=%d, running %s decoder ",  p->mode, p->mode==0 ? "vecdec RIS" : "BP");
       switch(p->internal){
-      case 0: printf("use DET and OBS files\n"); break;
+      case 0: printf("use DET %s\n", p->fobs ? "and OBS files" : "file"); break;
       case 1: printf("internal error generator\n"); break;
       case 2: printf("reading error vectors from ERR file\n"); break;
       default: ERROR("this should not happen");
@@ -2103,13 +2107,17 @@ int main(int argc, char **argv){
       if((p->nfail > 0) && (synd_fail >= p->nfail))
 	break;
     }
-    if(p->steps > 0){/** otherwise results are invalid as we assume syndromes to match */
-      if(p->debug&1)
-	printf("# fail_fraction total_cnt succes_cnt\n");
-      printf(" %g %lld %lld # %s\n",(double) synd_fail/synd_tot, synd_tot, synd_tot-synd_fail,
-	     p->fdem ? p->fdem : p->finH );
-    }   
-      
+    if (!((p->fdet)&&(p->fobs==NULL)&&(p->perr))){ /** except in the case of partial decoding */
+      if(p->steps > 0){  /** otherwise results are invalid as we assume syndromes to match */
+	if(p->debug&1)
+	  printf("# fail_fraction total_cnt succes_cnt\n");
+	printf(" %g %lld %lld # %s\n",(double) synd_fail/synd_tot, synd_tot, synd_tot-synd_fail,
+	       p->fdem ? p->fdem : p->finH );
+      }   
+    }
+    else if(p->debug&1)
+      printf("# all finished\n");
+
     break;
 
   case 1: /** `mode=1` various BP flavors */    
@@ -2202,22 +2210,26 @@ int main(int argc, char **argv){
 	      mzd_write_01(p->file_pobs, pLerr, 0, p->pobs, p->debug);
 	    }
 	  }
-
-	  if((succ_BP)||(succ_OSD)){              /** `convergence success`  */
-	    mzd_t * const obsrow = mzd_init_window(p->mLeT, ierr,0, ierr+1,p->mLeT->ncols);
-	    if(syndrome_check(ans, obsrow, p->mL, p)){
-	      cnt[SUCC_TOT]++;
-	      if(succ_BP)
-		cnt[SUCC_BP]++;
-	      else
-		cnt[SUCC_OSD]++;
+	  if (!((p->fdet)&&(p->fobs==NULL)&&(p->perr))){ /** except the case of partial decoding */  
+	    if((succ_BP)||(succ_OSD)){ /** `convergence success`  */	      
+	      mzd_t * const obsrow = mzd_init_window(p->mLeT, ierr,0, ierr+1,p->mLeT->ncols);
+	      if(syndrome_check(ans, obsrow, p->mL, p)){
+		cnt[SUCC_TOT]++;
+		if(succ_BP)
+		  cnt[SUCC_BP]++;
+		else
+		  cnt[SUCC_OSD]++;
+	      }
+	      mzd_free(obsrow);
 	    }
-	    mzd_free(obsrow);
-	  }
-	  mzd_free(srow);
 	  
-	  if(p->debug&16)
-	    printf("i=%lld of %lld succ=%d\n",ierr,ierr_tot,succ_BP);
+	    if(p->debug&16)
+	      printf("i=%lld of %lld succ=%d\n",ierr,ierr_tot,succ_BP);
+	  }
+	  else if(p->debug&16)
+	    printf("i=%lld of %lld\n",ierr,ierr_tot);
+
+	  mzd_free(srow);
 	}
 	if((p->nfail) && cnt[TOTAL]-cnt[SUCC_TOT] >= p->nfail)
 	  break;
