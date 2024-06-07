@@ -115,6 +115,24 @@ int csr_max_row_wght(const csr_t *p){
   return wmax;
 }
 
+long long int csr_min_max_blk(csr_t *mat, int r1, int r2){
+  if((r1 > r2) || (r2 >= mat->rows))
+    ERROR("r1=%d r2=%d; must be a non-empty range of valid matrixs rows < %d\n",r1,r2,mat->rows);
+  long long int max=-1, min=mat->cols;
+  for(int j=r1; j<= r2; j++){
+    if (mat->p[j+1] > mat->p[j] ){
+      int p1 = mat->p[j];      /* index of 1st column in this row */
+      int p2 = mat->p[j+1] - 1;/* index of last col in this row */
+      if(max < mat->i[p2])
+	max = mat->i[p2];
+      if(min > mat->i[p1])
+	min = mat->i[p1];
+    }
+  }
+  if(max<0)
+    ERROR("specified row interval r1=%d r2=%d is empty \n",r1,r2);
+  return min + (mat->cols) * max;
+}
 
 /** 
  * transpose compressed CSR matrix, 
@@ -138,6 +156,45 @@ csr_t * csr_transpose(csr_t *dst, const csr_t *p){
   dst->nz=nz;
   csr_compress(dst);
   return dst;
+}
+
+/** 
+ * @brief create a submatrix of a CSR matrix
+ * return resulting matrix
+ * TODO: add more detailed error messages
+ * TODO: add code for List of Pairs 
+ */
+
+csr_t * csr_submatrix(const csr_t * const p, int minR, int maxR, int minC, int maxC){
+  const int rows=p->rows, cols=p->cols;
+  if(p->nz != -1)
+    ERROR("nz=%d, List of Pairs format not supported\n",p->nz);
+  if((minR<0) || (minR >= maxR) || (maxR > rows)||
+     (minC<0) || (minC >= maxC) || (maxC > cols))
+    ERROR("invalid parameters specified");	  
+  int new_nz=0;
+  for(int j=minR; j< maxR; j++){
+    for(int i = p->p[j]; i < p->p[j+1]; i++){
+      int col = p->i[i];
+      if ((col >= minC) && (col < maxC))
+	new_nz++;
+    }
+  }
+  csr_t *submat = csr_init(NULL,maxR-minR,maxC-minC, new_nz);
+  
+  int idx=0, j, j0;
+  for(j0=minR, j=0; j0< maxR; j0++, j++){
+    submat->p[j]=idx; 
+    for(int i = p->p[j0]; i < p->p[j0+1]; i++){
+      int col0 = p->i[i];
+      if ((col0 >= minC) && (col0 < maxC))
+	submat->i[idx++] = col0 - minC;
+    }
+  }
+  submat->p[j]=idx;
+  submat->nz=-1;
+  
+  return submat;
 }
 
 

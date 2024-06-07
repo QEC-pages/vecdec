@@ -45,7 +45,7 @@ if (( $# > 0 )) ; then # we actually mean to do the calculation
 	  $vecdec mode=2 steps=$((d0*d0*Ntotal)) fdem= $fnam.dem finC=${fnam}.nz outC=${fnam}.nz dW=2
 	  nn=`grep -c -e "^[1-9]" ${fnam}.nz`;
 	  if ((nn!=n0)); then
-	      echo round $i of 15 d=$d0 n0=$n0 nn=$nn try again
+	      echo round $i of 25 d=$d0 n0=$n0 nn=$nn try again
 	      n0=$nn;
 	  else
 	      echo done nn=$nn

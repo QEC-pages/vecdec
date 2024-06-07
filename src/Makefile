@@ -34,6 +34,9 @@ vecdec: ${VECDEC_OBJS} ${VECDEC_XTRA} ${VECDEC_HDRS} Makefile
 %.o: %.c ${VECDEC_HDRS} Makefile 
 	${CC} ${CFLAGS} -c $<
 
+mtx_sub: mtx_sub.o utils.h util_m4ri.h util_m4ri.o utils.o mmio.o Makefile 
+	${CPP} ${OPT} ${WARN} -o mtx_sub $< util_m4ri.o utils.o mmio.o -l m4ri
+
 clean:
 	rm -f *~ *.tmp *.out *.o ../input/*~ TAGS
 
