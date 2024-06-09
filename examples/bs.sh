@@ -62,7 +62,9 @@ EOF
       # analyze errors 
       $stim analyze_errors --in $fnam.stim > $fnam.dem
       
-      $vecdec debug=0 steps=$((d0*d0*d0)) nvec=$Ntotal f=$fnam.dem > $fnam.out
+      $vecdec debug=0 mode=0.1 steps=$((d0*d0*d0)) nvec=$Ntotal f=$fnam.dem > $fnam.out
+      #$vecdec debug=0 mode=0.1 steps=$((d0*d0*d0)) nvec=$Ntotal finH=bsH.mmx finG=bsG.mmx finP=bsP.mmx
+      #$vecdec debug=0 mode=0.1 steps=$((d0*d0*d0)) nvec=$Ntotal fdem=$fnam.dem
       echo $d0 $p1 `cat $fnam.out` # show the output
       echo $d0 $p1 `cat $fnam.out` >> $outfile # save to big file        
     done # loop over p1

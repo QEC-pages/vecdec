@@ -145,25 +145,30 @@ csr_t * csr_transpose(csr_t *dst, const csr_t *p){
  * Convert CSR sparse binary matrix to MZD
  * allocate dst if needed (must be correct size or NULL)
  */
-mzd_t *mzd_from_csr(mzd_t *dst, const csr_t *p) {
-  int m=p->rows, n=p->cols, nz=p->nz;
-  if (dst == NULL) 
-    dst = mzd_init(m,n);
-  else if ((dst->nrows != m) || (dst->ncols != n)) 
-    ERROR("Wrong size for return matrix.\n");
-  else
-    mzd_set_ui(dst,0); /* clear bits */
+mzd_t *mzd_from_csr(mzd_t *mat, const csr_t * const orig) {
+    if (orig == NULL) {
+        ERROR("Null pointer input for orig!\n");
+        return NULL;
+    }
 
-  if(nz==-1){ // binary CSR matrix in Compressed Row Form
-    for(int i=0;i<m;i++)
-      for(int j=p->p[i]; j < p->p[i+1] ; j++)
-	mzd_write_bit(dst, i, p->i[j], 1);
-  }
-  else{  // binary CSR matrix in Pair Form
-    for(int i=0;i<p->nz;i++)
-      mzd_write_bit(dst, p->p[i],p->i[i],1);
-  }
-  return dst;
+    mat = mzd_init(orig->rows, orig->cols); // Initialize the matrix
+
+    if (mat == NULL) {
+        ERROR("Failed to initialize dense matrix.\n");
+        return NULL;
+    }
+
+    for (int i = 0; i < orig->rows; i++) {
+        for (int j = orig->p[i]; j < orig->p[i+1]; j++) {
+            if (j >= orig->nzmax) {
+                ERROR("Index out of bounds in CSR matrix.\n");
+                mzd_free(mat);
+                return NULL;
+            }
+            mzd_write_bit(mat, i, orig->i[j], 1);
+        }
+    }
+    return mat;
 }
 
 /**

@@ -24,6 +24,7 @@
 #include "util_m4ri.h"
 #include "vecdec.h"
 #include "qllr.h"
+#include <stdbool.h>
 
 params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50, .pads=0,
   .rankH=0, .rankG=-1, .rankL=-1, 
@@ -874,6 +875,642 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
   return mEt0;
 }
 
+/**
+ * @brief Calculate the energy change when a row from mH is combined with a row from mEt0.
+ * @param coeff Coefficients array for energy calculation.
+ * @param A The matrix containing current error vectors.
+ * @param H The parity-check matrix.
+ * @param i The index of the row in A to be updated.
+ * @param row_to_add The index of the row in H to add to the i-th row of A.
+ * @return The change in energy.
+ */
+qllr_t calculate_energy_change(qllr_t *coeff, const mzd_t *A, const mzd_t *B, const int i, const int row_to_add) {
+    qllr_t energy_change = 0;
+    // Loop over all columns to calculate the change in energy due to the row addition.
+    for (rci_t j = 0; j < A->ncols; ++j) {
+        // Check if there is a change in the bit after addition.
+        // If the bits in A and B are different, the result is 1 (change), otherwise it's 0 (no change).
+        if (mzd_read_bit(A, i, j) != mzd_read_bit(B, row_to_add, j)) {
+            // If the original bit in A is 1, the energy will decrease (because the bit flips to 0).
+            // If the original bit in A is 0, the energy will increase (because the bit flips to 1).
+            energy_change += (mzd_read_bit(A, i, j) ? -coeff[j] : coeff[j]);
+        }
+    }
+    return energy_change;
+}
+
+/**
+ * Decompress a CSR matrix if it is in compressed form.
+ * @param mat The CSR matrix to decompress.
+ */
+void csr_decompress(csr_t *mat) {
+    if (mat == NULL || mat->nz != -1) {
+        return;  // Matrix is already decompressed or invalid
+    }
+
+    int nz = mat->p[mat->rows];
+    int *new_i = malloc(nz * sizeof(int));
+    if (new_i == NULL) {
+        ERROR("Memory allocation failed in csr_decompress.\n");
+        return;
+    }
+
+    int idx = 0;
+    for (int i = 0; i < mat->rows; i++) {
+        for (int j = mat->p[i]; j < mat->p[i + 1]; j++) {
+            new_i[idx++] = mat->i[j];
+        }
+    }
+
+    free(mat->i);
+    mat->i = new_i;
+    mat->nz = nz;
+}
+
+
+/**
+ * @brief Copy a CSR matrix
+ * @param src The source CSR matrix to copy from.
+ * @return A new CSR matrix that is a copy of the source.
+ */
+csr_t *csr_copy(const csr_t *src) {
+    if (src == NULL) {
+        return NULL;
+    }
+
+    csr_t *dst = malloc(sizeof(csr_t));
+    if (dst == NULL) {
+        ERROR("Memory allocation failed for CSR matrix copy.\n");
+        return NULL;
+    }
+
+    dst->rows = src->rows;
+    dst->cols = src->cols;
+    dst->nzmax = src->nzmax;
+
+    dst->p = malloc((src->rows + 1) * sizeof(int));
+    if (dst->p == NULL) {
+        free(dst);
+        ERROR("Memory allocation failed for CSR matrix data.\n");
+        return NULL;
+    }
+
+    dst->i = malloc(src->nzmax * sizeof(int));
+    if (dst->i == NULL) {
+        free(dst->p);
+        free(dst);
+        ERROR("Memory allocation failed for CSR matrix data.\n");
+        return NULL;
+    }
+
+    memcpy(dst->p, src->p, (src->rows + 1) * sizeof(int));
+    memcpy(dst->i, src->i, src->nzmax * sizeof(int));
+
+    dst->nz = src->nz;
+
+    return dst;
+}
+
+
+
+/**
+ * @brief Add row j of matrix B to row i of matrix A, and store the result in row i of matrix A.
+ * @param A The CSR matrix to be updated.
+ * @param i The row index in matrix A to be updated.
+ * @param B The CSR matrix providing the row to be added.
+ * @param j The row index in matrix B to be added to row i of matrix A.
+ */
+void csr_add_row_to_row(csr_t *A, int i, const csr_t *B, int j) {
+    if (A == NULL || B == NULL || i >= A->rows || j >= B->rows) {
+        ERROR("Invalid input parameters in csr_add_row_to_row.\n");
+        return;
+    }
+
+    if (A->nz != -1 || B->nz != -1) {
+        ERROR("Matrices must be in compressed form for csr_add_row_to_row.\n");
+        return;
+    }
+
+    int start_A = A->p[i];
+    int end_A = A->p[i + 1];
+    int start_B = B->p[j];
+    int end_B = B->p[j + 1];
+
+    int *toggle_columns = calloc(A->cols, sizeof(int));
+    if (toggle_columns == NULL) {
+        ERROR("Memory allocation failed in csr_add_row_to_row.\n");
+        return;
+    }
+
+    for (int idx_A = start_A; idx_A < end_A; ++idx_A) {
+        toggle_columns[A->i[idx_A]] ^= 1;
+    }
+    for (int idx_B = start_B; idx_B < end_B; ++idx_B) {
+        toggle_columns[B->i[idx_B]] ^= 1;
+    }
+
+    int nz_required = 0;
+    for (int col = 0; col < A->cols; col++) {
+        if (toggle_columns[col]) {
+            nz_required++;
+        }
+    }
+
+    int old_nz = end_A - start_A;
+    int total_nonzeros = A->p[A->rows];
+    int new_nzmax = total_nonzeros - old_nz + nz_required;
+
+    if (new_nzmax > A->nzmax) {
+        int *new_i = realloc(A->i, new_nzmax * sizeof(int));
+        if (new_i == NULL) {
+            free(toggle_columns);
+            ERROR("Memory reallocation failed in csr_add_row_to_row.\n");
+            return;
+        }
+        A->i = new_i;
+        A->nzmax = new_nzmax;
+    }
+
+    if (nz_required != old_nz) {
+        memmove(&A->i[start_A + nz_required], &A->i[end_A], (total_nonzeros - end_A) * sizeof(int));
+    }
+
+    int idx = 0;
+    for (int col = 0; col < A->cols; col++) {
+        if (toggle_columns[col]) {
+            A->i[start_A + idx] = col;
+            idx++;
+        }
+    }
+
+    int new_nz = idx;
+    //A->p[i + 1] = A->p[i] + new_nz;
+    for (int k = i + 1; k <= A->rows; k++) {
+        A->p[k] += new_nz - old_nz;
+    }
+
+    free(toggle_columns);
+}
+
+
+
+
+
+
+/**
+ * @brief Calculate the energy of row `i` in CSR matrix.
+ * @param coeff Coefficients array for energy calculation.
+ * @param csr The CSR matrix.
+ * @param i The row index.
+ * @return The energy of the row.
+ */
+qllr_t csr_row_energ(qllr_t *coeff, const csr_t *csr, const int i) {
+    if (coeff == NULL || csr == NULL || i >= csr->rows || i < 0) {
+        ERROR("Invalid input parameters in csr_row_energ: coeff=%p, csr=%p, i=%d, rows=%d\n",
+              coeff, csr, i, (csr ? csr->rows : -1));
+        return 0;
+    }
+
+    qllr_t ans = 0;
+
+    if (csr->nz != -1) {
+        ERROR("Matrix must be in compressed form for csr_row_energ.\n");
+        return 0;
+    }
+
+    int start = csr->p[i];
+    int end = csr->p[i + 1];
+
+    if (start < 0 || end > csr->p[csr->rows] || start > end) {
+        ERROR("Invalid row pointer range in csr_row_energ: start=%d, end=%d, nz=%d\n", start, end, csr->nz);
+        return 0;
+    }
+
+    for (int j = start; j < end; ++j) {
+        int col = csr->i[j];
+        if (col < 0 || col >= csr->cols) {
+            ERROR("Invalid column index in csr_row_energ: col=%d, cols=%d\n", col, csr->cols);
+            return 0;
+        }
+        ans += coeff[col];
+    }
+
+    return ans;
+}
+
+
+
+
+/**
+ * @brief Calculate the energy change when a row from csr B is combined with a row from csr A.
+ * @param coeff Coefficients array for energy calculation.
+ * @param A The CSR matrix containing current error vectors.
+ * @param B The CSR matrix containing the rows to add.
+ * @param i The index of the row in A to be updated.
+ * @param row_to_add The index of the row in B to add to the i-th row of A.
+ * @return The change in energy.
+ */
+qllr_t csr_calculate_energy_change(qllr_t *coeff, const csr_t *A, const csr_t *B, const int i, const int row_to_add) {
+    if (coeff == NULL || A == NULL || B == NULL || i >= A->rows || row_to_add >= B->rows || i < 0 || row_to_add < 0) {
+        ERROR("Invalid input parameters in csr_calculate_energy_change: coeff=%p, A=%p, B=%p, i=%d, row_to_add=%d\n",
+              coeff, A, B, i, row_to_add);
+        return 0;
+    }
+
+    qllr_t energy_change = 0;
+
+    if (A->nz != -1 || B->nz != -1) {
+        ERROR("Matrices must be in compressed form for csr_calculate_energy_change.\n");
+        return 0;
+    }
+
+    int start_A = A->p[i];
+    int end_A = A->p[i + 1];
+    int start_B = B->p[row_to_add];
+    int end_B = B->p[row_to_add + 1];
+
+    int *toggle_columns = calloc(A->cols, sizeof(int));
+    if (toggle_columns == NULL) {
+        ERROR("Memory allocation failed in csr_calculate_energy_change.\n");
+        return 0;
+    }
+
+    for (int j = start_A; j < end_A; ++j) {
+        toggle_columns[A->i[j]] ^= 1;
+    }
+
+    for (int j = start_B; j < end_B; ++j) {
+        int col = B->i[j];
+        if (toggle_columns[col]) {
+            energy_change -= coeff[col];
+        } else {
+            energy_change += coeff[col];
+        }
+        toggle_columns[col] ^= 1;
+    }
+
+    free(toggle_columns);
+    return energy_change;
+}
+
+
+
+
+
+
+
+
+
+
+/**
+ * @brief Replace the row i of destination CSR matrix with the row i of source CSR matrix.
+ * @param dest The destination CSR matrix.
+ * @param src The source CSR matrix.
+ * @param i The row index to replace.
+ */
+void csr_replace_row(csr_t *dest, const csr_t *src, int i) {
+    if (dest == NULL || src == NULL || i >= dest->rows || i >= src->rows) {
+        ERROR("Invalid input parameters in csr_replace_row.\n");
+        return;
+    }
+
+    if (dest->nz != -1) {
+        csr_compress(dest);
+    }
+    if (src->nz != -1) {
+        csr_compress((csr_t *)src);
+    }
+
+    int start_src = src->p[i];
+    int end_src = src->p[i + 1];
+    int start_dest = dest->p[i];
+    int end_dest = dest->p[i + 1];
+    int nz_src = end_src - start_src;
+    int nz_dest = end_dest - start_dest;
+
+    int new_nz = dest->p[dest->rows] - nz_dest + nz_src;
+    if (dest->nzmax < new_nz) {
+        dest->nzmax = new_nz * 2;
+        dest->i = realloc(dest->i, dest->nzmax * sizeof(int));
+        if (dest->i == NULL) {
+            ERROR("Memory reallocation failed in csr_replace_row.\n");
+            return;
+        }
+    }
+
+    if (nz_src != nz_dest) {
+        memmove(&dest->i[start_dest + nz_src], &dest->i[end_dest], (dest->p[dest->rows] - end_dest) * sizeof(int));
+    }
+
+    memcpy(&dest->i[start_dest], &src->i[start_src], nz_src * sizeof(int));
+
+    for (int j = i + 1; j <= dest->rows; j++) {
+        dest->p[j] += nz_src - nz_dest;
+    }
+
+    dest->nz = new_nz;
+}
+
+
+
+
+
+
+/**
+ * @brief Executes simulated annealing to adjust error matrix based on energy changes.
+ * @param mEt0_csr The initial error matrix in CSR format to be updated.
+ * @param mHz CSR matrix representing the syndrome structure.
+ * @param mEt_csr CSR matrix where the results are stored.
+ * @param p Structure containing model parameters and error probabilities.
+ */
+void simulate_annealing_mcmc(csr_t *mEt0_csr, params_t const * const p,int i) {
+    int max_iterations = 5000;
+    double final_temperature = 1.0;
+    double cooling_rate = 1.0;
+    double reheating_rate = 1.0;
+    int check_interval = 100;
+    double min_acceptance_rate = 0.2;
+
+    //double temperature = csr_row_energ(p->vLLR,mEt0_csr,i);
+    double temperature = 1.0;
+    int iterations = 0;
+    int accepted_updates = 0;
+
+    //while (iterations < max_iterations && temperature >= final_temperature) {
+    while (iterations < max_iterations && temperature >= final_temperature) {
+            iterations++;
+            unsigned int seed = time(NULL);  // Use the current time as seed for randomness
+            int row_to_add = rand_r(&seed) % (p->mG->rows); //here no fault
+            
+            
+            double delta_energy = csr_calculate_energy_change(p->vLLR, mEt0_csr, p->mG, i, row_to_add);
+
+            if (delta_energy < 0 || exp(-delta_energy / temperature) > (double)rand_r(&seed) / RAND_MAX) {
+                csr_add_row_to_row(mEt0_csr, i, p->mG, row_to_add);
+                accepted_updates++;
+            }
+
+            if (iterations % check_interval == 0) {
+                double acceptance_rate = (double)accepted_updates / iterations;
+                if (acceptance_rate < min_acceptance_rate) {
+                    temperature *= reheating_rate;
+                }
+            }
+            temperature *= cooling_rate;
+        }
+    //double energ=csr_row_energ(p->vLLR,mEt0_csr,i);
+    //printf("energy=%f",energ);
+}
+
+/**
+ * @brief Solves the equation to determine which ensemble has a lower free energy.
+ * @param avg_exp_U_A_minus_U_B_A The average of <exp(U_A - U_B)>_A.
+ * @param avg_exp_U_A_minus_U_B_B The average of <exp(U_A - U_B)>_B.
+ * @param N_A The number of MCMC steps in ensemble A.
+ * @param N_B The number of MCMC steps in ensemble B.
+ * @return 1 if ensemble A is preferred, -1 if ensemble B is preferred.
+ */
+int solve_free_energy(double avg_exp_U_A_minus_U_B_A, double avg_exp_U_A_minus_U_B_B, int N_A, int N_B) {
+    double x = 1.0;
+    double tolerance = 1e-6;
+    int max_iterations = 1000;
+
+    for (int iter = 0; iter < max_iterations; ++iter) {
+        double f_x = x - (1 + avg_exp_U_A_minus_U_B_A * N_B / N_A * x) /
+                           ((avg_exp_U_A_minus_U_B_A * x) * (1 + avg_exp_U_A_minus_U_B_B * N_B / N_A * x));
+        double f_x_prime = 1 - ((avg_exp_U_A_minus_U_B_A * N_B / N_A * (1 + avg_exp_U_A_minus_U_B_B * N_B / N_A * x)) -
+                               (1 + avg_exp_U_A_minus_U_B_A * N_B / N_A * x) * avg_exp_U_A_minus_U_B_A * 
+                               (1 + avg_exp_U_A_minus_U_B_B * N_B / N_A * x)) /
+                               pow((avg_exp_U_A_minus_U_B_A * x * (1 + avg_exp_U_A_minus_U_B_B * N_B / N_A * x)), 2);
+        double x_new = x - f_x / f_x_prime;
+
+        if (fabs(x_new - x) < tolerance) {
+            x = x_new;
+            break;
+        }
+        x = x_new;
+    }
+
+    if (x >= 1.0) {
+        return 1;
+    } else {
+        return -1;
+    }
+}
+
+
+void BAR_MCMC(csr_t *mEt0_csr, csr_t *mEt_csr, params_t const * const p, int i) {
+    int max_iterations = 5000;
+    double temperature = 1.0;
+    int num_ensembles = p->mK->rows + 1;
+
+    // Create arrays to store flipped error vectors for each Lz row and the original error vector
+    csr_t **error_vectors = malloc(num_ensembles * sizeof(csr_t *));
+    // if (error_vectors == NULL) {
+    //     ERROR("Memory allocation failed for error_vectors array.\n");
+    //     return;
+    // }
+    //printf("Malloc done\n");
+
+    // Initialize error vectors
+    error_vectors[0] = csr_copy(mEt0_csr);
+
+    // if (error_vectors[0] == NULL) {
+    //     ERROR("Memory allocation failed for error_vectors[0].\n");
+    //     //free(error_vectors);
+    //     return;
+    // }
+    for (int k = 1; k < num_ensembles; k++) {
+        error_vectors[k] = csr_copy(mEt0_csr);
+        
+        // if (error_vectors[k] == NULL) {
+        //     ERROR("Memory allocation failed for error_vectors[%d].\n", k);
+        //     for (int j = 0; j < k; j++) {
+        //         csr_free(error_vectors[j]);
+        //     }
+        //     //free(error_vectors);
+        //     return;
+        // }
+        csr_add_row_to_row(error_vectors[k], i, p->mK, k - 1);
+    }
+    //printf("Initialize ensembles done\n");
+
+    // Variables for accumulating statistics
+    double exp_U_A_minus_U_B_A = 0.0;
+    double exp_U_A_minus_U_B_B = 0.0;
+    int N_A = 0;
+    int N_B = 0;
+    double U_A_A = 0;
+    double U_B_A = 0;
+    double U_A_B = 0;
+    double U_B_B = 0;
+    csr_t *current_ensemble = csr_copy(error_vectors[0]);
+    // if (current_ensemble == NULL) {
+    //     ERROR("Memory allocation failed for current_ensemble.\n");
+    //     for (int k = 0; k < num_ensembles; k++) {
+    //         csr_free(error_vectors[k]);
+    //     }
+    //     //free(error_vectors);
+    //     return;
+    // }
+    //printf("Current ensemble init done\n");
+
+    // Iterate through each ensemble starting from the second one
+    for (int k = 1; k < num_ensembles; k++) {
+        exp_U_A_minus_U_B_A = 0.0;
+        exp_U_A_minus_U_B_B = 0.0;
+        N_A = 0;
+        N_B = 0;
+
+        // Perform MCMC in the current ensemble
+        for (int iterations = 0; iterations < max_iterations; iterations++) {
+            unsigned int seed = time(NULL);
+            int row_to_add = rand_r(&seed) % (p->mG->rows);
+            // if (error_vectors[k] == NULL || current_ensemble == NULL) {
+            //     ERROR("NULL pointer in BAR_MCMC at iteration %d, ensemble %d\n", iterations, k);
+            //     return;
+            // }
+
+            // Perform MCMC step for the current ensemble
+            double delta_energy_A = csr_calculate_energy_change(p->vLLR, current_ensemble, p->mG, i, row_to_add);
+            //printf("delta_A\n");
+            if (delta_energy_A < 0 || exp(-delta_energy_A / temperature) > (double)rand_r(&seed) / RAND_MAX) {
+                csr_add_row_to_row(current_ensemble, i, p->mG, row_to_add);
+                csr_add_row_to_row(error_vectors[k], i, p->mG, row_to_add);
+            }
+            //printf("Add_done_A\n");
+            U_A_A = csr_row_energ(p->vLLR, current_ensemble, i);// csr_row_energ has memory leakage
+            //printf("Energ_done_A1\n");
+            U_B_A = csr_row_energ(p->vLLR, error_vectors[k], i);// csr_row_energ has memory leakage
+            //printf("Energ_done_A2\n");
+            exp_U_A_minus_U_B_A += exp(U_A_A - U_B_A);
+            //printf("exp_A\n");
+            N_A++;
+        }
+        //printf("Current ensemble done\n");
+
+        // Perform MCMC in the k-th ensemble
+        for (int iterations = 0; iterations < max_iterations; iterations++) {
+            unsigned int seed = time(NULL);
+            int row_to_add = rand_r(&seed) % (p->mG->rows);
+            // if (error_vectors[k] == NULL || current_ensemble == NULL) {
+            //     ERROR("NULL pointer in BAR_MCMC at iteration %d, ensemble %d\n", iterations, k);
+            //     return;
+            // }
+
+            // Perform MCMC step for the k-th ensemble
+            double delta_energy_B = csr_calculate_energy_change(p->vLLR, error_vectors[k], p->mG, i, row_to_add);
+            //printf("delta_B\n");
+            if (delta_energy_B < 0 || exp(-delta_energy_B / temperature) > (double)rand_r(&seed) / RAND_MAX) {
+                csr_add_row_to_row(error_vectors[k], i, p->mG, row_to_add);
+                csr_add_row_to_row(current_ensemble, i, p->mG, row_to_add);
+            }
+            //printf("Add_done_B\n");
+            U_A_B = csr_row_energ(p->vLLR, current_ensemble, i);
+            //printf("Energ_done_B1\n");
+            U_B_B = csr_row_energ(p->vLLR, error_vectors[k], i);
+            //printf("Energ_done_B2\n");
+            exp_U_A_minus_U_B_B += exp(U_A_B - U_B_B);
+            //printf("exp_B\n");
+            N_B++;
+        }
+        //printf("k-th ensemble done\n");
+
+        double average_exp_U_A_minus_U_B_A = exp_U_A_minus_U_B_A / N_A;
+        double average_exp_U_A_minus_U_B_B = exp_U_A_minus_U_B_B / N_B;
+        int result = solve_free_energy(average_exp_U_A_minus_U_B_A, average_exp_U_A_minus_U_B_B, N_A, N_B);
+
+        if (result == -1) {
+            csr_free(current_ensemble);
+            current_ensemble = csr_copy(error_vectors[k]);
+            // if (current_ensemble == NULL) {
+            //     ERROR("Memory allocation failed for current_ensemble during update.\n");
+            //     for (int k = 0; k < num_ensembles; k++) {
+            //         csr_free(error_vectors[k]);
+            //     }
+            //     free(error_vectors);
+            //     return;
+            // }
+        }
+        //printf("Update current ensemble\n");
+    }
+    //printf("BAR done\n");
+
+    csr_replace_row(mEt_csr, current_ensemble, i);
+    //printf("Replace done\n");
+
+    for (int k = 0; k < num_ensembles; k++) {
+        //printf("Freeing error_vector[%d]\n", k);
+        csr_free(error_vectors[k]);
+    }
+    free(error_vectors);
+    csr_free(current_ensemble);
+    //printf("Free done\n");
+}
+
+
+/**
+ * @brief Simulated Annealing-based syndrome decoding routine with improved stopping mechanism. (CSR form)
+ * @param mS Matrix with syndromes (each column).
+ * @param p Structure with error model information.
+ * @return Binary matrix of min weight errors for each syndrome.
+ */
+mzd_t *do_decode_MC_csr(mzd_t *mS, params_t const * const p) {
+    mzd_t *mHx_dense = mzd_from_csr(NULL, p->mH);
+    mzd_t *mE_dense = mzd_init(mHx_dense->ncols, mS->ncols);
+
+    mzp_t *perm = mzp_init(p->nvar);
+    mzp_t *pivs = mzp_init(p->nvar);
+
+    perm = sort_by_llr(perm, p->vLLR, p);
+    int rank = 0;
+    for (int i = 0; i < p->nvar; i++) {
+        int col = perm->values[i];
+        int ret = twomat_gauss_one(mHx_dense, mS, col, rank);
+        if (ret)
+            pivs->values[rank++] = col;
+    }
+
+    mzd_set_ui(mE_dense, 0);
+    for (int i = 0; i < rank; i++) {
+        mzd_copy_row(mE_dense, pivs->values[i], mS, i);
+    }
+    mzp_free(perm);
+    mzp_free(pivs);
+    //printf("rows of G matrix:%d\n",p->mG->rows);
+    csr_t *mE_csr = csr_from_mzd(NULL,mE_dense);
+    csr_t *mEt0_csr = csr_transpose(NULL, mE_csr);
+
+    //printf("nz of mG=%d\n", p->mG->nz);
+
+    int nrows_E = mHx_dense->ncols;
+    int ncols_E = mS->ncols;
+    
+    int nzmax_E = nrows_E * ncols_E;
+    csr_t *mEt_csr = csr_init(NULL, ncols_E, nrows_E, nzmax_E);
+    //csr_t *mEt_csr=csr_copy(mEt0_csr);
+    if (mEt_csr == NULL) {
+        ERROR("Memory allocation failed for CSR structure.\n");
+        return NULL;
+    }
+    csr_compress(mEt_csr);
+
+    //int tracker = 1;
+    for (int i = 0; i < mEt0_csr->rows; i++) {
+        //simulate_annealing_mcmc(mEt0_csr, p, i);
+        BAR_MCMC(mEt0_csr,mEt_csr,p,i);
+        //tracker++;
+        //printf("iter=%d\n", tracker);
+    }
+
+    //printf("finished calculation");
+
+    mzd_t *mEt = mzd_from_csr(NULL, mEt_csr);
+    return mEt;
+}
+
+
+
 /** @brief one more matrix initialization routine 
  */
 void init_Ht(params_t *p){
@@ -1419,7 +2056,7 @@ int var_init(int argc, char **argv, params_t *p){
     else if ((! p->fobs) && (! p->fdet))
       p->internal=1; /* generate observables and detector events internally */
 
-    if ((p->mode==0)&&(p->submode!=0))
+    if ((p->mode==0)&&(p->submode!=0)&&(p->submode!=1))
       ERROR(" mode=%d : non-zero submode='%d' unsupported\n",
 	    p->mode, p->submode);
     
@@ -1601,74 +2238,111 @@ int main(int argc, char **argv){
     char * comment;
   case 0: /** `mode=0` internal `vecdec` decoder */
     /** at least one round always */
-    synd_tot=0, synd_fail=0;
-    for(long long int iround=1; iround <= rounds; iround++){
-      if(p->debug &1){
-	printf("# starting round %lld of %lld fail=%lld total=%lld\n", iround, rounds, synd_fail,synd_tot);
-	fflush(stdout);
-      }
-    
-      if( !(ierr_tot = do_err_vecs(p)))
-	break; /** no more rounds */
+    synd_tot = 0;
+    synd_fail = 0;
+    for (long long int iround = 1; iround <= rounds; iround++) {
+        if (p->debug & 1) {
+            printf("# starting round %lld of %lld fail=%lld total=%lld\n", iround, rounds, synd_fail, synd_tot);
+            fflush(stdout);
+        }
 
-      // actually decode and generate error vectors
-      mzd_t *mE0=NULL;
-#ifndef NDEBUG  /** need `mHe` later */
-      mzd_t *mS=mzd_copy(NULL,p->mHe);
-      mE0=do_decode(mS, p); /** each row a decoded error vector */
-      mzd_free(mS); mS=NULL;
-#else
-      mE0=do_decode(p->mHe, p); /** each row a decoded error vector */
-#endif /* NDEBUG */
-      mzd_t *mE0t = mzd_transpose(NULL, mE0);
-      mzd_free(mE0); mE0=NULL;
-        
-#ifndef NDEBUG
-      mzd_t *prodHe = csr_mzd_mul(NULL,p->mH,mE0t,1);
-      mzd_add(prodHe, prodHe, p->mHe);
-      if(!mzd_is_zero(prodHe)){
-	if((p->debug&512)||(p->nvec <=64)){
-	  printf("syndromes difference:\n");
-	  mzd_print(prodHe);
-	}
-	ERROR("some syndromes are not matched!\n");
-      }
-      mzd_free(prodHe); prodHe = NULL;
-      //      mzd_free(p->mHe);    mHe    = NULL;
-#endif
+        if (!(ierr_tot = do_err_vecs(p)))
+            break; /** no more rounds */
 
-      mzd_t *prodLe = csr_mzd_mul(NULL,p->mL,mE0t,1);
+        mzd_t *mE0 = NULL;
+        mzd_t *mE0t = NULL;
 
-      if(p->debug & 512){ /** print matrices */
-	printf("prodLe:\n");
-	mzd_print(prodLe);
-	printf("mLe:\n");
-	mzd_print(p->mLe);
-      }
+        if (p->submode & 1) { /** submode 1 */
+            // In submode1, we use Maximum Likelihood decoder
+            if (!p->mG || !p->mK) {
+              for (int i = 0; i < p->nchk; i++) {
+                  p->vP[i] = P_from_llr(p->vLLR[i]);
+              }
+              p->rankH = rank_csr(p->mH);
+              p->rankL = rank_csr(p->mL);
+              p->rankG = p->nvar - p->rankH - p->rankL;
+              if (p->debug & 1){
+                    printf("rankG=%d", p->rankG);
+              }
+              p->mG = do_G_matrix(p->mHt, p->mLt, p->vLLR, p->rankG, p->debug);
+              int rankG = rank_csr(p->mG);
+              if (p->debug & 1){
+                        printf("G matrix created with: rankG=%d \n", rankG);
+              }
+              p->mK = Lx_for_CSS_code(p->mG, p->mH);
+              int rankK = rank_csr(p->mK);
+              if (p->debug & 1){
+                        printf("K matrix created with: rankK=%d \n", rankK);
+              }
+            }
+            #ifndef NDEBUG  /** need `mHe` later */
+            mzd_t *mS = mzd_copy(NULL, p->mHe);
+            mE0 = do_decode_MC_csr(mS, p); /** each row a decoded error vector */
+            mzd_free(mS);
+            mS = NULL;
+            #else
+            mE0 = do_decode_MC_csr(p->mHe, p); /** each row a decoded error vector */
+            #endif /* NDEBUG */
+        } else {
+            #ifndef NDEBUG  /** need `mHe` later */
+            mzd_t *mS = mzd_copy(NULL, p->mHe);
+            mE0 = do_decode(mS, p); /** each row a decoded error vector */
+            mzd_free(mS);
+            mS = NULL;
+            #else
+            mE0 = do_decode(p->mHe, p); /** each row a decoded error vector */
+            #endif /* NDEBUG */
+        }
 
-      mzd_add(prodLe, prodLe, p->mLe);
-      //      mzd_free(mLe); mLe=NULL;
+        mE0t = mzd_transpose(NULL, mE0);
+        mzd_free(mE0);
+        mE0 = NULL;
 
-      int fails=0;
-      for(rci_t ic=0; ic< ierr_tot; ic++){
-	rci_t ir=0;
-	if(mzd_find_pivot(prodLe, ir, ic, &ir, &ic)){
-	  fails++;
-	}
-	else /** no more pivots */
-	  break;
-      }
-      /** update the global counts */
-      synd_tot  += ierr_tot; /** was: prodLe->ncols */
-      synd_fail += fails;
-      mzd_free(prodLe); prodLe=NULL;
-      if((p->nfail > 0) && (synd_fail >= p->nfail))
-	break;
+        #ifndef NDEBUG
+        mzd_t *prodHe = csr_mzd_mul(NULL, p->mH, mE0t, 1);
+        mzd_add(prodHe, prodHe, p->mHe);
+        if (!mzd_is_zero(prodHe)) {
+            if ((p->debug & 512) || (p->nvec <= 64)) {
+                printf("syndromes difference:\n");
+                mzd_print(prodHe);
+            }
+            ERROR("some syndromes are not matched!\n");
+        }
+        mzd_free(prodHe);
+        prodHe = NULL;
+        #endif
+
+        mzd_t *prodLe = csr_mzd_mul(NULL, p->mL, mE0t, 1);
+
+        if (p->debug & 512) { /** print matrices */
+            printf("prodLe:\n");
+            mzd_print(prodLe);
+            printf("mLe:\n");
+            mzd_print(p->mLe);
+        }
+
+        mzd_add(prodLe, prodLe, p->mLe);
+
+        int fails = 0;
+        for (rci_t ic = 0; ic < ierr_tot; ic++) {
+            rci_t ir = 0;
+            if (mzd_find_pivot(prodLe, ir, ic, &ir, &ic)) {
+                fails++;
+            } else /** no more pivots */
+                break;
+        }
+        /** update the global counts */
+        synd_tot += ierr_tot; /** was: prodLe->ncols */
+        synd_fail += fails;
+        mzd_free(prodLe);
+        prodLe = NULL;
+        if ((p->nfail > 0) && (synd_fail >= p->nfail))
+            break;
     }
-    if(p->debug&1)
-      printf("# fail_fraction total_cnt succes_cnt\n");
-    printf(" %g %lld %lld # %s\n",(double) synd_fail/synd_tot, synd_tot, synd_tot-synd_fail, p->fdem ? p->fdem : p->finH );
-      
+    if (p->debug & 1)
+        printf("# fail_fraction total_cnt succes_cnt\n");
+    printf(" %g %lld %lld # %s\n", (double) synd_fail / synd_tot, synd_tot, synd_tot - synd_fail, p->fdem ? p->fdem : p->finH);
+
     break;
 
   case 1: /** `mode=1` various BP flavors */    

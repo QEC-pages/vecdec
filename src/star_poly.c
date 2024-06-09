@@ -201,78 +201,94 @@ int star_triangle(csr_t * Ht, csr_t * Lt, qllr_t *LLR, const one_vec_t * const c
 
 /** @brief create K=Lz matrix with minimum weight rows from a list of codewords in hash */
 csr_t * do_K_from_C(const csr_t * const mLt, const one_vec_t * const codewords,
-		    const int k, const int n, const int minW, int maxW,
-		    _maybe_unused const int debug){
-  int classical = (mLt == NULL) ? 1 : 0;
-  //printf("k=%d minW=%d maxW=%d\n",k,minW,maxW);
-  mzd_t *vLt = NULL;
-  if (!classical)
-    vLt = mzd_init(k, mLt->cols);
-  else 
-    vLt = mzd_init(k, n);
-  one_vec_t const **list = malloc(k*sizeof(one_vec_t *)); /** chosen vectors (pointers) */
-  if(!list) ERROR("memory allocation");
-  one_vec_t const * pvec;
-  int rank=0, nz=0; /** how many rows already found; `nz` = non-zero bits total */
-  int skip_checkW = minW > maxW ? 1 : 0;
-  if (maxW < minW)
-    maxW=minW; 
-  for(int iw = minW; iw <= maxW && rank < k; iw++){
-    if(debug&2)
-      printf("rank=%d of %d; checking codewords of weight %d\n", rank, k, iw);
-    for(pvec = codewords; pvec != NULL; pvec=(one_vec_t *)(pvec->hh.next)){
-      if(skip_checkW || (pvec->weight == iw)){
-	//	printf("iw=%d rank=%d ",iw,rank); print_one_vec(pvec);
-	mzd_row_clear_offset(vLt, rank, 0); 
-	if(!classical){
-	  for(int i=0; i < pvec->weight; i++){
-	    const int pos = pvec->arr[i];
-	    for(int j=mLt->p[pos]; j < mLt->p[pos+1] ; j++)
-	      mzd_flip_bit(vLt,rank,mLt->i[j]);
-	  }
-	}
-	else{ /* classical */
-	  for(int i=0; i < pvec->weight; i++){
-	    const int pos = pvec->arr[i];
-	    mzd_flip_bit(vLt,rank,pos);
-	  }    
-	}
-	if(!mzd_row_is_zero(vLt, rank)){	 
-	  //	  mzd_print_row(vLt,rank);
-	  int rk=mzd_gauss_delayed(vLt,0,1);
-	  if(rk > rank){
-	    list[rank++]=pvec;
-	    nz += pvec->weight;
-	    if(rank==k)
-	      break;
-	  }
-	  else{
-	    //	    mzd_print(vLt);
-	  }
-	}
-      }
+                    const int k, const int n, const int minW, int maxW,
+                    _maybe_unused const int debug) {
+    if (k <= 0) {
+        ERROR("The number of rows to construct (k) must be positive.");
+        return NULL;
+    }else
+    printf("The numer of rows is%d\n",k);
+    if (n <= 0) {
+        ERROR("The number of columns (n) must be positive.");
+        return NULL;
     }
-  }
-  if(rank<k){
-    printf("we have minW=%d maxW=%d (check dW parameter)\n",minW,maxW);
-    ERROR("Number of codewords is not sufficient to construct K=Lz matrix");
-  }
-  
-  mzd_free(vLt);
 
-  /** create CSR matrix from the list of vectors */
-  csr_t *ans = csr_init(NULL,k,n,nz); 
-  for(int j=0, pos=0; j<k; j++){ /** row index */
-    for(int i=0; i < list[j]->weight; i++){
-      int idx=list[j]->arr[i]; /** col index */
-      ans->i[pos++] = idx;
+    int classical = (mLt == NULL) ? 1 : 0;
+    // printf("k=%d minW=%d maxW=%d\n",k,minW,maxW);
+    mzd_t *vLt = NULL;
+    if (!classical)
+        vLt = mzd_init(k, mLt->cols);
+    else
+        vLt = mzd_init(k, n);
+    
+    one_vec_t const **list = malloc(k * sizeof(one_vec_t *)); /** chosen vectors (pointers) */
+    if (!list) ERROR("memory allocation");
+    one_vec_t const * pvec;
+    int rank = 0, nz = 0; /** how many rows already found; `nz` = non-zero bits total */
+    int skip_checkW = minW > maxW ? 1 : 0;
+    if (maxW < minW)
+        maxW = minW;
+    
+    for (int iw = minW; iw <= maxW && rank < k; iw++) {
+        if (debug & 2)
+            printf("rank=%d of %d; checking codewords of weight %d\n", rank, k, iw);
+        for (pvec = codewords; pvec != NULL; pvec = (one_vec_t *)(pvec->hh.next)) {
+            if (skip_checkW || (pvec->weight == iw)) {
+                // printf("iw=%d rank=%d ",iw,rank); print_one_vec(pvec);
+                mzd_row_clear_offset(vLt, rank, 0);
+                if (!classical) {
+                    for (int i = 0; i < pvec->weight; i++) {
+                        const int pos = pvec->arr[i];
+                        for (int j = mLt->p[pos]; j < mLt->p[pos + 1]; j++)
+                            mzd_flip_bit(vLt, rank, mLt->i[j]);
+                    }
+                } else { /* classical */
+                    for (int i = 0; i < pvec->weight; i++) {
+                        const int pos = pvec->arr[i];
+                        mzd_flip_bit(vLt, rank, pos);
+                    }
+                }
+                if (!mzd_row_is_zero(vLt, rank)) {
+                    // mzd_print_row(vLt, rank);
+                    int rk = mzd_gauss_delayed(vLt, 0, 1);
+                    if (rk > rank) {
+                        list[rank++] = pvec;
+                        nz += pvec->weight;
+                        if (rank == k)
+                            break;
+                    } else {
+                        // mzd_print(vLt);
+                    }
+                }
+            }
+        }
     }
-    ans->p[j+1] = pos;
-  }
-  ans->nz = -1;/** csr compressed form */
-  free(list);
-  return ans;
+    
+    if (rank < k) {
+        printf("we have minW=%d maxW=%d (check dW parameter)\n", minW, maxW);
+        ERROR("Number of codewords is not sufficient to construct K=Lz matrix");
+    }
+
+    if (rank == 0) {
+        printf("Warning: The resulting matrix has no rows (rank is 0).\n");
+    }
+
+    mzd_free(vLt);
+
+    /** create CSR matrix from the list of vectors */
+    csr_t *ans = csr_init(NULL, k, n, nz);
+    for (int j = 0, pos = 0; j < k; j++) { /** row index */
+        for (int i = 0; i < list[j]->weight; i++) {
+            int idx = list[j]->arr[i]; /** col index */
+            ans->i[pos++] = idx;
+        }
+        ans->p[j + 1] = pos;
+    }
+    ans->nz = -1; /** csr compressed form */
+    free(list);
+    return ans;
 }
+
 
 /** @brief create G=Hz matrix with minimum weight rows from a list of codewords in hash */
 csr_t * do_G_from_C(const csr_t * const mLt, const one_vec_t * const codewords,
@@ -280,7 +296,8 @@ csr_t * do_G_from_C(const csr_t * const mLt, const one_vec_t * const codewords,
 		    _maybe_unused const int debug){
   assert(mLt);
   assert(codewords);
-  printf("num_need=%d row=%d minW=%d maxW=%d\n",num_need,mLt->rows, minW,maxW);
+  if(debug & 1)
+   printf("num_need=%d row=%d minW=%d maxW=%d\n",num_need,mLt->rows, minW,maxW);
   mzd_t *mat = mzd_init(num_need, mLt->rows); /** needed to ensure the sufficient rank */
   mzd_t *vLt = mzd_init(1, mLt->cols); 
   one_vec_t const * pvec;

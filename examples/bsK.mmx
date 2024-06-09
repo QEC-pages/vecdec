@@ -1,0 +1,5 @@
+%%MatrixMarket matrix coordinate integer general
+% K matrix from DEM file tmp.dem
+1 44 2
+1 43 1
+1 44 1
