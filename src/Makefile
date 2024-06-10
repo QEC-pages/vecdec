@@ -12,7 +12,7 @@ VER=-DUSE_QLLR
 OPT = -g -march=native -mtune=native -O3 ${EXTRA}
 #OPT = -g -mtune=native -O3 ${EXTRA}
 CC = gcc
-CFLAGS = ${OPT} ${VER} ${WARN}
+CFLAGS = ${OPT} ${VER} ${WARN} -fopenmp
 CPP = g++
 
 #-Wmissing-prototypes   -Wconversion -Wextra

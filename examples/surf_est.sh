@@ -12,7 +12,7 @@ outfile=surf_est.dat
 
 # program parameters
 dmin=3 # minimum code distance 
-dmax=9 # maximum code distance
+dmax=7 # maximum code distance
 p0=0.05 # error probability for j=0 
 jmin=0 # range for calculating p1 and p2 (using p0/2**j )
 jmax=15

@@ -34,9 +34,9 @@ outfile=bs.dat
 # program parameters
 dmin=2 # minimum code distance 
 dmax=2 # maximum code distance
-p0=0.032 # error probability for j=0 
+p0=0.064 # error probability for j=0 
 jmin=0 # range for calculating p1 and p2 (using p0/2**j )
-jmax=6
+jmax=7
 Ntotal=$((1024*4)) # total number of steps to use
 
 echo "# running bs.sh" > $outfile

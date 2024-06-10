@@ -14,10 +14,10 @@ obsf=obs.01
 
 # program parameters
 dmin=3 # minimum code distance 
-dmax=12 # maximum code distance
+dmax=7 # maximum code distance
 p0=0.016 # error probability for j=0 
 jmin=0 # range for calculating p1 and p2 (using p0/2**j )
-jmax=12
+jmax=6
 #Ntotal=$((1024*128)) # total number of steps to use
 Ntotal=$((1024*8)) 
 nvec=$((1024*8))
@@ -69,7 +69,7 @@ for (( ddd = $dmin; ddd <= $dmax; ddd += 2 )) ; do # distance loop
       elif ((ddd==7)); then steps_max=$((256*factr)) ; fi
                            
       for (( steps=$((4*factr)) ; steps <= steps_max ; steps*= 2 )) ; do
-        $vecdec debug=0 mode=0 fdet=$detf fobs=$obsf steps=$steps lerr=0 swait=0 \
+        $vecdec debug=0 mode=0.1 fdet=$detf fobs=$obsf steps=$steps lerr=0 swait=0 \
           ntot=$Ntotal nvec=$((nvec)) nfail=0 f=$fnam.dem > $fnam.out 
           # $vecdec debug=0 mode=0.1 fdet=$detf fobs=$obsf steps=$steps lerr=0 swait=0 \
           #  ntot=$Ntotal nvec=$((nvec)) nfail=0 finC=surf_d3C.nz f=$fnam.dem > $fnam.out dW=5 

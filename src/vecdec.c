@@ -1272,7 +1272,7 @@ void simulate_annealing_mcmc(csr_t *mEt0_csr, params_t const * const p,int i) {
  */
 int solve_free_energy(double avg_exp_U_A_minus_U_B_A, double avg_exp_U_A_minus_U_B_B, int N_A, int N_B) {
     double x = 1.0;
-    double tolerance = 1e-6;
+    double tolerance = 1e-10;
     int max_iterations = 1000;
 
     for (int iter = 0; iter < max_iterations; ++iter) {
@@ -1494,7 +1494,7 @@ mzd_t *do_decode_MC_csr(mzd_t *mS, params_t const * const p) {
         return NULL;
     }
     csr_compress(mEt_csr);
-
+    //#pragma omp parallel for
     //int tracker = 1;
     for (int i = 0; i < mEt0_csr->rows; i++) {
         //simulate_annealing_mcmc(mEt0_csr, p, i);
