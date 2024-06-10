@@ -1455,7 +1455,7 @@ void BAR_MCMC(csr_t *mEt0_csr, csr_t *mEt_csr, params_t const * const p, int i) 
  * @param p Structure with error model information.
  * @return Binary matrix of min weight errors for each syndrome.
  */
-mzd_t *do_decode_MC_csr(mzd_t *mS, params_t const * const p) {
+mzd_t *do_decode_BAR(mzd_t *mS, params_t const * const p) {
     mzd_t *mHx_dense = mzd_from_csr(NULL, p->mH);
     mzd_t *mE_dense = mzd_init(mHx_dense->ncols, mS->ncols);
 
@@ -2277,11 +2277,11 @@ int main(int argc, char **argv){
             }
             #ifndef NDEBUG  /** need `mHe` later */
             mzd_t *mS = mzd_copy(NULL, p->mHe);
-            mE0 = do_decode_MC_csr(mS, p); /** each row a decoded error vector */
+            mE0 = do_decode_BAR(mS, p); /** each row a decoded error vector */
             mzd_free(mS);
             mS = NULL;
             #else
-            mE0 = do_decode_MC_csr(p->mHe, p); /** each row a decoded error vector */
+            mE0 = do_decode_BAR(p->mHe, p); /** each row a decoded error vector */
             #endif /* NDEBUG */
         } else {
             #ifndef NDEBUG  /** need `mHe` later */
