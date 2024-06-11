@@ -1,234 +1,449 @@
-==678826== Memcheck, a memory error detector
-==678826== Copyright (C) 2002-2017, and GNU GPL'd, by Julian Seward et al.
-==678826== Using Valgrind-3.18.1 and LibVEX; rerun with -h for copyright info
-==678826== Command: ../src/vecdec mode=0.1 debug=0.1 fdem=tmp.dem
-==678826== Parent PID: 653918
-==678826== 
-==678826== 
-==678826== HEAP SUMMARY:
-==678826==     in use at exit: 382,804 bytes in 27 blocks
-==678826==   total heap usage: 10,257,477 allocs, 10,257,450 frees, 1,834,833,416 bytes allocated
-==678826== 
-==678826== 8 bytes in 1 blocks are still reachable in loss record 1 of 27
-==678826==    at 0x484DA83: calloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x117BC9: csr_init (util_m4ri.c:406)
-==678826==    by 0x1199C5: csr_apply_perm (util_m4ri.c:931)
-==678826==    by 0x119C3A: Lx_for_CSS_code (util_m4ri.c:570)
-==678826==    by 0x10BB94: main (vecdec.c:2272)
-==678826== 
-==678826== 8 bytes in 1 blocks are still reachable in loss record 2 of 27
-==678826==    at 0x484DA83: calloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x117BDD: csr_init (util_m4ri.c:407)
-==678826==    by 0x1199C5: csr_apply_perm (util_m4ri.c:931)
-==678826==    by 0x119C3A: Lx_for_CSS_code (util_m4ri.c:570)
-==678826==    by 0x10BB94: main (vecdec.c:2272)
-==678826== 
-==678826== 32 bytes in 1 blocks are still reachable in loss record 3 of 27
-==678826==    at 0x4848899: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x117BAF: csr_init (util_m4ri.c:405)
-==678826==    by 0x1199C5: csr_apply_perm (util_m4ri.c:931)
-==678826==    by 0x119C3A: Lx_for_CSS_code (util_m4ri.c:570)
-==678826==    by 0x10BB94: main (vecdec.c:2272)
-==678826== 
-==678826== 48 bytes in 1 blocks are still reachable in loss record 4 of 27
-==678826==    at 0x484DE30: memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x484DF92: posix_memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x488DDA5: m4ri_mmc_malloc (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
-==678826==    by 0x486F5F7: mzd_init (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
-==678826==    by 0x116EA1: mzd_from_csr (util_m4ri.c:154)
-==678826==    by 0x11A804: rank_csr (util_m4ri.c:1082)
-==678826==    by 0x10BB02: main (vecdec.c:2261)
-==678826== 
-==678826== 48 bytes in 1 blocks are still reachable in loss record 5 of 27
-==678826==    at 0x484DE30: memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x484DF92: posix_memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x488DDA5: m4ri_mmc_malloc (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
-==678826==    by 0x486F5F7: mzd_init (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
-==678826==    by 0x4879AAC: _mzd_apply_p_right_even (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
-==678826==    by 0x119B09: Lx_for_CSS_code (util_m4ri.c:547)
-==678826==    by 0x10BB94: main (vecdec.c:2272)
-==678826== 
-==678826== 48 bytes in 1 blocks are still reachable in loss record 6 of 27
-==678826==    at 0x484DE30: memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x484DF92: posix_memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x488DDA5: m4ri_mmc_malloc (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
-==678826==    by 0x486F5F7: mzd_init (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
-==678826==    by 0x4879AAC: _mzd_apply_p_right_even (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
-==678826==    by 0x11707B: mzd_generator_from_csr (util_m4ri.c:201)
-==678826==    by 0x119BC6: Lx_for_CSS_code (util_m4ri.c:559)
-==678826==    by 0x10BB94: main (vecdec.c:2272)
-==678826== 
-==678826== 48 bytes in 1 blocks are still reachable in loss record 7 of 27
-==678826==    at 0x484DE30: memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x484DF92: posix_memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x488DDA5: m4ri_mmc_malloc (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
-==678826==    by 0x486F5F7: mzd_init (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
-==678826==    by 0x487506D: mzd_transpose (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
-==678826==    by 0x1170B4: mzd_generator_from_csr (util_m4ri.c:204)
-==678826==    by 0x119BC6: Lx_for_CSS_code (util_m4ri.c:559)
-==678826==    by 0x10BB94: main (vecdec.c:2272)
-==678826== 
-==678826== 48 bytes in 1 blocks are still reachable in loss record 8 of 27
-==678826==    at 0x484DE30: memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x484DF92: posix_memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x488DDA5: m4ri_mmc_malloc (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
-==678826==    by 0x486F5F7: mzd_init (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
-==678826==    by 0x4875126: mzd_transpose (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
-==678826==    by 0x10B8DC: main (vecdec.c:2297)
-==678826== 
-==678826== 72 bytes in 1 blocks are still reachable in loss record 9 of 27
-==678826==    at 0x484DE30: memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x484DF92: posix_memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x488DDA5: m4ri_mmc_malloc (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
-==678826==    by 0x486F449: mzd_init (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
-==678826==    by 0x116EA1: mzd_from_csr (util_m4ri.c:154)
-==678826==    by 0x112B01: do_decode_MC_csr (vecdec.c:1459)
-==678826==    by 0x10B8CF: main (vecdec.c:2284)
-==678826== 
-==678826== 128 bytes in 1 blocks are still reachable in loss record 10 of 27
-==678826==    at 0x484DE30: memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x484DF92: posix_memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x488DDA5: m4ri_mmc_malloc (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
-==678826==    by 0x486F537: mzd_init (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
-==678826==    by 0x116EA1: mzd_from_csr (util_m4ri.c:154)
-==678826==    by 0x11A804: rank_csr (util_m4ri.c:1082)
-==678826==    by 0x10BB02: main (vecdec.c:2261)
-==678826== 
-==678826== 248 bytes in 1 blocks are indirectly lost in loss record 11 of 27
-==678826==    at 0x484DA83: calloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x117BC9: csr_init (util_m4ri.c:406)
-==678826==    by 0x117FC0: csr_from_mzd (util_m4ri.c:478)
-==678826==    by 0x113151: do_decode_MC_csr (vecdec.c:1481)
-==678826==    by 0x10B8CF: main (vecdec.c:2284)
-==678826== 
-==678826== 272 bytes in 1 blocks are indirectly lost in loss record 12 of 27
-==678826==    at 0x484DA83: calloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x117BDD: csr_init (util_m4ri.c:407)
-==678826==    by 0x118502: csr_transpose (util_m4ri.c:128)
-==678826==    by 0x11315B: do_decode_MC_csr (vecdec.c:1482)
-==678826==    by 0x10B8CF: main (vecdec.c:2284)
-==678826== 
-==678826== 360 bytes in 1 blocks are still reachable in loss record 13 of 27
-==678826==    at 0x484DE30: memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x484DF92: posix_memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x488DDA5: m4ri_mmc_malloc (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
-==678826==    by 0x486F449: mzd_init (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
-==678826==    by 0x112B10: do_decode_MC_csr (vecdec.c:1460)
-==678826==    by 0x10B8CF: main (vecdec.c:2284)
-==678826== 
-==678826== 360 bytes in 1 blocks are still reachable in loss record 14 of 27
-==678826==    at 0x484DE30: memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x484DF92: posix_memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x488DDA5: m4ri_mmc_malloc (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
-==678826==    by 0x486F449: mzd_init (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
-==678826==    by 0x4875126: mzd_transpose (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
-==678826==    by 0x10B8DC: main (vecdec.c:2297)
-==678826== 
-==678826== 496 bytes in 1 blocks are indirectly lost in loss record 15 of 27
-==678826==    at 0x484DCD3: realloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x1180A6: csr_from_mzd (util_m4ri.c:494)
-==678826==    by 0x113151: do_decode_MC_csr (vecdec.c:1481)
-==678826==    by 0x10B8CF: main (vecdec.c:2284)
-==678826== 
-==678826== 640 bytes in 1 blocks are still reachable in loss record 16 of 27
-==678826==    at 0x484DE30: memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x484DF92: posix_memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x488DDA5: m4ri_mmc_malloc (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
-==678826==    by 0x486F449: mzd_init (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
-==678826==    by 0x116EA1: mzd_from_csr (util_m4ri.c:154)
-==678826==    by 0x11A804: rank_csr (util_m4ri.c:1082)
-==678826==    by 0x121FC2: do_G_matrix (star_poly.c:515)
-==678826==    by 0x10BB65: main (vecdec.c:2267)
-==678826== 
-==678826== 776 (32 direct, 744 indirect) bytes in 1 blocks are definitely lost in loss record 17 of 27
-==678826==    at 0x4848899: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x117BAF: csr_init (util_m4ri.c:405)
-==678826==    by 0x117FC0: csr_from_mzd (util_m4ri.c:478)
-==678826==    by 0x113151: do_decode_MC_csr (vecdec.c:1481)
-==678826==    by 0x10B8CF: main (vecdec.c:2284)
-==678826== 
-==678826== 928 bytes in 1 blocks are still reachable in loss record 18 of 27
-==678826==    at 0x484DE30: memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x484DF92: posix_memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x488DDA5: m4ri_mmc_malloc (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
-==678826==    by 0x486F449: mzd_init (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
-==678826==    by 0x4875582: mzd_stack (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
-==678826==    by 0x119BF5: Lx_for_CSS_code (util_m4ri.c:562)
-==678826==    by 0x10BB94: main (vecdec.c:2272)
-==678826== 
-==678826== 1,264 bytes in 1 blocks are still reachable in loss record 19 of 27
-==678826==    at 0x484DE30: memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x484DF92: posix_memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x488DDA5: m4ri_mmc_malloc (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
-==678826==    by 0x486F537: mzd_init (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
-==678826==    by 0x116EA1: mzd_from_csr (util_m4ri.c:154)
-==678826==    by 0x11A804: rank_csr (util_m4ri.c:1082)
-==678826==    by 0x121FC2: do_G_matrix (star_poly.c:515)
-==678826==    by 0x10BB65: main (vecdec.c:2267)
-==678826== 
-==678826== 1,840 bytes in 1 blocks are still reachable in loss record 20 of 27
-==678826==    at 0x484DE30: memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x484DF92: posix_memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x488DDA5: m4ri_mmc_malloc (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
-==678826==    by 0x486F537: mzd_init (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
-==678826==    by 0x4875582: mzd_stack (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
-==678826==    by 0x119BF5: Lx_for_CSS_code (util_m4ri.c:562)
-==678826==    by 0x10BB94: main (vecdec.c:2272)
-==678826== 
-==678826== 4,100 bytes in 1 blocks are indirectly lost in loss record 21 of 27
-==678826==    at 0x484DA83: calloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x117BC9: csr_init (util_m4ri.c:406)
-==678826==    by 0x118502: csr_transpose (util_m4ri.c:128)
-==678826==    by 0x11315B: do_decode_MC_csr (vecdec.c:1482)
-==678826==    by 0x10B8CF: main (vecdec.c:2284)
-==678826== 
-==678826== 4,404 (32 direct, 4,372 indirect) bytes in 1 blocks are definitely lost in loss record 22 of 27
-==678826==    at 0x4848899: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x117BAF: csr_init (util_m4ri.c:405)
-==678826==    by 0x118502: csr_transpose (util_m4ri.c:128)
-==678826==    by 0x11315B: do_decode_MC_csr (vecdec.c:1482)
-==678826==    by 0x10B8CF: main (vecdec.c:2284)
-==678826== 
-==678826== 5,632 bytes in 1 blocks are still reachable in loss record 23 of 27
-==678826==    at 0x484DE30: memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x484DF92: posix_memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x488DDA5: m4ri_mmc_malloc (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
-==678826==    by 0x486F537: mzd_init (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
-==678826==    by 0x112B10: do_decode_MC_csr (vecdec.c:1460)
-==678826==    by 0x10B8CF: main (vecdec.c:2284)
-==678826== 
-==678826== 5,632 bytes in 1 blocks are still reachable in loss record 24 of 27
-==678826==    at 0x484DE30: memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x484DF92: posix_memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x488DDA5: m4ri_mmc_malloc (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
-==678826==    by 0x486F537: mzd_init (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
-==678826==    by 0x4875126: mzd_transpose (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
-==678826==    by 0x10B8DC: main (vecdec.c:2297)
-==678826== 
-==678826== 180,224 bytes in 1 blocks are indirectly lost in loss record 25 of 27
-==678826==    at 0x484DA83: calloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x117BC9: csr_init (util_m4ri.c:406)
-==678826==    by 0x113172: do_decode_MC_csr (vecdec.c:1490)
-==678826==    by 0x10B8CF: main (vecdec.c:2284)
-==678826== 
-==678826== 180,224 bytes in 1 blocks are indirectly lost in loss record 26 of 27
-==678826==    at 0x484DA83: calloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x117BDD: csr_init (util_m4ri.c:407)
-==678826==    by 0x113172: do_decode_MC_csr (vecdec.c:1490)
-==678826==    by 0x10B8CF: main (vecdec.c:2284)
-==678826== 
-==678826== 360,480 (32 direct, 360,448 indirect) bytes in 1 blocks are definitely lost in loss record 27 of 27
-==678826==    at 0x4848899: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
-==678826==    by 0x117BAF: csr_init (util_m4ri.c:405)
-==678826==    by 0x113172: do_decode_MC_csr (vecdec.c:1490)
-==678826==    by 0x10B8CF: main (vecdec.c:2284)
-==678826== 
-==678826== LEAK SUMMARY:
-==678826==    definitely lost: 96 bytes in 3 blocks
-==678826==    indirectly lost: 365,564 bytes in 6 blocks
-==678826==      possibly lost: 0 bytes in 0 blocks
-==678826==    still reachable: 17,144 bytes in 18 blocks
-==678826==         suppressed: 0 bytes in 0 blocks
-==678826== 
-==678826== For lists of detected and suppressed errors, rerun with: -s
-==678826== ERROR SUMMARY: 3 errors from 3 contexts (suppressed: 0 from 0)
+==10656== Memcheck, a memory error detector
+==10656== Copyright (C) 2002-2017, and GNU GPL'd, by Julian Seward et al.
+==10656== Using Valgrind-3.18.1 and LibVEX; rerun with -h for copyright info
+==10656== Command: ../src/vecdec mode=0.1 fdem=tmp.dem
+==10656== Parent PID: 877
+==10656== 
+==10656== Invalid read of size 4
+==10656==    at 0x1182A7: csr_compress (util_m4ri.c:589)
+==10656==    by 0x1122B7: csr_replace_row (vecdec.c:1178)
+==10656==    by 0x112A47: BAR_MCMC (vecdec.c:1439)
+==10656==    by 0x1131AF: do_decode_BAR (vecdec.c:1504)
+==10656==    by 0x10B8CF: main (vecdec.c:2287)
+==10656==  Address 0x4d1e814 is 0 bytes after a block of size 4,100 alloc'd
+==10656==    at 0x484DA83: calloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x117BC9: csr_init (util_m4ri.c:406)
+==10656==    by 0x117FC0: csr_from_mzd (util_m4ri.c:478)
+==10656==    by 0x113182: do_decode_BAR (vecdec.c:1492)
+==10656==    by 0x10B8CF: main (vecdec.c:2287)
+==10656== 
+==10656== Invalid read of size 4
+==10656==    at 0x11828B: csr_compress (util_m4ri.c:589)
+==10656==    by 0x1122B7: csr_replace_row (vecdec.c:1178)
+==10656==    by 0x112A47: BAR_MCMC (vecdec.c:1439)
+==10656==    by 0x1131AF: do_decode_BAR (vecdec.c:1504)
+==10656==    by 0x10B8CF: main (vecdec.c:2287)
+==10656==  Address 0x4d1e820 is 12 bytes after a block of size 4,100 alloc'd
+==10656==    at 0x484DA83: calloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x117BC9: csr_init (util_m4ri.c:406)
+==10656==    by 0x117FC0: csr_from_mzd (util_m4ri.c:478)
+==10656==    by 0x113182: do_decode_BAR (vecdec.c:1492)
+==10656==    by 0x10B8CF: main (vecdec.c:2287)
+==10656== 
+==10656== Conditional jump or move depends on uninitialised value(s)
+==10656==    at 0x11610A: cmp_int_pairs (util_m4ri.c:438)
+==10656==    by 0x49C340E: msort_with_tmp.part.0 (msort.c:82)
+==10656==    by 0x49C33A4: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C33A4: msort_with_tmp.part.0 (msort.c:52)
+==10656==    by 0x49C33C1: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C33C1: msort_with_tmp.part.0 (msort.c:53)
+==10656==    by 0x49C33C1: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C33C1: msort_with_tmp.part.0 (msort.c:53)
+==10656==    by 0x49C33C1: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C33C1: msort_with_tmp.part.0 (msort.c:53)
+==10656==    by 0x49C33C1: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C33C1: msort_with_tmp.part.0 (msort.c:53)
+==10656==    by 0x49C33C1: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C33C1: msort_with_tmp.part.0 (msort.c:53)
+==10656==    by 0x49C33C1: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C33C1: msort_with_tmp.part.0 (msort.c:53)
+==10656==    by 0x49C33C1: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C33C1: msort_with_tmp.part.0 (msort.c:53)
+==10656==    by 0x49C33C1: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C33C1: msort_with_tmp.part.0 (msort.c:53)
+==10656==    by 0x49C3A55: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C3A55: qsort_r (msort.c:296)
+==10656== 
+==10656== Conditional jump or move depends on uninitialised value(s)
+==10656==    at 0x11610A: cmp_int_pairs (util_m4ri.c:438)
+==10656==    by 0x49C340E: msort_with_tmp.part.0 (msort.c:82)
+==10656==    by 0x49C33C1: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C33C1: msort_with_tmp.part.0 (msort.c:53)
+==10656==    by 0x49C33C1: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C33C1: msort_with_tmp.part.0 (msort.c:53)
+==10656==    by 0x49C33C1: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C33C1: msort_with_tmp.part.0 (msort.c:53)
+==10656==    by 0x49C33C1: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C33C1: msort_with_tmp.part.0 (msort.c:53)
+==10656==    by 0x49C33C1: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C33C1: msort_with_tmp.part.0 (msort.c:53)
+==10656==    by 0x49C33C1: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C33C1: msort_with_tmp.part.0 (msort.c:53)
+==10656==    by 0x49C33C1: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C33C1: msort_with_tmp.part.0 (msort.c:53)
+==10656==    by 0x49C33C1: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C33C1: msort_with_tmp.part.0 (msort.c:53)
+==10656==    by 0x49C33C1: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C33C1: msort_with_tmp.part.0 (msort.c:53)
+==10656==    by 0x49C3A55: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C3A55: qsort_r (msort.c:296)
+==10656== 
+==10656== Conditional jump or move depends on uninitialised value(s)
+==10656==    at 0x49C3411: msort_with_tmp.part.0 (msort.c:82)
+==10656==    by 0x49C33C1: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C33C1: msort_with_tmp.part.0 (msort.c:53)
+==10656==    by 0x49C33C1: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C33C1: msort_with_tmp.part.0 (msort.c:53)
+==10656==    by 0x49C33C1: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C33C1: msort_with_tmp.part.0 (msort.c:53)
+==10656==    by 0x49C33C1: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C33C1: msort_with_tmp.part.0 (msort.c:53)
+==10656==    by 0x49C33C1: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C33C1: msort_with_tmp.part.0 (msort.c:53)
+==10656==    by 0x49C33C1: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C33C1: msort_with_tmp.part.0 (msort.c:53)
+==10656==    by 0x49C33C1: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C33C1: msort_with_tmp.part.0 (msort.c:53)
+==10656==    by 0x49C3A55: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C3A55: qsort_r (msort.c:296)
+==10656==    by 0x1182F0: csr_compress (util_m4ri.c:592)
+==10656==    by 0x1122B7: csr_replace_row (vecdec.c:1178)
+==10656==    by 0x112A47: BAR_MCMC (vecdec.c:1439)
+==10656== 
+==10656== Conditional jump or move depends on uninitialised value(s)
+==10656==    at 0x49C3411: msort_with_tmp.part.0 (msort.c:82)
+==10656==    by 0x49C33C1: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C33C1: msort_with_tmp.part.0 (msort.c:53)
+==10656==    by 0x49C33C1: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C33C1: msort_with_tmp.part.0 (msort.c:53)
+==10656==    by 0x49C3A55: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C3A55: qsort_r (msort.c:296)
+==10656==    by 0x1182F0: csr_compress (util_m4ri.c:592)
+==10656==    by 0x1122B7: csr_replace_row (vecdec.c:1178)
+==10656==    by 0x112A47: BAR_MCMC (vecdec.c:1439)
+==10656==    by 0x1131AF: do_decode_BAR (vecdec.c:1504)
+==10656==    by 0x10B8CF: main (vecdec.c:2287)
+==10656== 
+==10656== Conditional jump or move depends on uninitialised value(s)
+==10656==    at 0x11610A: cmp_int_pairs (util_m4ri.c:438)
+==10656==    by 0x49C340E: msort_with_tmp.part.0 (msort.c:82)
+==10656==    by 0x49C33C1: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C33C1: msort_with_tmp.part.0 (msort.c:53)
+==10656==    by 0x49C3A55: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C3A55: qsort_r (msort.c:296)
+==10656==    by 0x1182F0: csr_compress (util_m4ri.c:592)
+==10656==    by 0x1122B7: csr_replace_row (vecdec.c:1178)
+==10656==    by 0x112A47: BAR_MCMC (vecdec.c:1439)
+==10656==    by 0x1131AF: do_decode_BAR (vecdec.c:1504)
+==10656==    by 0x10B8CF: main (vecdec.c:2287)
+==10656== 
+==10656== Conditional jump or move depends on uninitialised value(s)
+==10656==    at 0x49C3411: msort_with_tmp.part.0 (msort.c:82)
+==10656==    by 0x49C33C1: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C33C1: msort_with_tmp.part.0 (msort.c:53)
+==10656==    by 0x49C3A55: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C3A55: qsort_r (msort.c:296)
+==10656==    by 0x1182F0: csr_compress (util_m4ri.c:592)
+==10656==    by 0x1122B7: csr_replace_row (vecdec.c:1178)
+==10656==    by 0x112A47: BAR_MCMC (vecdec.c:1439)
+==10656==    by 0x1131AF: do_decode_BAR (vecdec.c:1504)
+==10656==    by 0x10B8CF: main (vecdec.c:2287)
+==10656== 
+==10656== Conditional jump or move depends on uninitialised value(s)
+==10656==    at 0x11610A: cmp_int_pairs (util_m4ri.c:438)
+==10656==    by 0x49C340E: msort_with_tmp.part.0 (msort.c:82)
+==10656==    by 0x49C3A55: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C3A55: qsort_r (msort.c:296)
+==10656==    by 0x1182F0: csr_compress (util_m4ri.c:592)
+==10656==    by 0x1122B7: csr_replace_row (vecdec.c:1178)
+==10656==    by 0x112A47: BAR_MCMC (vecdec.c:1439)
+==10656==    by 0x1131AF: do_decode_BAR (vecdec.c:1504)
+==10656==    by 0x10B8CF: main (vecdec.c:2287)
+==10656== 
+==10656== Conditional jump or move depends on uninitialised value(s)
+==10656==    at 0x49C3411: msort_with_tmp.part.0 (msort.c:82)
+==10656==    by 0x49C3A55: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C3A55: qsort_r (msort.c:296)
+==10656==    by 0x1182F0: csr_compress (util_m4ri.c:592)
+==10656==    by 0x1122B7: csr_replace_row (vecdec.c:1178)
+==10656==    by 0x112A47: BAR_MCMC (vecdec.c:1439)
+==10656==    by 0x1131AF: do_decode_BAR (vecdec.c:1504)
+==10656==    by 0x10B8CF: main (vecdec.c:2287)
+==10656== 
+==10656== Conditional jump or move depends on uninitialised value(s)
+==10656==    at 0x11833B: csr_compress (util_m4ri.c:596)
+==10656==    by 0x1122B7: csr_replace_row (vecdec.c:1178)
+==10656==    by 0x112A47: BAR_MCMC (vecdec.c:1439)
+==10656==    by 0x1131AF: do_decode_BAR (vecdec.c:1504)
+==10656==    by 0x10B8CF: main (vecdec.c:2287)
+==10656== 
+==10656== Conditional jump or move depends on uninitialised value(s)
+==10656==    at 0x49C3411: msort_with_tmp.part.0 (msort.c:82)
+==10656==    by 0x49C33A4: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C33A4: msort_with_tmp.part.0 (msort.c:52)
+==10656==    by 0x49C33C1: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C33C1: msort_with_tmp.part.0 (msort.c:53)
+==10656==    by 0x49C33C1: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C33C1: msort_with_tmp.part.0 (msort.c:53)
+==10656==    by 0x49C33C1: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C33C1: msort_with_tmp.part.0 (msort.c:53)
+==10656==    by 0x49C33C1: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C33C1: msort_with_tmp.part.0 (msort.c:53)
+==10656==    by 0x49C33C1: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C33C1: msort_with_tmp.part.0 (msort.c:53)
+==10656==    by 0x49C33C1: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C33C1: msort_with_tmp.part.0 (msort.c:53)
+==10656==    by 0x49C33C1: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C33C1: msort_with_tmp.part.0 (msort.c:53)
+==10656==    by 0x49C33C1: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C33C1: msort_with_tmp.part.0 (msort.c:53)
+==10656==    by 0x49C3A55: msort_with_tmp (msort.c:44)
+==10656==    by 0x49C3A55: qsort_r (msort.c:296)
+==10656==    by 0x1182F0: csr_compress (util_m4ri.c:592)
+==10656== 
+==10656== 
+==10656== HEAP SUMMARY:
+==10656==     in use at exit: 58,300 bytes in 30 blocks
+==10656==   total heap usage: 10,257,478 allocs, 10,257,448 frees, 1,834,640,140 bytes allocated
+==10656== 
+==10656== 8 bytes in 1 blocks are still reachable in loss record 1 of 30
+==10656==    at 0x484DA83: calloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x117BC9: csr_init (util_m4ri.c:406)
+==10656==    by 0x1199C5: csr_apply_perm (util_m4ri.c:931)
+==10656==    by 0x119C3A: Lx_for_CSS_code (util_m4ri.c:570)
+==10656==    by 0x10BB94: main (vecdec.c:2275)
+==10656== 
+==10656== 8 bytes in 1 blocks are still reachable in loss record 2 of 30
+==10656==    at 0x484DA83: calloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x117BDD: csr_init (util_m4ri.c:407)
+==10656==    by 0x1199C5: csr_apply_perm (util_m4ri.c:931)
+==10656==    by 0x119C3A: Lx_for_CSS_code (util_m4ri.c:570)
+==10656==    by 0x10BB94: main (vecdec.c:2275)
+==10656== 
+==10656== 32 bytes in 1 blocks are still reachable in loss record 3 of 30
+==10656==    at 0x4848899: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x117BAF: csr_init (util_m4ri.c:405)
+==10656==    by 0x1199C5: csr_apply_perm (util_m4ri.c:931)
+==10656==    by 0x119C3A: Lx_for_CSS_code (util_m4ri.c:570)
+==10656==    by 0x10BB94: main (vecdec.c:2275)
+==10656== 
+==10656== 48 bytes in 1 blocks are still reachable in loss record 4 of 30
+==10656==    at 0x484DE30: memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x484DF92: posix_memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x488DDA5: m4ri_mmc_malloc (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x486F5F7: mzd_init (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x116EA1: mzd_from_csr (util_m4ri.c:154)
+==10656==    by 0x11A804: rank_csr (util_m4ri.c:1082)
+==10656==    by 0x10BB02: main (vecdec.c:2264)
+==10656== 
+==10656== 48 bytes in 1 blocks are still reachable in loss record 5 of 30
+==10656==    at 0x484DE30: memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x484DF92: posix_memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x488DDA5: m4ri_mmc_malloc (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x486F5F7: mzd_init (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x4879AAC: _mzd_apply_p_right_even (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x119B09: Lx_for_CSS_code (util_m4ri.c:547)
+==10656==    by 0x10BB94: main (vecdec.c:2275)
+==10656== 
+==10656== 48 bytes in 1 blocks are still reachable in loss record 6 of 30
+==10656==    at 0x484DE30: memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x484DF92: posix_memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x488DDA5: m4ri_mmc_malloc (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x486F5F7: mzd_init (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x11706D: mzd_generator_from_csr (util_m4ri.c:198)
+==10656==    by 0x119BC6: Lx_for_CSS_code (util_m4ri.c:559)
+==10656==    by 0x10BB94: main (vecdec.c:2275)
+==10656== 
+==10656== 48 bytes in 1 blocks are still reachable in loss record 7 of 30
+==10656==    at 0x484DE30: memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x484DF92: posix_memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x488DDA5: m4ri_mmc_malloc (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x486F5F7: mzd_init (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x4879AAC: _mzd_apply_p_right_even (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x11707B: mzd_generator_from_csr (util_m4ri.c:201)
+==10656==    by 0x119BC6: Lx_for_CSS_code (util_m4ri.c:559)
+==10656==    by 0x10BB94: main (vecdec.c:2275)
+==10656== 
+==10656== 48 bytes in 1 blocks are still reachable in loss record 8 of 30
+==10656==    at 0x484DE30: memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x484DF92: posix_memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x488DDA5: m4ri_mmc_malloc (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x486F5F7: mzd_init (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x487506D: mzd_transpose (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x1170B4: mzd_generator_from_csr (util_m4ri.c:204)
+==10656==    by 0x119BC6: Lx_for_CSS_code (util_m4ri.c:559)
+==10656==    by 0x10BB94: main (vecdec.c:2275)
+==10656== 
+==10656== 48 bytes in 1 blocks are still reachable in loss record 9 of 30
+==10656==    at 0x484DE30: memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x484DF92: posix_memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x488DDA5: m4ri_mmc_malloc (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x486F5F7: mzd_init (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x4875126: mzd_transpose (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x10B8DC: main (vecdec.c:2300)
+==10656== 
+==10656== 72 bytes in 1 blocks are still reachable in loss record 10 of 30
+==10656==    at 0x484DE30: memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x484DF92: posix_memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x488DDA5: m4ri_mmc_malloc (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x486F449: mzd_init (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x116EA1: mzd_from_csr (util_m4ri.c:154)
+==10656==    by 0x112B01: do_decode_BAR (vecdec.c:1459)
+==10656==    by 0x10B8CF: main (vecdec.c:2287)
+==10656== 
+==10656== 128 bytes in 1 blocks are still reachable in loss record 11 of 30
+==10656==    at 0x484DE30: memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x484DF92: posix_memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x488DDA5: m4ri_mmc_malloc (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x486F537: mzd_init (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x116EA1: mzd_from_csr (util_m4ri.c:154)
+==10656==    by 0x11A804: rank_csr (util_m4ri.c:1082)
+==10656==    by 0x10BB02: main (vecdec.c:2264)
+==10656== 
+==10656== 256 bytes in 1 blocks are indirectly lost in loss record 12 of 30
+==10656==    at 0x484DA83: calloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x117BC9: csr_init (util_m4ri.c:406)
+==10656==    by 0x117FC0: csr_from_mzd (util_m4ri.c:478)
+==10656==    by 0x113151: do_decode_BAR (vecdec.c:1481)
+==10656==    by 0x10B8CF: main (vecdec.c:2287)
+==10656== 
+==10656== 300 bytes in 1 blocks are indirectly lost in loss record 13 of 30
+==10656==    at 0x484DA83: calloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x117BDD: csr_init (util_m4ri.c:407)
+==10656==    by 0x118502: csr_transpose (util_m4ri.c:128)
+==10656==    by 0x11315B: do_decode_BAR (vecdec.c:1482)
+==10656==    by 0x10B8CF: main (vecdec.c:2287)
+==10656== 
+==10656== 360 bytes in 1 blocks are still reachable in loss record 14 of 30
+==10656==    at 0x484DE30: memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x484DF92: posix_memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x488DDA5: m4ri_mmc_malloc (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x486F449: mzd_init (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x112B10: do_decode_BAR (vecdec.c:1460)
+==10656==    by 0x10B8CF: main (vecdec.c:2287)
+==10656== 
+==10656== 360 bytes in 1 blocks are still reachable in loss record 15 of 30
+==10656==    at 0x484DE30: memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x484DF92: posix_memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x488DDA5: m4ri_mmc_malloc (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x486F449: mzd_init (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x4875126: mzd_transpose (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x10B8DC: main (vecdec.c:2300)
+==10656== 
+==10656== 512 bytes in 1 blocks are indirectly lost in loss record 16 of 30
+==10656==    at 0x484DCD3: realloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x1180A6: csr_from_mzd (util_m4ri.c:494)
+==10656==    by 0x113151: do_decode_BAR (vecdec.c:1481)
+==10656==    by 0x10B8CF: main (vecdec.c:2287)
+==10656== 
+==10656== 640 bytes in 1 blocks are still reachable in loss record 17 of 30
+==10656==    at 0x484DE30: memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x484DF92: posix_memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x488DDA5: m4ri_mmc_malloc (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x486F449: mzd_init (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x116EA1: mzd_from_csr (util_m4ri.c:154)
+==10656==    by 0x11A804: rank_csr (util_m4ri.c:1082)
+==10656==    by 0x121FC2: do_G_matrix (star_poly.c:515)
+==10656==    by 0x10BB65: main (vecdec.c:2270)
+==10656== 
+==10656== 800 (32 direct, 768 indirect) bytes in 1 blocks are definitely lost in loss record 18 of 30
+==10656==    at 0x4848899: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x117BAF: csr_init (util_m4ri.c:405)
+==10656==    by 0x117FC0: csr_from_mzd (util_m4ri.c:478)
+==10656==    by 0x113151: do_decode_BAR (vecdec.c:1481)
+==10656==    by 0x10B8CF: main (vecdec.c:2287)
+==10656== 
+==10656== 928 bytes in 1 blocks are still reachable in loss record 19 of 30
+==10656==    at 0x484DE30: memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x484DF92: posix_memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x488DDA5: m4ri_mmc_malloc (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x486F449: mzd_init (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x4875582: mzd_stack (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x119BF5: Lx_for_CSS_code (util_m4ri.c:562)
+==10656==    by 0x10BB94: main (vecdec.c:2275)
+==10656== 
+==10656== 1,264 bytes in 1 blocks are still reachable in loss record 20 of 30
+==10656==    at 0x484DE30: memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x484DF92: posix_memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x488DDA5: m4ri_mmc_malloc (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x486F537: mzd_init (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x116EA1: mzd_from_csr (util_m4ri.c:154)
+==10656==    by 0x11A804: rank_csr (util_m4ri.c:1082)
+==10656==    by 0x121FC2: do_G_matrix (star_poly.c:515)
+==10656==    by 0x10BB65: main (vecdec.c:2270)
+==10656== 
+==10656== 1,840 bytes in 1 blocks are still reachable in loss record 21 of 30
+==10656==    at 0x484DE30: memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x484DF92: posix_memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x488DDA5: m4ri_mmc_malloc (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x486F537: mzd_init (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x4875582: mzd_stack (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x119BF5: Lx_for_CSS_code (util_m4ri.c:562)
+==10656==    by 0x10BB94: main (vecdec.c:2275)
+==10656== 
+==10656== 4,100 bytes in 1 blocks are indirectly lost in loss record 22 of 30
+==10656==    at 0x484DA83: calloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x117BC9: csr_init (util_m4ri.c:406)
+==10656==    by 0x118502: csr_transpose (util_m4ri.c:128)
+==10656==    by 0x11315B: do_decode_BAR (vecdec.c:1482)
+==10656==    by 0x10B8CF: main (vecdec.c:2287)
+==10656== 
+==10656== 4,100 bytes in 1 blocks are indirectly lost in loss record 23 of 30
+==10656==    at 0x484DA83: calloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x117BC9: csr_init (util_m4ri.c:406)
+==10656==    by 0x117FC0: csr_from_mzd (util_m4ri.c:478)
+==10656==    by 0x113182: do_decode_BAR (vecdec.c:1492)
+==10656==    by 0x10B8CF: main (vecdec.c:2287)
+==10656== 
+==10656== 4,432 (32 direct, 4,400 indirect) bytes in 1 blocks are definitely lost in loss record 24 of 30
+==10656==    at 0x4848899: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x117BAF: csr_init (util_m4ri.c:405)
+==10656==    by 0x118502: csr_transpose (util_m4ri.c:128)
+==10656==    by 0x11315B: do_decode_BAR (vecdec.c:1482)
+==10656==    by 0x10B8CF: main (vecdec.c:2287)
+==10656== 
+==10656== 5,632 bytes in 1 blocks are still reachable in loss record 25 of 30
+==10656==    at 0x484DE30: memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x484DF92: posix_memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x488DDA5: m4ri_mmc_malloc (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x486F537: mzd_init (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x112B10: do_decode_BAR (vecdec.c:1460)
+==10656==    by 0x10B8CF: main (vecdec.c:2287)
+==10656== 
+==10656== 5,632 bytes in 1 blocks are still reachable in loss record 26 of 30
+==10656==    at 0x484DE30: memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x484DF92: posix_memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x488DDA5: m4ri_mmc_malloc (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x486F537: mzd_init (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x4875126: mzd_transpose (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x10B8DC: main (vecdec.c:2300)
+==10656== 
+==10656== 7,160 bytes in 1 blocks are indirectly lost in loss record 27 of 30
+==10656==    at 0x484DCD3: realloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x1123D4: csr_replace_row (vecdec.c:1194)
+==10656==    by 0x112A47: BAR_MCMC (vecdec.c:1439)
+==10656==    by 0x1131AF: do_decode_BAR (vecdec.c:1504)
+==10656==    by 0x10B8CF: main (vecdec.c:2287)
+==10656== 
+==10656== 8,200 bytes in 1 blocks are still reachable in loss record 28 of 30
+==10656==    at 0x484DE30: memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x484DF92: posix_memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x488DDA5: m4ri_mmc_malloc (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x486F449: mzd_init (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x11316B: do_decode_BAR (vecdec.c:1490)
+==10656==    by 0x10B8CF: main (vecdec.c:2287)
+==10656== 
+==10656== 11,292 (32 direct, 11,260 indirect) bytes in 1 blocks are definitely lost in loss record 29 of 30
+==10656==    at 0x4848899: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x117BAF: csr_init (util_m4ri.c:405)
+==10656==    by 0x117FC0: csr_from_mzd (util_m4ri.c:478)
+==10656==    by 0x113182: do_decode_BAR (vecdec.c:1492)
+==10656==    by 0x10B8CF: main (vecdec.c:2287)
+==10656== 
+==10656== 16,384 bytes in 1 blocks are still reachable in loss record 30 of 30
+==10656==    at 0x484DE30: memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x484DF92: posix_memalign (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==10656==    by 0x488DDA5: m4ri_mmc_malloc (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x486F537: mzd_init (in /usr/lib/x86_64-linux-gnu/libm4ri-0.0.20200125.so)
+==10656==    by 0x11316B: do_decode_BAR (vecdec.c:1490)
+==10656==    by 0x10B8CF: main (vecdec.c:2287)
+==10656== 
+==10656== LEAK SUMMARY:
+==10656==    definitely lost: 96 bytes in 3 blocks
+==10656==    indirectly lost: 16,428 bytes in 6 blocks
+==10656==      possibly lost: 0 bytes in 0 blocks
+==10656==    still reachable: 41,776 bytes in 21 blocks
+==10656==         suppressed: 0 bytes in 0 blocks
+==10656== 
+==10656== For lists of detected and suppressed errors, rerun with: -s
+==10656== ERROR SUMMARY: 331 errors from 15 contexts (suppressed: 0 from 0)

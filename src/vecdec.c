@@ -1306,34 +1306,14 @@ void BAR_MCMC(csr_t *mEt0_csr, csr_t *mEt_csr, params_t const * const p, int i) 
 
     // Create arrays to store flipped error vectors for each Lz row and the original error vector
     csr_t **error_vectors = malloc(num_ensembles * sizeof(csr_t *));
-    // if (error_vectors == NULL) {
-    //     ERROR("Memory allocation failed for error_vectors array.\n");
-    //     return;
-    // }
-    //printf("Malloc done\n");
 
     // Initialize error vectors
     error_vectors[0] = csr_copy(mEt0_csr);
 
-    // if (error_vectors[0] == NULL) {
-    //     ERROR("Memory allocation failed for error_vectors[0].\n");
-    //     //free(error_vectors);
-    //     return;
-    // }
     for (int k = 1; k < num_ensembles; k++) {
         error_vectors[k] = csr_copy(mEt0_csr);
-        
-        // if (error_vectors[k] == NULL) {
-        //     ERROR("Memory allocation failed for error_vectors[%d].\n", k);
-        //     for (int j = 0; j < k; j++) {
-        //         csr_free(error_vectors[j]);
-        //     }
-        //     //free(error_vectors);
-        //     return;
-        // }
         csr_add_row_to_row(error_vectors[k], i, p->mK, k - 1);
     }
-    //printf("Initialize ensembles done\n");
 
     // Variables for accumulating statistics
     double exp_U_A_minus_U_B_A = 0.0;
@@ -1345,15 +1325,6 @@ void BAR_MCMC(csr_t *mEt0_csr, csr_t *mEt_csr, params_t const * const p, int i) 
     double U_A_B = 0;
     double U_B_B = 0;
     csr_t *current_ensemble = csr_copy(error_vectors[0]);
-    // if (current_ensemble == NULL) {
-    //     ERROR("Memory allocation failed for current_ensemble.\n");
-    //     for (int k = 0; k < num_ensembles; k++) {
-    //         csr_free(error_vectors[k]);
-    //     }
-    //     //free(error_vectors);
-    //     return;
-    // }
-    //printf("Current ensemble init done\n");
 
     // Iterate through each ensemble starting from the second one
     for (int k = 1; k < num_ensembles; k++) {
@@ -1366,55 +1337,32 @@ void BAR_MCMC(csr_t *mEt0_csr, csr_t *mEt_csr, params_t const * const p, int i) 
         for (int iterations = 0; iterations < max_iterations; iterations++) {
             unsigned int seed = time(NULL);
             int row_to_add = rand_r(&seed) % (p->mG->rows);
-            // if (error_vectors[k] == NULL || current_ensemble == NULL) {
-            //     ERROR("NULL pointer in BAR_MCMC at iteration %d, ensemble %d\n", iterations, k);
-            //     return;
-            // }
-
             // Perform MCMC step for the current ensemble
             double delta_energy_A = csr_calculate_energy_change(p->vLLR, current_ensemble, p->mG, i, row_to_add);
-            //printf("delta_A\n");
             if (delta_energy_A < 0 || exp(-delta_energy_A / temperature) > (double)rand_r(&seed) / RAND_MAX) {
                 csr_add_row_to_row(current_ensemble, i, p->mG, row_to_add);
                 csr_add_row_to_row(error_vectors[k], i, p->mG, row_to_add);
             }
-            //printf("Add_done_A\n");
-            U_A_A = csr_row_energ(p->vLLR, current_ensemble, i);// csr_row_energ has memory leakage
-            //printf("Energ_done_A1\n");
-            U_B_A = csr_row_energ(p->vLLR, error_vectors[k], i);// csr_row_energ has memory leakage
-            //printf("Energ_done_A2\n");
+            U_A_A = csr_row_energ(p->vLLR, current_ensemble, i);
+            U_B_A = csr_row_energ(p->vLLR, error_vectors[k], i);
             exp_U_A_minus_U_B_A += exp(U_A_A - U_B_A);
-            //printf("exp_A\n");
             N_A++;
         }
-        //printf("Current ensemble done\n");
 
         // Perform MCMC in the k-th ensemble
         for (int iterations = 0; iterations < max_iterations; iterations++) {
             unsigned int seed = time(NULL);
             int row_to_add = rand_r(&seed) % (p->mG->rows);
-            // if (error_vectors[k] == NULL || current_ensemble == NULL) {
-            //     ERROR("NULL pointer in BAR_MCMC at iteration %d, ensemble %d\n", iterations, k);
-            //     return;
-            // }
-
-            // Perform MCMC step for the k-th ensemble
             double delta_energy_B = csr_calculate_energy_change(p->vLLR, error_vectors[k], p->mG, i, row_to_add);
-            //printf("delta_B\n");
             if (delta_energy_B < 0 || exp(-delta_energy_B / temperature) > (double)rand_r(&seed) / RAND_MAX) {
                 csr_add_row_to_row(error_vectors[k], i, p->mG, row_to_add);
                 csr_add_row_to_row(current_ensemble, i, p->mG, row_to_add);
             }
-            //printf("Add_done_B\n");
             U_A_B = csr_row_energ(p->vLLR, current_ensemble, i);
-            //printf("Energ_done_B1\n");
             U_B_B = csr_row_energ(p->vLLR, error_vectors[k], i);
-            //printf("Energ_done_B2\n");
             exp_U_A_minus_U_B_B += exp(U_A_B - U_B_B);
-            //printf("exp_B\n");
             N_B++;
         }
-        //printf("k-th ensemble done\n");
 
         double average_exp_U_A_minus_U_B_A = exp_U_A_minus_U_B_A / N_A;
         double average_exp_U_A_minus_U_B_B = exp_U_A_minus_U_B_B / N_B;
@@ -1423,29 +1371,19 @@ void BAR_MCMC(csr_t *mEt0_csr, csr_t *mEt_csr, params_t const * const p, int i) 
         if (result == -1) {
             csr_free(current_ensemble);
             current_ensemble = csr_copy(error_vectors[k]);
-            // if (current_ensemble == NULL) {
-            //     ERROR("Memory allocation failed for current_ensemble during update.\n");
-            //     for (int k = 0; k < num_ensembles; k++) {
-            //         csr_free(error_vectors[k]);
-            //     }
-            //     free(error_vectors);
-            //     return;
-            // }
         }
-        //printf("Update current ensemble\n");
+        
     }
-    //printf("BAR done\n");
+    
 
     csr_replace_row(mEt_csr, current_ensemble, i);
-    //printf("Replace done\n");
+    
 
     for (int k = 0; k < num_ensembles; k++) {
-        //printf("Freeing error_vector[%d]\n", k);
         csr_free(error_vectors[k]);
     }
     free(error_vectors);
     csr_free(current_ensemble);
-    //printf("Free done\n");
 }
 
 
@@ -1477,33 +1415,22 @@ mzd_t *do_decode_BAR(mzd_t *mS, params_t const * const p) {
     }
     mzp_free(perm);
     mzp_free(pivs);
-    //printf("rows of G matrix:%d\n",p->mG->rows);
+
     csr_t *mE_csr = csr_from_mzd(NULL,mE_dense);
     csr_t *mEt0_csr = csr_transpose(NULL, mE_csr);
 
-    //printf("nz of mG=%d\n", p->mG->nz);
+    mzd_t *mEt_dense = mzd_init(mS->ncols,mHx_dense->ncols);
+    mzd_set_ui(mEt_dense,0);
+    csr_t *mEt_csr=csr_from_mzd(NULL,mEt_dense);
 
-    int nrows_E = mHx_dense->ncols;
-    int ncols_E = mS->ncols;
-    
-    int nzmax_E = nrows_E * ncols_E;
-    csr_t *mEt_csr = csr_init(NULL, ncols_E, nrows_E, nzmax_E);
-    //csr_t *mEt_csr=csr_copy(mEt0_csr);
     if (mEt_csr == NULL) {
         ERROR("Memory allocation failed for CSR structure.\n");
         return NULL;
     }
-    csr_compress(mEt_csr);
-    //#pragma omp parallel for
-    //int tracker = 1;
-    for (int i = 0; i < mEt0_csr->rows; i++) {
-        //simulate_annealing_mcmc(mEt0_csr, p, i);
-        BAR_MCMC(mEt0_csr,mEt_csr,p,i);
-        //tracker++;
-        //printf("iter=%d\n", tracker);
-    }
 
-    //printf("finished calculation");
+    for (int i = 0; i < mEt0_csr->rows; i++) {
+        BAR_MCMC(mEt0_csr,mEt_csr,p,i);
+    }
 
     mzd_t *mEt = mzd_from_csr(NULL, mEt_csr);
     return mEt;
