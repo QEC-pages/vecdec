@@ -25,6 +25,50 @@ typedef struct ONE_PROB_T {
   int idx[]; /**< flexible array to store `n1+n2` entries */
 } one_prob_t;
 
+/** @brief poor man's most significant bit
+ * @note for `0` it returns `0`, for `-1` -> 31 */
+uint32_t getMsb(uint32_t n){
+  uint32_t msb  = sizeof(n) * 4;
+  uint32_t step = msb;
+  while (step > 1){
+    step /=2;
+    if (n>>msb)
+      msb += step;
+    else
+      msb -= step;
+  }
+  if (n>>msb)
+    msb++;
+  return (msb - 1);
+}
+
+/** @brief Gray code (code from `Gray_code` Wiki)
+ * @details
+ * `gray(i+1)` differs from `gray(i)` in one bit only.
+ * to fill a table of entries from `1` to `max`=`(1<<n)-1`, use
+ * @code{.C}
+ * uint32_t old=0, max=(uint32_t) 1 << n; 
+ * for(uint32_t i=1; i<max; i++){
+ *   uint32_t gray=binary_to_gray(i);
+ *   uint32_t diff_bit = getMsb(gray^old);
+ *   //! do something with this bit using `old` as reference 
+ *   old=gray;
+ * }
+ * 
+ * */
+uint32_t binary_to_gray(const uint32_t binary) {
+  return binary ^ (binary >> 1);		
+}
+
+/** @brief reverse of gray code */
+uint32_t gray_to_binary(uint32_t gray) {
+  uint32_t mask = gray;
+  while(mask) {
+    mask >>= 1;
+    gray ^= mask;
+  }
+  return gray;		
+}
 
 
 
@@ -41,6 +85,36 @@ qllr_t transform3(const qllr_t A, const qllr_t B, const qllr_t C){
   return llr_from_dbl(CC);
 }
 
+/** @brief calculate the partition function `Z(e)` over rows of `G`
+ * 
+ * Normalization `Z(e)`$=\sum_{x\sim e} \exp(-\sum_j x_j K_j)$.  
+ * Use Gray code to speed up the calculation: at most one row is added at each step.
+ *
+ */
+double do_Z(const qllr_t * const coeff, const mzd_t * err, csr_t * mG, _maybe_unused const long int debug){
+  qllr_t energ = mzd_row_energ(coeff, err, 0);
+  double prob = P_from_llr(energ);
+  if(mG->rows > 30)
+    ERROR("number of rows in matrix G[%d,%d] is too large\n",mG->rows, mG->cols);
+  const uint32_t max = (uint32_t ) 1<< mG->rows, prev=0;
+  for (uint32_t bin=1; bin < max; bin++){
+    uint32_t gray = binary_to_gray(i);
+    uint32_t idx = getMsb(gray^prev); /** row to add */
+    for(int i=mG->p[idx]; i < mG->p[idx+1]; i++){
+      int j=mG->i[i]; /** position */
+      if(mzd_read_bit(err,0,j))
+	energ -= coeff[j];
+      else 
+	energ -= coeff[j];
+      mzd_flip_bit(err,0,j);      
+    }
+    prob += P_from_llr(energ);
+    
+    prev = gray;
+  }
+  
+  return prob ;
+}
 
 /** @brief replace the DEM with star-triangle transformed 
  *
