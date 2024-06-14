@@ -85,7 +85,8 @@ int var_init(int argc, char **argv, par_t *p){
 	printf("# matrix dimensions %d by %d\n",p->mat->rows,p->mat->cols);
       //      if(p->debug&128)	csr_out(p->mat);
       if(p->debug&128){
-	printf("# original matrix:\n");
+	if(p->debug&1)
+	  printf("# original matrix:\n");
 	if (p->mat->cols < 50){
 	  mzd_t *mmat = mzd_from_csr(NULL,p->mat);
 	  mzd_print(mmat);

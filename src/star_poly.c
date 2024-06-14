@@ -87,33 +87,45 @@ qllr_t transform3(const qllr_t A, const qllr_t B, const qllr_t C){
 
 /** @brief calculate the partition function `Z(e)` over rows of `G`
  * 
- * Normalization `Z(e)`$=\sum_{x\sim e} \exp(-\sum_j x_j K_j)$.  
+ * Normalization `Z(e)`$=\sum_{x\sim e} Prob(x)$.  
  * Use Gray code to speed up the calculation: at most one row is added at each step.
  *
  */
-double do_Z(const qllr_t * const coeff, const mzd_t * err, csr_t * mG, _maybe_unused const long int debug){
+double do_Z(const qllr_t * const coeff, const mzd_t * const err0, csr_t * mG, _maybe_unused const long int debug){
+  mzd_t * err = mzd_copy(NULL, err0);
   qllr_t energ = mzd_row_energ(coeff, err, 0);
   double prob = P_from_llr(energ);
+  if(debug&32){
+    mzd_print_row(err,0);
+    printf(" P0=%g row=%d cols=%d\n",prob, mG->rows, mG->cols);
+  }
+
   if(mG->rows > 30)
     ERROR("number of rows in matrix G[%d,%d] is too large\n",mG->rows, mG->cols);
-  const uint32_t max = (uint32_t ) 1<< mG->rows, prev=0;
+  const uint32_t max = (uint32_t ) 1 << mG->rows;
+  uint32_t prev=0;
   for (uint32_t bin=1; bin < max; bin++){
-    uint32_t gray = binary_to_gray(i);
+    uint32_t gray = binary_to_gray(bin);
     uint32_t idx = getMsb(gray^prev); /** row to add */
     for(int i=mG->p[idx]; i < mG->p[idx+1]; i++){
       int j=mG->i[i]; /** position */
       if(mzd_read_bit(err,0,j))
 	energ -= coeff[j];
       else 
-	energ -= coeff[j];
+	energ += coeff[j];
       mzd_flip_bit(err,0,j);      
     }
-    prob += P_from_llr(energ);
-    
+    prob += P_from_llr(energ);    
+    if(debug&32){
+      mzd_print_row(err,0);
+      printf(" energ=%g P=%g gray=%d idx=%d diff=%d\n",dbl_from_llr(energ), prob,gray,idx,gray^prev);
+    }
     prev = gray;
   }
-  
-  return prob ;
+  mzd_free(err);
+  int diff = mG->rows - rank_csr(mG);
+  uint32_t factor = (uint32_t )1 << diff;
+  return prob /factor;
 }
 
 /** @brief replace the DEM with star-triangle transformed 
@@ -153,6 +165,11 @@ int star_triangle(csr_t * Ht, csr_t * Lt, qllr_t *LLR, const one_vec_t * const c
   mzd_t *used = mzd_init(1,n);
   mzd_t *vLt = mzd_init(1, Lt->cols);
 
+  if(debug&32){
+    printf("original half-LLRs:\n");
+    for(int i=0;i<n;i++)
+      printf("%g%s",dbl_from_llr(LLR[i])*0.5,i+1==n ? "\n":" ");
+  }
   one_prob_t **cols = calloc(n, sizeof(one_prob_t *)); /* storage for processed columns */
   int n1=0, r1=Ht->cols, nzH1=0, nzL1=0; /** new `n`, rows of new `H`, and non-zero elements */
   if((!used) || (!cols))
@@ -276,6 +293,13 @@ int star_triangle(csr_t * Ht, csr_t * Lt, qllr_t *LLR, const one_vec_t * const c
   Lt->p[n1]=jL;
   Lt->nz = -1;  
 
+
+  if(debug&32){
+    printf("final half-LLRs:\n");
+    for(int i=0;i<n1;i++)
+      printf("%g%s",dbl_from_llr(LLR[i])*0.5,i+1==n1 ? "\n":" ");
+  }
+  
   /** memory clean-up */
   mzd_free(vLt);
   mzd_free(used);
@@ -366,11 +390,14 @@ csr_t * do_K_from_C(const csr_t * const mLt, const one_vec_t * const codewords,
 csr_t * do_G_from_C(const csr_t * const mLt, const one_vec_t * const codewords,
 		    const int num_need, const int minW, int maxW,
 		    _maybe_unused const int debug){
-  assert(mLt);
-  assert(codewords);
-  printf("num_need=%d row=%d minW=%d maxW=%d\n",num_need,mLt->rows, minW,maxW);
+  if (!mLt)
+    ERROR("invalid call: mLt must be defined\n");
+  if (!codewords)
+    ERROR("invalid call: codewords must be defined\n");
+  if(debug&1)
+    printf("# num_need=%d rows=%d cols=%d minW=%d maxW=%d\n",num_need,mLt->rows, mLt->cols, minW,maxW);
   mzd_t *mat = mzd_init(num_need, mLt->rows); /** needed to ensure the sufficient rank */
-  mzd_t *vLt = mzd_init(1, mLt->cols); 
+  mzd_t *vLt = mzd_init(1, mLt->cols);
   one_vec_t const * pvec;
   int rank=0, num=0, nz=0; /** `rank` how many rows already in mat; `num` vectors, `nz` = non-zero bits total */
   int skip_checkW = minW > maxW ? 1 : 0; /** this may happen if `dW=-1`, i.e., include any weight */
@@ -403,19 +430,25 @@ csr_t * do_G_from_C(const csr_t * const mLt, const one_vec_t * const codewords,
       }
     }
   }
-  if(rank<num_need)
+
+  if(rank<num_need){
+    printf("# minW=%d maxW=%d\n", minW, maxW);
     ERROR("Number of codewords is not sufficient to construct G=Hz matrix: rk=%d < rankG=%d",rank,num_need);
+  }
   mzd_free(mat);
 
   /** second round: actually create the CSR matrix */
+  //  printf("creating csr matrix %d by %d nz=%d\n",num, mLt->rows, nz);
   csr_t *ans = csr_init(NULL,num,mLt->rows,nz);
   int jvec=0; /** vector index */
   int pos=0; /** position index */
   for(int iw = minW; iw <= maxW ; iw++){ /** same cycle as before  */
     for(pvec = codewords; pvec != NULL; pvec=(one_vec_t *)(pvec->hh.next)){
+      mzd_row_clear_offset(vLt, 0, 0); 
       if(skip_checkW || (pvec->weight == iw)){
 	for(int i=0; i < pvec->weight; i++){
 	  const int idx = pvec->arr[i];
+	  assert(idx< mLt->rows);
 	  for(int j=mLt->p[idx]; j < mLt->p[idx+1] ; j++)
 	    mzd_flip_bit(vLt,0,mLt->i[j]);
 	}

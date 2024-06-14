@@ -262,6 +262,8 @@ long long int nzlist_read(const char fnam[], params_t *p){
   }
   p->num_cws += count; 
   fclose(f);
+  if(p->debug&1)
+    printf("read %lld codewords from %s, total %lld\n",count, fnam, p->num_cws);
   return count; 
 }
 
@@ -1130,7 +1132,7 @@ int var_init(int argc, char **argv, params_t *p){
       if (p->debug&4)
 	printf("# read %s, QLLR parameter d1=%d\n",argv[i],p-> d1);
 #ifndef USE_QLLR
-      ERROR("program was compiled without \"USE_QLLR\" define")
+      ERROR("program was compiled without \"USE_QLLR\" define");
 #endif       
     }
     else if (sscanf(argv[i],"qllr2=%d",&dbg)==1){ /** QLLR `d2` param */
@@ -1138,7 +1140,7 @@ int var_init(int argc, char **argv, params_t *p){
       if (p->debug&4)
 	printf("# read %s, QLLR parameter d2=%d\n",argv[i],p-> d2);
 #ifndef USE_QLLR
-      ERROR("program was compiled without \"USE_QLLR\" define")
+      ERROR("program was compiled without \"USE_QLLR\" define");
 #endif       
     }
     else if (sscanf(argv[i],"qllr3=%d",&dbg)==1){ /** QLLD `d3` param */
@@ -1146,7 +1148,7 @@ int var_init(int argc, char **argv, params_t *p){
       if (p->debug&4)
 	printf("# read %s, QLLR parameter d3=%d\n",argv[i],p-> d3);
 #ifndef USE_QLLR
-      ERROR("program was compiled without \"USE_QLLR\" define")
+      ERROR("program was compiled without \"USE_QLLR\" define");
 #endif       
     }
     else if (sscanf(argv[i],"nvec=%d",&dbg)==1){ /** `nvec` */
@@ -1277,7 +1279,7 @@ int var_init(int argc, char **argv, params_t *p){
 	else
 	  printf("# setting upper limit 'minW+%d' on error/codeword weight to store\n",p->dW);
       }	
-      if(p->mode!=2)
+      if((p->mode!=2) && (p->mode!=3))
 	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
     }
     else if (sscanf(argv[i],"maxW=%d",&dbg)==1){ /** `maxW` */
@@ -2263,7 +2265,7 @@ int main(int argc, char **argv){
       free(comment);
       break;
     }
-    if(p->submode&32){ /** matrix transformation */
+    else if(p->submode&32){ /** matrix transformation */
       if(!p->finC)
 	ERROR("mode=%d submode=%d (bit 5 set) must set 'finC' for matrix transformation",
 	      p->mode,p->submode);
@@ -2354,8 +2356,9 @@ int main(int argc, char **argv){
 	  if(p->debug&1)
 	    printf("# creating G=Hz matrix and writing to\t%s%s\n",
 		   p->fout, p->use_stdout ? "\n" :"G.mmx");
-	  if(p->finC)
-	    p->mG = do_G_from_C(p->mLt,p->codewords,p->rankG,p->minW, p->minW + p->dW, p->debug);
+	  if(p->finC){
+	    p->mG = do_G_from_C(p->mLt,p->codewords,p->rankG,p->minW, p->maxW ? p->maxW : p->minW + p->dW, p->debug);
+	  }
 	  else 
 	    p->mG = do_G_matrix(p->mHt,p->mLt,p->vLLR, p->rankG, p->debug);
 	  comment[0]='G';
@@ -2378,6 +2381,7 @@ int main(int argc, char **argv){
 	    ERROR("Incorrect rank=%d of provided matrix G=Hz, expected %d",rankG, p->rankG);
 #endif 	  	  
 	}
+
 	csr_mm_write(p->fout,"G.mmx",p->mG,comment);
       }
 
@@ -2388,17 +2392,18 @@ int main(int argc, char **argv){
 		   p->fout, p->use_stdout ? "\n" :"K.mmx");
 	  if(p->finC){/** use the list of codewords from file */
 	    //	    nzlist_read(p->finC, p);
-	    p->mK = do_K_from_C(p->mLt, p->codewords, p->ncws, p->nvar, p->minW, p->minW+p->dW, p->debug);
+	    p->mK = do_K_from_C(p->mLt, p->codewords, p->ncws, p->nvar,
+				p->minW, p->maxW ? p->maxW : p->minW+p->dW, p->debug);
 	    //	  csr_out(p->mK);
 	  }
 	  else{
 	    if ((p->mG)&&(p->mH)){
 	      p->mK=Lx_for_CSS_code(p->mG,p->mH);
-	      comment[0]='K';
 	    }
 	    else
 	      ERROR("use mode=3.3 or specify the codewords file `finC=...` or generator matrix `finG=...`");
 	  }
+	  comment[0]='K';
 	}
 	else{
 	  size_t size2 = snprintf(NULL, 0, "K matrix from file %s", p->finK);
@@ -2417,6 +2422,30 @@ int main(int argc, char **argv){
     }
     
     free(comment);
+
+    if((p->debug &16) &&(p->mG) && (p->vLLR)){ /** calculate partition functions */
+      printf("debug&16: calculating partition functions (may be slow)\n");
+      mzd_t * err = mzd_init(1,p->nvar);
+      double prob0 = do_Z(p->vLLR, err, p->mG, p->debug);
+      printf("Z(0)=%g\n",prob0);
+      if(p->mK){
+	int max = p->ncws > 2 ? 1<<2 : 1 << p->ncws ; 
+	uint32_t prev=0;
+	for(int bin=1; bin < max; bin++){
+	  uint32_t gray =binary_to_gray(bin);
+	  uint32_t idx = getMsb(gray^prev); /** row to add */
+	  for(int i=p->mK->p[idx]; i < p->mK->p[idx+1]; i++){
+	    int j = p->mK->i[i]; /** position */
+	    mzd_flip_bit(err,0,j);      
+	  }	  
+	  printf("Z(%d)=",gray); fflush(stdout);
+	  double prob = do_Z(p->vLLR, err, p->mG, p->debug);
+	  printf("%g ratio=%g\n", prob, prob/prob0);
+	  prev=gray;
+	}
+      }
+      mzd_free(err);
+    }
     break;
     
   default:

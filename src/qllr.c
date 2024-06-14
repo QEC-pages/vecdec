@@ -114,7 +114,7 @@ extern "C"{
 #endif /* USE_QLLR */
 
 /** @brief calculate the energy of the row `i` in `A` */
-static inline qllr_t mzd_row_energ_naive(qllr_t *coeff, const mzd_t *A, const int i){
+static inline qllr_t mzd_row_energ_naive(const qllr_t * const coeff, const mzd_t *A, const int i){
   qllr_t ans=0;
   //  mzd_print(A);
   for(rci_t j = 0; j < A->ncols; ++j)
@@ -126,12 +126,12 @@ static inline qllr_t mzd_row_energ_naive(qllr_t *coeff, const mzd_t *A, const in
 }
 
 #if 0
-static inline qllr_t mzd_row_energ(qllr_t *coeff, const mzd_t *A, const int i){
+static inline qllr_t mzd_row_energ(const qllr_t * const coeff, const mzd_t *A, const int i){
   return mzd_row_energ_naive(coeff, A, i);
 }
 #else /** substantial speed-up of `mode=0` calculation for large matrices */
 /** @brief calculate the energy of the row `i` in `A` */
-qllr_t mzd_row_energ(qllr_t *coeff, const mzd_t *A, const int i){
+qllr_t mzd_row_energ(const qllr_t * const coeff, const mzd_t *A, const int i){
 #ifndef NDEBUG  
   if (mzd_is_windowed(A))
     ERROR("this does not work on a windowed matrix, use `mzd_row_energ_naive()`");  
