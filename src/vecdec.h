@@ -200,6 +200,13 @@ extern "C"{
   csr_t * do_G_matrix(const csr_t * const mHt, const csr_t * const mLt, const qllr_t LLR[], 
 		      const int rankG, const int debug);
 
+  /** calculate partition function */
+  double do_Z(const qllr_t * const coeff, const mzd_t * err, csr_t * mG, _maybe_unused const long int debug);
+
+  uint32_t gray_to_binary(uint32_t gray);
+  uint32_t getMsb(uint32_t n);
+  uint32_t binary_to_gray(const uint32_t binary);
+  
   /** 
    * @brief The help message. 
    * 

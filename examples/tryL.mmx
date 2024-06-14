@@ -1,0 +1,5 @@
+%%MatrixMarket matrix coordinate integer general
+% Field: GF(2)
+% example quantum code Lx matrix 
+1 7 1
+1 5 1
