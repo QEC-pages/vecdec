@@ -5,7 +5,7 @@
 # variables to use 
 vecdec=../src/vecdec
 stim=../../Stim/out/stim
-pymatching=../../PyMatching/pymatching
+pymatching=../../Stim/PyMatching/build/pymatching
 
 # place to put the data in
 outfile=surf_new.dat
@@ -22,11 +22,11 @@ jmax=6
 Ntotal=$((1024*8)) 
 nvec=$((1024*8))
 factr=10 # NOTE: make it "1000" for an actual calculation ********************** !!!
-#echo "# running surf3.sh" > $outfile
-#echo "# same depolarizing probability and measurement error p1" >> $outfile
-#echo "# columns: d p1 Nfails Ntotal"
-#echo "# columns: d p1 Nfails Ntotal" >> $outfile
-#index=0 # block index to use in gnuplot
+echo "# running surf3.sh" > $outfile
+echo "# same depolarizing probability and measurement error p1" >> $outfile
+echo "# columns: d p1 Nfails Ntotal"
+echo "# columns: d p1 Nfails Ntotal" >> $outfile
+index=0 # block index to use in gnuplot
 echo "#" d p 'pF(vecdec) ' 
 for (( ddd = $dmin; ddd <= $dmax; ddd += 2 )) ; do # distance loop
     fnam=surf_d$ddd # filename to use
@@ -69,7 +69,7 @@ for (( ddd = $dmin; ddd <= $dmax; ddd += 2 )) ; do # distance loop
       elif ((ddd==7)); then steps_max=$((256*factr)) ; fi
                            
       for (( steps=$((4*factr)) ; steps <= steps_max ; steps*= 2 )) ; do
-        $vecdec debug=0 mode=0.1 fdet=$detf fobs=$obsf steps=$steps lerr=0 swait=0 \
+        $vecdec debug=0 mode=0 fdet=$detf fobs=$obsf steps=$steps lerr=0 swait=0 \
           ntot=$Ntotal nvec=$((nvec)) nfail=0 f=$fnam.dem > $fnam.out 
           # $vecdec debug=0 mode=0.1 fdet=$detf fobs=$obsf steps=$steps lerr=0 swait=0 \
           #  ntot=$Ntotal nvec=$((nvec)) nfail=0 finC=surf_d3C.nz f=$fnam.dem > $fnam.out dW=5 

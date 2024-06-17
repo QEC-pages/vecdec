@@ -8,7 +8,7 @@ vecdec=../src/vecdec
 stim=../../Stim/out/stim
 pymatching=../../PyMatching/pymatching 
 # place to put the data in
-outfile=surf_est.dat
+outfile=surf12.dat
 
 # program parameters
 dmin=3 # minimum code distance 

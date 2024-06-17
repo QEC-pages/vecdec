@@ -8,7 +8,7 @@ vecdec=../src/vecdec
 stim=../../Stim/out/stim
 
 # place to put the data in
-outfile=surf12.dat
+outfile=toric.dat
 
 # program parameters
 dmin=3 # minimum code distance 
@@ -18,7 +18,7 @@ jmin=0 # range for calculating p1 and p2 (using p0/2**j )
 jmax=6
 Ntotal=$((1024*100)) # total number of steps to use
 
-echo "# running surf12.sh" > $outfile
+echo "# running toric.sh" > $outfile
 echo "# depolarizing probability p1, measurement error p2" >> $outfile
 echo "# columns: d p1 p2 Nfails Ntotal"
 index=0 # block index to use in gnuplot
@@ -36,7 +36,7 @@ for (( d0=$dmin; d0<=$dmax; d0+=2 )) do # distance loop
         fnam=surf_d$d0_$j1_$j2 # filename to use
         fnam=tmp # comment this line to keep all files 
         # now, generate the stim circuit
-        $stim gen --code surface_code --task rotated_memory_x \
+        $stim gen --code toric_code --task rotated_memory_x \
           --distance $d0 --rounds $d0 \
           --after_clifford_depolarization $p1 \
           --after_reset_flip_probability $p1 \
