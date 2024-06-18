@@ -162,6 +162,39 @@ diff tmp1.01 tmp2.01 | grep -c -e "^>"
 which returns `53`, in agreement with the `FAIL_FRAC` or `S_TOT`
 reported by `vecdec`.
 
+### Syndrome vector manipulation 
+
+In some cases, we may need to modify the syndrome vectors read from a
+file.  Input parameters `fer0` and `finA` are used to this extent.
+Namely, the detector events `s` read from a file specified with the
+parameter `fdet` are modified according to `s -> s + A*e0`, where
+binary matrix `A` and `01` vectors `e0` are read from files specified
+as arguments of `finA=...` and `fer0=...`.  In particular, if we use
+BP w/o OSD for decoding, and save generated detector events and
+the predicted errors into files `dets.01` and `bperr.01` respectively:
+```
+./vecdec mode=1.12 finH= ../examples/96.3.963.alist seed=13 \
+      ntot=1000 nvec=1000 steps=40 useP=0.05 gdet=dets.01 perr=bperr.01
+```
+we can verify the syndrome values using 
+```
+H=../examples/96.3.963.alist 
+./vecdec mode=0 finH= $H ntot=1000 nvec=1000 steps=0 useP=0.05 \
+         fdet=dets.01 fer0=bperr.01 finA=$H gdet=yyy.01 
+```
+where each line in the file `yyy.01` is the combination `s+A*e0`, with the 
+lines `s` and `e0` read from the files `dets.01` and `bperr.01`,
+respectively.  In a particular example, the BP decoding gave 
+`C_BP_TOT=914`, i.e., `86` times convergence failure, which is also
+the number of non-zero syndrome vectors in the file `yyy.01` (use
+`grep -c 1 yyy.01` to count).
+
+The input parameters `finA`, `fer0`, and `fdet` can be used for decoding 
+(in `mode=0` and `mode=1`); they must be specified at the same time.  
+The only effect of `fer0` and `finA` is that the syndrome vectors are modified; 
+otherwise, the decoding can proceed as usual.
+
+
 ### Simulate the performance of a classical code 
 
 - **Use the internal random information set (RIS) decoder.** Use a
@@ -191,8 +224,33 @@ are examined.
 In a particular run the block error rate (BER) `0.0249023` (`102` out
 of `4096`) was achieved.  Increasing the number of RIS decoding steps
 by a factor of 10 **increased** BER to `0.029541` (`121` out of
-`4096`). [**FIXME:** *This looks like a bug - likely in the OSD module
--- nothing like this happens with `lerr=-1`!*]
+`4096`).  While looks like a bug, notice that the difference in the
+number of failed decoding changed by `21`, which is within the
+statistical range; this can be a result of a different set of errors.  
+
+To guarantee the same error vectors, specify the same `seed`
+parameter, and also use the same values for `ntot` and `nvec`
+parameters (or just read detector events / observables from
+files).  The following double loop
+```
+vecdec=./src/vecdec
+for lerr in 0 1 ; do 
+  for steps in 500 2000 8000 ; do 
+    echo lerr=$lerr steps=$steps \
+  	    `$vecdec debug=0 seed=113 mode=0 finH= ./examples/96.3.963.alist \
+	             ntot=10000 nvec=10000 steps=$steps useP=0.05 lerr=$lerr` 
+  done 
+done
+```
+gives more predictable results.  In a particular run: 
+```
+lerr=0 steps=500 0.0819 10000 9181 # ./examples/96.3.963.alist
+lerr=0 steps=2000 0.0387 10000 9613 # ./examples/96.3.963.alist
+lerr=0 steps=8000 0.0314 10000 9686 # ./examples/96.3.963.alist
+lerr=1 steps=500 0.0314 10000 9686 # ./examples/96.3.963.alist
+lerr=1 steps=2000 0.0307 10000 9693 # ./examples/96.3.963.alist
+lerr=1 steps=8000 0.0307 10000 9693 # ./examples/96.3.963.alist
+```
 
 - **Use Belief Propagation (BP) disorder with optional OSD.** Same
   code, using up to `steps=50` BP iterations with parallel update

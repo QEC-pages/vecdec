@@ -46,7 +46,7 @@ void print_one_vec(const one_vec_t * const pvec){
 void cnt_update(extr_t which, int istep){
   const long long int max = (LLONG_MAX >> 3);
   cnt[which]++;
-  if((which == CONV_BP) || (which == CONV_BP_AVG))
+  if((which == CONV_BP) || (which == CONV_BP_AVG) || (which == CONV_TRIVIAL))
     cnt[CONV_BP_TOT]++;
   iter1[which]+=abs(istep);
   iter2[which]+=istep*istep;
