@@ -1546,7 +1546,7 @@ int var_init(int argc, char **argv, params_t *p){
 
   if(p->finH){
     if(! p->finL){
-      if(((p->fobs) || (p->fdet)) && (p->perr == NULL))
+      if(((p->fobs) || (p->fdet)) && ((p->perr == NULL) && (p->fer0 == NULL)))
 	ERROR("Without L matrix, cannot specify fdet=%s or fobs=%s\n",
 	      p->fdet ? p->fdet : "",  p->fobs ? p->fobs : "");      
     }
@@ -1707,7 +1707,7 @@ int var_init(int argc, char **argv, params_t *p){
     if((p->fdet==NULL)&&(p->fobs!=NULL))
       ERROR(" mode=%d fobs='%s' need detection events file 'fdet'\n",
 	    p->mode, p->fobs);
-    if ((p->fdet!=NULL)&&(p->fobs==NULL)&&(p->perr == NULL))
+    if ((p->fdet!=NULL)&&(p->fobs==NULL)&&(p->perr == NULL)&&(p->fer0 == NULL))
       ERROR(" mode=%d fdet='%s' need observables file 'fobs'\n",
 	    p->mode, p->fdet);
 
