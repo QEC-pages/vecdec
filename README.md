@@ -96,6 +96,72 @@ format (the format is recognized automatically).
 
 ## Common tasks 
 
+### Use externally generated error vectors, detector events, or observables 
+
+In addition to internal sampler, externally generated error vectors,
+detector events, or observables can be used.  This can be done, e.g., with the help of `Stim`:
+```bash 
+stim=../Stim/out/stim # location of `stim` command-line binary
+vecdec=src/vecdec     # location of `vecdec`
+$stim sample_dem --shots 5000 --in ./examples/surf_d3.dem \
+	--out tmp_det.01 --out_format 01 \
+	--obs_out tmp_obs.01 --obs_out_format 01
+$vecdec mode=0 fdet=tmp_det.01 fobs=tmp_obs.01 fdem= ./examples/surf_d3.dem nvec=2500 steps=1000 ntot=5000 
+```
+
+Alternatively, generated or constructed detector events and
+observables in `mode=0` and `mode=1` can be written to files.  The
+file names are set by the command line arguments `gdet=...` and
+`gobs=...`  For example:
+```
+./src/vecdec fdem= input/rep_code3.dem gdet=tmpA.01 gobs=tmpB.01 ntot=1500 nvec=1000 steps=0
+```
+Note that since `ntot` and `nvec` are not commensurate, this would write `2000` lines to 
+each of the output files `tmpA.01` and `tmpB.01`.  When exact count is important, make 
+sure `ntot` be divisible by `nvec`. 
+
+In addition, actual error vectors can be read from a file using the
+command line argument `ferr=[file_name]`.  As a reminder, with a binary error vector `e`, 
+the corresponding detector events are the syndrome bits `H*e`, and observable bits are `L*e`.
+
+Similarly, in `mode=0` and `mode=1`, the predicted error vectors,
+detector events, and observables can be written to `01` files.  For example, with the files created above, run  
+```
+$vecdec mode=0 fdet=tmp_det.01 fobs=tmp_obs.01 fdem= ./examples/surf_d3.dem nvec=2500 steps=1000 ntot=5000 \
+  perr=tmp_E.01 pdet=tmp_D.01 pobs=tmp_L.01 
+det_mism=`diff  tmp_D.01 tmp_det.01 | grep -c -e "^<"`
+obs_mism=`diff  tmp_L.01 tmp_obs.01 | grep -c -e "^<"`
+echo mismatch detector: $det_mism obs: $obs_mism
+```
+In a particular run, the last three lines of the output are 
+```
+# fail_fraction total_cnt succes_cnt
+ 0.0024 5000 4988 # ./examples/surf_d3.dem
+mismatch detector: 0 obs: 12 
+```
+That is, all detector events are recovered correctly (as expected),
+but there are `12` logical errors, in agreement with the
+`fail_fraction` and `success_cnt` reported by the program.
+
+A similar run with `mode=1.12 lerr=-1` (serial-V BP without OSD) gives
+output with the last three lines 
+```
+# FAIL_FRAC TOTAL  C_TRIVIAL S_TRIVIAL  C_BP C_BP_AVG C_BP_TOT S_BP   S_OSD S_TOT
+     0.0106 5000  3530 3530      1337 86 1423 1417  0 4947
+mismatch detector: 47 obs: 21
+```
+That is, the decoder failed to converge `47` times (in agreement with
+`C_TRIVIAL`+`C_BP_TOT`), and `21` times the observable was incorrect.
+To reproduce the total number of logical errors, the files must be
+compared column-by-column, e.g., by running 
+```
+paste tmp_det.01 tmp_obs.01 > tmp1.01
+paste tmp_D.01 tmp_L.01 > tmp2.01
+diff tmp1.01 tmp2.01 | grep -c -e "^>"
+```
+which returns `53`, in agreement with the `FAIL_FRAC` or `S_TOT`
+reported by `vecdec`.
+
 ### Simulate the performance of a classical code 
 
 - **Use the internal random information set (RIS) decoder.** Use a
@@ -166,12 +232,12 @@ performance, with BER of `0.0390918` (`4003` out of `102400`).
   `tmp.nz`.
 ```
 vecdec=./src/vecdec
-$vecdec mode=2 steps=100000 finH= ./examples/96.3.963.alist useP=0.05 outC=tmp.nz dW=10
+$vecdec mode=2.1 steps=100000 finH= ./examples/96.3.963.alist useP=0.05 outC=tmp.nz dW=10
 ```
 In a particular run, `195769` codewords have been generated; more
   codewords can be found by repeating the runs using the command line
 ```
-$vecdec mode=2 steps=100000 finH= ./examples/96.3.963.alist useP=0.05 \
+$vecdec mode=2.1 steps=100000 finH= ./examples/96.3.963.alist useP=0.05 \
   finC=tmp.nz outC=tmp.nz dW=10
 ```
 In a particular set of three subsequent runs, `210822`, `212203`, and
@@ -179,8 +245,8 @@ In a particular set of three subsequent runs, `210822`, `212203`, and
 can be used to estimate the BER, e.g, by running a `bash` script 
 ```
 for ((w=6; w<=16; w++)) ; do 
-  echo $w `$vecdec debug=0 mode=2 steps=0 \
-  finH= ./examples/96.3.963.alist useP=0.05 finC=tmp.nz maxW=$w`  
+  echo $w `$vecdec debug=0 mode=2.1 steps=0 \
+  finH= ./examples/96.3.963.alist useP=0.05 finC=tmp.nz maxW=$w` 
 done
 ```
 which gives the output
@@ -239,9 +305,9 @@ prefactor calculation.)
 vecdec=./src/vecdec 
 $vecdec debug=1 mode=0 finH= ./input/GB_10_w6_X.mtx \
                        finG= ./input/GB_10_w6_Z.mtx \
-					useP=0.005 lerr=1 nvec=10240 ntot=102400 steps=5000 
+					   useP=0.005 lerr=1 nvec=100000 ntot=1000000 steps=5000
 ```
-  which gives the BER of `0.000908203` (`93` errors out of `102400`).
+  which gives the BER of `0.000814` (`814` errors out of `1000000`).
 
 - Use BP decoder with serial-`V` schedule based on average LLR
 ```
@@ -253,30 +319,35 @@ $vecdec debug=1 mode=0 finH= ./input/GB_10_w6_X.mtx \
 
 - Estimate the BER by generating the list of codewords 
 ```
-$vecdec debug=1 mode=2 finH= ./input/GB_10_w6_X.mtx \
+$vecdec debug=1 mode=2.0 finH= ./input/GB_10_w6_X.mtx \
                        finG= ./input/GB_10_w6_Z.mtx \
 				    useP=0.005 steps=1000000 finC=tmp.nz outC=tmp.nz dW=7
 ```
-  and a subsequent cycle over the maximum weight:
+this generates a list of 32 codewords.  A subsequent cycle over the maximum weight:
 ```
-for ((w=3; w<=10; w++)) ; do 
-  echo $w `$vecdec debug=0 mode=2 finH=./input/GB_10_w6_X.mtx \
+for ((w=3; w<=6; w++)) ; do 
+  echo $w `$vecdec debug=0 mode=2.3 finH=./input/GB_10_w6_X.mtx \
       finG=./input/GB_10_w6_Z.mtx useP=0.005 steps=0 finC=tmp.nz  maxW=$w` 
 done
 ```
   which gives 
 ```
-3 0.0280724 0.00280724 3 10
-4 0.0320325 0.00280724 3 20
-5 0.0327029 0.00280724 3 32
-6 0.0327029 0.00280724 3 32
-7 0.0327029 0.00280724 3 32
-8 0.0327029 0.00280724 3 32
-9 0.0327029 0.00280724 3 32
-10 0.0327029 0.00280724 3 32
+3 0.0280724 0.00280724 0.00074625 7.4625e-05 3 10 10 10
+4 0.0320325 0.00280724 0.000751225 7.4625e-05 3 10 20 20
+5 0.0327029 0.00280724 0.000766113 7.4625e-05 3 10 32 32
+6 0.0327029 0.00280724 0.000766113 7.4625e-05 3 10 32 32
+```
+Here the column titles (except for the first one which is the maximum
+codeword weight used) can be generated using `debug=1` option; they
+are
+```
+# sumP(fail) maxP(fail) sumP_exact(fail) maxP_exact(fail) min_weight N_min N_use N_tot
 ```
 Again, the estimated contribution from a single codeword is about
-twice the LER computed.
+twice the LER computed.  However, the `sumP_exact(fail)` appears to
+converge at `0.000766113`, which is numerically close to the
+fail probability computed using RIS decoder (not clear why the
+difference) and about a half of the fail probability given by the BP decoder.
 
 ### Simulate quantum Clifford circuit (given a detector error model)
 
@@ -355,30 +426,25 @@ Finally, to estimate the decoding
 performance at small error probabilities, `mode=2` can be used:
 ```
 vecdec=./src/vecdec 
-$vecdec mode=2 fdem=sd5.dem steps=100000 dW=7 outC=tmp.nz 
-for ((w=5; w<=12; w++)) ; do 
-  echo $w `$vecdec debug=0 mode=2 fdem=sd5.dem steps=0 maxW=$w finC=tmp.nz`
+$vecdec mode=2.0 fdem=sd5.dem steps=100000 dW=7 outC=tmp.nz 
+for ((w=5; w<=10; w++)) ; do 
+  echo $w `$vecdec debug=0 mode=2.2 fdem=sd5.dem steps=0 maxW=$w finC=tmp.nz`
 done
 ```
 This the output (truncated at the top)
 ```
-# sumP(fail) maxP(fail) min_weight num_found
-0.184833 0.000686607 5 5458643
-# wrote 5458643 computed codewords to file tmp.nz
-5 0.0757023 0.000686607 5 13785
-6 0.164425 0.000686607 5 175286
-7 0.182536 0.000686607 5 531246
-8 0.18459 0.000686607 5 1085981
-9 0.184808 0.000686607 5 1853386
-10 0.184829 0.000686607 5 2838376
-11 0.184832 0.000686607 5 4042564
-12 0.184833 0.000686607 5 5458643
+# min_weight N_min N_use N_tot
+5 13800 5471523 5471523
+# wrote 5471523 computed codewords to file tmp.nz
+5 0.00258921 2.71648e-05 5 13800 13800 13800
+6 0.00880308 2.71648e-05 5 13800 175887 175887
+7 0.009567 2.71648e-05 5 13800 533481 533481
+8 0.00968002 2.71648e-05 5 13800 1090400 1090400
+9 0.00968931 2.71648e-05 5 13800 1858982 1858982
+10 0.00969025 2.71648e-05 5 13800 2845251 2845251
 ```
-While the expansion converges, clearly, the greedy estimate is nearly
-two orders of magnitude bigger than the actual error rate, while the
-single largest contribution to the sum is several orders of magnitude
-too small.  Evidently, the reason is the large number (`13785`) of
-minimum-weight vectors associated with this particular DEM.
+Clearly, the expansion converges, and the greedy estimate is
+numerically close to the actual error rate.
 
 ## Use matrix transformations to simplify the error model
 
@@ -446,23 +512,40 @@ number of steps.  For example, for the DEM file
 `./examples/surf_d7.dem` (it was originally generated with the help of
 `Stim`) we run
 ```
-$vecdec debug=0 mode=2 steps=10000 fdem= ./examples/surf_d7.dem
+$vecdec debug=1 mode=2 steps=10000 fdem= ./examples/surf_d7.dem
 ```
 to get the output 
 ```
-8.53809e-06 1.26044e-06 7 19
+# initializing seed=211030872039 from time(NULL)+1000000ul*getpid()+0
+# opening DEM file ./examples/surf_d7.dem
+# read DEM: r=336 k=1 n=5473
+# using variables: mode=2 submode=0
+# Analyze small-weight codewords in 10000 RIS steps; swait=0
+# maxC=0 dE=-1 dW=0 maxW=0
+# calculating minimum weight
+# mode=2 submode=0 debug=1
+# mode=2, estimating fail probability in 10000 steps
+nz=1 cnt=7 energ=36.8401
+nz=1 cnt=7 energ=36.7964
+# min_weight N_min N_use N_tot
+7 875 875 875
 ```
-where the third number (`7`) is the minimum weight of a codeword
-found, and `19` is the number of codewords found.  Re-run with the
+where the first number (`7`) is the minimum weight of a codeword
+found, and `875` is the number of codewords found.  Re-run with the
 additional parameter `maxW=7` to give the number of codewords of this
-weight found:
+weight found, e.g.
 ```
-./src/vecdec debug=0 mode=2 steps=1000 fout=tmp2 fdem= ./examples/surf_d7.dem maxW=7
-9.12457e-06 1.26044e-06 7 99
+./src/vecdec debug=0 mode=2 steps=1000 fdem= ./examples/surf_d7.dem maxW=8 dW=2
 ```
+which gives the output (fewer codewords are found after a fewer steps)
+```
+7 71 336 1053
+```
+Here `71` is the number of found codewords of the minimum weight `7`,
+`336` is the number of codewords of weight not exceeding `maxW=8`, and 
+`1321` is the total number of codewords found.
 
-
-### Export code matrices to Matrix Market (`MMX`) files 
+### Export code matrices to Matrix Market (`MMX`) or `DEM` files 
 
 Use `mode=3`.  Create all five matrices (`H=Hx`, `G=Hz`, `L=Lx`, `K=Lz`) 
 and the probability vector `P` from the DEM file
@@ -499,6 +582,13 @@ created from the same set of codewords, e.g.,
 which creates both `G` and `K` matrices.  Of course, to create a
 `K=Lz` matrix, *quantum* codewords created directly from the `DEM` file can also be used.
 
+To create a DEM file (e.g., from `H` and `L` matrices and `P` vector), use `mode=3.64`.
+Bit `6` must be the only bit set in the `submode` bitmap (otherwise an error will result).
+```
+./src/vecdec mode=3.64 fout=tmp finH=H.mmx finL=L.mmx finP=P.mmx fout=tmp
+```
+This will create a DEM file `tmpD.dem`.  It can be used, e.g., as an input to `Stim`, 
+to generate errors/det/obs files externally 
 
 ## Vectorized decoder
 
@@ -646,6 +736,8 @@ in a table for LLR operations.  With `qllr2=0` (no table), the
 ## LER and code distance estimator
 
 This section describes operation with the command-line switch `mode=2`.
+(**TODO:** update the submode options.  Description below applies to
+current `mode=2.1`).
 
 Given the error model, i.e., the matrices $H$, $L$, and the vector of column
 probability values $p_i$, the program tries to enumerate the likely binary
@@ -730,105 +822,206 @@ which case the contents of the files is directed (surprise!) to
 
 ## All command-line arguments 
 
-You can generate the list of supported command line arguments by running 
-`vecdec --help`.
+You can generate the list of supported command line arguments by
+running `vecdec --help`.  Additional information is available by
+running `vecdec mode=[int] help` or `vecdec --morehelp`.  Here is the
+corresponding output:
 
+### run `./vecdec --help`
 ```bash
-./src/vecdec:  vecdec - vectorized decoder and LER estimator
-  usage: ./src/vecdec param=value [[param=value] ... ]
-         Command line arguments are processed in the order given.
-         Supported parameters:
-         --help         : give this help (also '-h' or just 'help')
-         --morehelp     : give more help
-         fdem=[string]  : name of the input file with detector error model
-         finH=[string]  : file with parity check matrix Hx (mm or alist)
-         finG=[string]  : file with dual check matrix Hz (mm or alist)
-         finL=[string]  : file with logical dual check matrix Lx (mm or alist)
-         finK=[string]  : file with logical check matrix Lz (mm or alist)
-         finP=[string]  : input file for probabilities (mm or a column of doubles)
-         finC=[string]  : input file name for codewords in `nzlist` format
-         outC=[string]  : output file name for codewords in `nzlist` format
-                         (if same as finC, the file will be updated)
-         maxC=[long long int]   : max number of codewords to read/write/store
-         epsilon=[double]       : small probability cutoff (default: 1e-8)
-         useP=[double]  : fixed probability value (override values in DEM file)
-                 for a quantum code specify 'fdem' OR 'finH' and ( 'finL' OR 'finG' );
-                 for classical just 'finH' (and optionally the dual matrix 'finL')
-         ferr=[string]  : input file with error vectors (01 format)
-         fobs=[string]  : input file with observables (01 matching lines in fdet)
-         fdet=[string]  : input file with detector events (01 format)
-                 specify either 'ferr' OR a pair of 'ferr' and 'fdet' (or none for internal)
-         pads=[integer] : if non-zero, pad vectors from `fdet` file with zeros (0)
-         fout=[string]  : header for output file names ('tmp', see 'mode=3')
-                 (space is OK in front of file names to enable shell completion)
-         steps=[integer]        : num of RIS or BP decoding steps (default: 50)
-         lerr =[integer]        : OSD search level (-1, only implemented with `mode=0`, `1`)
-         maxosd=[integer]       : max column for OSD2 and above (100)
-         bpalpha=[float]        : average LLR scaling coefficient for BP (default 0.5)
-         bpretry=[integer]      : retry BP up to this many times per syndrome (1)
-         swait=[integer]        : Gauss steps w/o new errors to stop (0, do not stop)
-         nvec =[integer]        : max vector size for decoding (default: 1024)
-                         (list size for distance or energy calculations)
-         ntot =[long long int]  : total syndromes to generate (default: 1)
-         nfail=[long long int]  : total fails to terminate (0, do not terminate)
-         dW=[integer]   : if 'dW>=0', may keep vectors of weight up to 'minW+dW' (0)
-         maxW=[integer] : if non-zero, skip any vectors above this weight (0)
-         dE=[double]    : if 'dE>=0', may keep vectors of energy up to 'minE+dE'
-                         (default value: -1, no upper limit on energy)
-         dmin=[integer] : terminate distance calculation immediately when
-                         a vector of weight 'W<=dmin' is found, return '-w' (default: 0)
-         seed= [long long int]  : RNG seed or automatic if <=0 (default: 0)
-         qllr1=[integer]        : if 'USE_QLLR' is set, parameter 'd1' (12)
-         qllr2=[integer]        : if 'USE_QLLR' is set, parameter 'd2' (300)
-         qllr3=[integer]        : if 'USE_QLLR' is set, parameter 'd3' (7)
-                 These are used to speed-up LLR calculations, see 'qllr.h'
-                 Use 'qllr2=0' for min-sum.
-         mode=int[.int] : operation mode[.submode] (default: 0.0)
-                * 0: use basic vectorized (random information set) decoder
-                         read detector events from file 'fdet' if given, otherwise
-                         generate 'ntot' detector events and matching observable flips;
-                         decode in chunks of size 'nvec'.
-                         Read observable flips from file 'fobs' if given
-                * 1: Belief Propagation decoder.  By default (no submode specified)
-                           parallel BP using both regular and average LLRs.
-                           Other options are selected by 'submode' bitmap:
-                         .1 (bit 0) use regular LLR
-                         .2 (bit 1) use average LLR - these take precendence
-                         .4 (bit 2) use serial BP schedule (not parallel)
-                         .8 (bit 3) with serial, use V-based order (not C-based)
-                         .16 (bit 4) with serial, randomize node order in each round
-                             (by default randomize only once per run)
-                * 2: generate most likely fault vectors, estimate Prob(Fail).
-                         Use up to 'steps' random information set (RIS) decoding steps
-                         unless no new fault vectors have been found for 'swait' steps.
-                         Keep vectors of weight up to 'dW' above min weight found.
-                               and energy up to 'dE' above min E found.
-                         When 'maxC' is non-zero, generate up to 'maxC' unique codewords.
-                         If 'outC' is set, write full list of CWs to this file.
-                         If 'finC' is set, read initial set of CWs from this file.
-                * 3: Read in the DEM file and optionally write the corresponding
-                         G, K, H, and L matrices and the probability vector P.
-                         By default (submode&31=0) outpul everything, otherwise
-                         .1 (bit 0) write G=Hz matrix
-                         .2 (bit 1) write K=Lz matrix
-                         .4 (bit 2) write H=Hx matrix
-                         .8 (bit 3) write  L=Lx matrix
-                         .16 (bit 4) write P vector
-                         In addition, mode=3.32 (just one bit set) in combination with
-                          codewords file 'finC' forces matrix transformation mode
-                         Use 'fout=' command line argument to generate file names
-                         ${fout}H.mmx, ${fout}G.mmx, ${fout}L.mmx, ${fout}K.mmx, and ${fout}P.mmx
-                         with 'fout=stdout' all output is sent to 'stdout'
-                         with 'finC' set, use codewords to create G and/or K matrix
-         debug=[integer]        : bitmap for aux information to output (default: 1)
-                *   0: clear the entire debug bitmap to 0.
-                *   1: output misc general info (on by default)
-                *   2: output matrices for verification
-                         see the source code for more options
-         See program documentation for input file syntax.
-         Multiple 'debug' parameters are XOR combined except for 0.
-         Use debug=0 as the 1st argument to suppress all debug messages.
+./vecdec:  vecdec - vectorized decoder and LER estimator
+  usage: ./vecdec param=value [[param=value] ... ]
+	 Command line arguments are processed in the order given except
+	 for 'mode' and 'debug' (these are processed first).
+	 Supported parameters:
+	 --help		: give this help (also '-h' or just 'help')
+	 mode=[integer] help		: help for specific mode
+	 --morehelp	: give more help on program conventions
+	 fdem=[string]	: name of the input file with detector error model
+	 finH=[string]	: file with parity check matrix Hx (mm or alist)
+	 finG=[string]	: file with dual check matrix Hz (mm or alist)
+	 finL=[string]	: file with logical dual check matrix Lx (mm or alist)
+	 finK=[string]	: file with logical check matrix Lz (mm or alist)
+	 finP=[string]	: input file for probabilities (mm or a column of doubles)
+	 finC=[string]	: input file name for codewords in `nzlist` format
+		 (space is OK in front of file names to enable shell completion)
+	 outC=[string]	: output file name for codewords in `nzlist` format
+			 (if same as finC, the file will be updated)
+	 maxC=[long long int]	: max number of codewords to read/write/store
+	 epsilon=[double]	: small probability cutoff (default: 1e-8)
+	 useP=[double]	: fixed probability value (override values in DEM file)
+		 for a quantum code specify 'fdem' OR 'finH' and ( 'finL' OR 'finG' );
+		 for classical just 'finH' (and optionally the dual matrix 'finL')
+	 ferr=[string]	: input file with error vectors (01 format)
+	 fobs=[string]	: input file with observables (01 matching lines in fdet)
+	 fdet=[string]	: input file with detector events (01 format)
+		 specify either 'ferr' OR a pair of 'ferr' and 'fdet' (or none for internal)
+	 perr, pobs, pdet=[string]	: out file for predicted vectors (01 format)
+	 pads=[integer]	: if non-zero, pad vectors from `fdet` file with zeros (0)
+	 fout=[string]	: header for output file names ('tmp', see 'mode=3')
+	 steps=[integer]	: num of RIS or BP decoding steps (default: 50)
+	 lerr =[integer]	: OSD search level (-1, only implemented with `mode=0`, `1`)
+	 maxosd=[integer]	: max column for OSD2 and above (100)
+	 bpalpha=[float]	: average LLR scaling coefficient for BP (default 0.5)
+	 bpretry=[integer]	: retry BP up to this many times per syndrome (1)
+	 swait=[integer]	: Gauss steps w/o new errors to stop (0, do not stop)
+	 nvec =[integer]	: max vector size for decoding (default: 1024)
+			 (list size for distance or energy calculations)
+	 ntot =[long long int]	: total syndromes to generate (default: 1)
+	 nfail=[long long int]	: total fails to terminate (0, do not terminate)
+	 dW=[integer]	: if 'dW>=0', may keep vectors of weight up to 'minW+dW' (0)
+	 maxW=[integer]	: if non-zero, skip any vectors above this weight (0)
+	 dE=[double]	: if 'dE>=0', may keep vectors of energy up to 'minE+dE'
+			 (default value: -1, no upper limit on energy)
+	 dmin=[integer]	: terminate distance calculation immediately when
+			 a vector of weight 'W<=dmin' is found, return '-w' (default: 0)
+	 seed= [long long int]	: RNG seed or automatic if <=0 (default: 0)
+	 qllr1=[integer]	: if 'USE_QLLR' is set, parameter 'd1' (12)
+	 qllr2=[integer]	: if 'USE_QLLR' is set, parameter 'd2' (300)
+	 qllr3=[integer]	: if 'USE_QLLR' is set, parameter 'd3' (7)
+		 These are used to speed-up LLR calculations, see 'qllr.h'
+		 Use 'qllr2=0' for min-sum.
+	 mode=int[.int]	: operation mode[.submode] (default: 0.0)
+		* 0: use basic vectorized (random information set) decoder
+		* 1: Belief Propagation decoder.
+		* 2: Generate most likely fault vectors, estimate Prob(Fail).
+		* 3: Read in the DEM file and optionally write the corresponding 
+			 G, K, H, and L matrices and the probability vector P.
+	 debug=[integer]	: bitmap for aux information to output (default: 1)
+		*   0: clear the entire debug bitmap to 0.
+		*   1: output misc general info (on by default)
+		*   2: output matrices for verification
+			 see the source code for more options
+	 See program documentation for input file syntax.
+	 Multiple 'debug' parameters are XOR combined except for 0.
+	 Use debug=0 as the 1st argument to suppress all debug messages.
 ```
+
+### run `./vecdec mode=0 --help`
+```sh
+ mode=0 : use basic vectorized (random information set) decoder
+	 No 'submode' can be used with this mode. 
+	 This decoder is exponentially slow but it is not specific to 
+	 quantum LDPC codes.  Accuracy and performance are 
+	 determined by parameters 'steps' (number of RIS rounds) and 'lerr'.
+	 Long codes may require exponentially large number of 'steps'.
+	 Values 'lerr>1' can be slow for long codes.
+	 Specify a single DEM file 'fdem', or 'finH', 'finL', and 'finP'
+	 separately (either 'finL' or 'finG' is needed for a quantum code).
+	 Use 'useP' to override error probability values in DEM file.   
+	 Errors can be generated internally or read from 01 file 'ferr'.
+	 Alternatively, files with detector events and observables 
+	 can be specified via 'fdet' and 'fobs'. 
+	 Long lines in these files may be silently truncated. 
+	 Use 'pads=1' to pad lines in 'fdet' file with zeros.
+	 Set 'nfail' and/or 'swait' for early termination.
+	 Total of 'ntot' errors will be read or generated in chunks of 'nvec'.
+```
+
+### run `./vecdec mode=1 --help`
+```sh
+ mode=1.[submode] : use one of several iterative decoder versions
+	Submode bitmap values:
+			 .1 (bit 0) use regular LLR
+			 .2 (bit 1) use average LLR - these take precendence
+			 .4 (bit 2) use serial BP schedule (not parallel)
+			 .8 (bit 3) with serial, use V-based order (not C-based)
+			 .16 (bit 4) with serial, randomize node order in each round 
+			     (by default randomize only once per run)
+	 For convenience, 'submode=0' is equivalent to 'submode=3'. 
+	 This decoder may experience convergence issues.
+	 Accuracy and performance are determined by parameters 
+	 'steps' (number of BP rounds), 'lerr' (OSD level, defaul=-1, on OSD).
+	 and 'maxosd', the number of columns for OSD in levels 2 and above.
+	 Using 'steps' not higher than 50 is recommended.
+	 Use 'bpalpha' to specify how averaging is done (default: 0.5).
+	 Use 'bpretry' to specify how many times to retry BP (default: 1, do not retry) 
+	 Use 'qllr' parameters to set LLR quantization
+	   or compile with 'VER=""' option for double LLR values. 
+	 With 'qllr2=0' the Sum-Product algorithm reduces to a 'Min-Sum'.
+	 Specify a single DEM file 'fdem', or 'finH', 'finL', and 'finP'
+	 separately (either 'finL' or 'finG' is needed for a quantum code).
+	 Use 'useP' to override error probability values in DEM file.   
+	 Errors can be generated internally or read from 01 file 'ferr'.
+	 Alternatively, files with detector events and observables 
+	 can be specified via 'fdet' and 'fobs'. 
+	 Long lines in these files may be silently truncated. 
+	 Use 'pads=1' to pad lines in 'fdet' file with zeros.
+	 Set 'nfail' and/or 'swait' for early termination.
+	 Total of 'ntot' errors will be read or generated in chunks of 'nvec'.
+```
+
+### run `./vecdec mode=2 --help`
+```sh
+ mode=2 : Generate most likely fault vectors, estimate Prob(Fail).
+	Submode bitmap values:
+			 .1 (bit 0) calculate original fail probability estimate
+			 .2 (bit 1) calculate exact greedy probability estimate
+	 Use up to 'steps' random information set (RIS) steps
+	 unless no new codewords (fault vectors) have been found for 'swait' steps.
+	 Use 'steps=0' to just use the codewords from the file 
+	 Keep vectors of weight up to 'dW' above min weight found.
+	       and energy up to 'dE' above minimum E found (sum of LLRs).
+	 When 'maxC' is non-zero, generate up to 'maxC' unique codewords.
+	 If 'outC' is set, write full list of CWs to this file.
+	 If 'finC' is set, read initial set of CWs from this file.
+	 Accuracy and performance are determined by parameters 
+	 'steps' (number of BP rounds), 'lerr' (OSD level, defaul=-1, on OSD).
+	 and 'maxosd', the number of columns for OSD in levels 2 and above.
+	 Specify a single DEM file 'fdem', or 'finH', 'finL', and 'finP'
+	 separately (either 'finL' or 'finG' is needed for a quantum code).
+	 Use 'useP' to override error probability values in DEM file.   
+```
+
+### run `./vecdec mode=3 --help`
+```sh
+ mode=3 : Export matrices associated with the code.
+	 Read in the DEM file and optionally write the corresponding 
+	 G, K, H, and L matrices and the probability vector P.
+	 By default (submode&31=0) output everything, otherwise
+	 .1 (bit 0) write G=Hz matrix
+	 .2 (bit 1) write K=Lz matrix
+	 .4 (bit 2) write H=Hx matrix
+	 .8 (bit 3) write L=Lx matrix
+	 .16 (bit 4) write P vector
+	 Codewords file 'finC', if given, will be used to create 'G' and 'K'
+	   matrices with rows of smallest possible weight.
+	 In addition, mode=3.32 (just bit 5 set) in combination with
+	  codewords file 'finC' forces code transformation mode.
+	 Similarly, use mode=3.64 (just bit 6 set) to create DEM file '${fout}D.dem'
+	 Use 'fout=' command line argument to generate file names
+	 ${fout}H.mmx, ${fout}G.mmx, ${fout}L.mmx, ${fout}K.mmx, and ${fout}P.mmx
+	 with 'fout=stdout' all output is sent to 'stdout'
+```
+
+### run `./vecdec --morehelp`
+```sh
+   Matrices used by ./vecdec:
+	 We have a CSS code with binary generator matrices Hx=H, Hz=G,
+	 and logical-operator generating matrices Lx=L and Lz=K.  These
+	 matrices have 'n' columns each and satisfy orthogonality properties
+		 Hx*Hz^T=0, Lx*Hz^T=0, Lx*Lz^T=0, and Lx*Lz^T=I (identity matrix).
+	 We are trying to correct binary Z errors, whose probabilities
+	 are given by the n-component double vector P
+	  (or can be overridden with the command-line parameter 'useP').
+		   A detector error model (DEM) file, in the format produced by Stim,
+	 contains matrices Hx and Lx, and the error probability vector P.
+	 The same code can be obtained by specifying the matrices 
+	 independently, via separate files.
+   The dual CSS matrix Hz can be specified instead of Lx.
+	 In such a case, the internal error generator must be used
+	 (an attempt to specify 'fdet' and 'fobs' files will result in an error).
+   For a classical code, just give the parity check matrix Hx=H.
+	 In this case G matrix is trivial (has zero rank), and
+	 Lx has all rows of weight '1'. 
+	 Only the internal error generator can be used for classical codes
+	                                                       
+	 Parameter(s) used by all modes:                     
+	 seed=[integer] : when negative or zero, combine provided value
+		 with 'time(null)' and 'pid()' for more randomness.
+```		 
+
+
 ### Additional details
 
 - The command-line argument `seed` is used when a positive value is

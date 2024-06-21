@@ -279,26 +279,32 @@ stim sample_dem \
         decoding in this case).
 
 - [ ] verification and convenience
-  - [ ] add help specific for each `mode` (use `vecdec mode=2 help`).
+  - [x] add help specific for each `mode` (use `vecdec mode=2 help`).
         To this end, first scan for `mode` (complain if it is set more
         than once), then scan for `debug` (set it), then scan for
         `help`.
   - [ ] Add the ability to read MTX complex matrices (non-CSS codes).
         See `GAP` package `QDistRnd`.
-  - [ ] Add `alpha` for modified BP, rename current `alpha` to `beta`.
+  - [ ] Also, ensure that `QDistRnd` `MTX` format is fully compatible
+        with `vecdec`.
+  - [ ] Add `alpha` for modified BP, rename current `alpha` to
+        `gamma`.  Also, introduce the parameter `beta` (see Kuo+Lai
+        papers on modified BP).
   - [ ] make sure `debug=1` prints the values relevant for each mode,
         and also give parameters of the matrices (dimensions, ranks,
         etc)
   - [ ] make `debug=2` show command line arguments
   - [ ] make `debug=4` show additional information (e.g., `QLLR`)
-  - [ ] make sure program complaints if a value not relevant to the
+  - [x] make sure program complaints if a value not relevant to the
         current mode is set on the command line
   - [ ] verify matrix orthogonality and ranks
   - [ ] more usage examples in the documentation
   - [ ] testing facility 
 
 - [ ] syndrome transformations / detector events creation
-  - [ ] syndrome transformation matrix (e.g., for subcode decoding)
+  - [ ] syndrome transformation matrix `T` (e.g., for subcode
+        decoding).  Possibly, also for transforming measurement
+        results to detection events.
 
 - [x] convenience feature: with negative seed, combine `time(null)` with the number provided
 - [ ] convenience feature: ability to combine several files with
@@ -307,8 +313,111 @@ stim sample_dem \
 - [ ] a special mode to process ( test / give the stats / select
       irreducible codewords ) in codewords files.
 
+### Enhance `mode=2` 
+- [ ] write Gaussian prefactor calculation routine for codeword
+      contribution to fail probability (in addition to current upper
+      bound and `exact`.)  Perhaps only use it for codewords of
+      sufficiently large weights.
+- [ ] Speed-up the `exact` routine
+- [ ] Enable probability `matrices` with several probability vectors
+      in `mode=2` for faster operation.  Come up with a "label" (e.g.,
+      "p=0.001", or just "0.001 0.01") string to distinguish between
+      different probability vectors (prepend the row with regular output).
+- [ ] Enable creation of such matrices (or come up with a shell script
+      to do it).
+- [ ] See if `Stim` has a guarantee on the structure of `DEM` matrices
+      as the probabilities change (but remain non-zero).
+- [x] make a routine to keep only irreducible codewords.
+- [ ] make this routine optional to speedup the calculation (**???**)
+- [ ] calculate actual `min_dW` for the `do_hash_remove_reduc()` 
+- [ ] Try to write more accurate estimates on BER beyond simple union
+      bound.  See *Bonferroni inequalities*, e.g., here
+      (https://www.probabilitycourse.com/chapter6/6_2_1_union_bound_and_exten.php)
+- [ ] In particular, account for pair correlations and construct an accurate lower
+      bound on fail probability.
 ### bugs to fix / features to add 
 - [ ] when reading a codewords file, ensure coordinates are not too big (also orthogonality)
-- [ ] OSD1 with `mode=2` can degrade the performance when number of `steps` is large.
-- [ ] better prefactor calculation in `mode=2`
-- [ ] 
+- [ ] OSD1 with `mode=2` can degrade the performance when number of
+      `steps` is large. (???)
+- [ ] verify OSD with `mode=0` and `mode=1`
+- [ ] ~~better~~ faster prefactor calculation in `mode=2`
+- [ ] use `istty()` to detect screen vs.\ redirected output in
+      `ERROR()` macro; make it color where appropriate.
+
+### All command-line parameters 
+```
+debug
+mode
+seed
+qllr1
+qllr2
+qllr3
+
+ntot // mode 0,1
+nvec // mode 0.1
+pads // mode 0,1 reading syndrome vectors only (fdet)
+nfail // mode 0,1 early termination condition 
+steps // mode 0,1,2 
+swait // mode 0 and mode 2   early termination condition 
+lerr  // mode 1 max OSD level (-1 for no OSD)
+// mode 0 (-1 is same as 0)
+
+useP DEM parameter
+
+dmin // early termination with mode=2
+
+maxosd // only for BP
+maxC // error if too long nz file, limit the number of CWs in do_LLR_dist (RIS)
+bpalpha
+bpretry
+epsilon // not used 
+dE  // only mode=2 
+dW  // mode=2 and mode=3 when constructing G and L matrix
+maxW // upper bound for creating / reading CWs / mode=2 and mode=3
+
+debug 1 possibly relevant information
+debug 2 output matrix ranks
+debug 4 parsing input variables 
+debug 8 file i/o messages
+
+## operation modes
+1. ferr specified (usual operation)
+2. both fdet and fobs specified (usual operation)
+3. fobs specified; generate (pobs and pdet) or (perr) (new)
+4. none is specified, generate gerr (and/or others), do no decoding. (new)
+   make it "mode=0" ???
+```
+
+## `mode=0` to fix
+
+1. `wish1` disable `finL`, `fobs`, `useP` requirement if `steps=0` or
+   (`fdet` and `perr`) are specified
+2. `wish2` for some reason `gobs` returns nothing
+3. `wish3` with `mode=0` with `steps=0`,  `fobs`, `finL`, `ferr` count decoding success 
+   (do not require `useP` and `finH`)
+
+1. use `paste` to paste columns from two or more files together 
+2. use `cut` to cut columns from a file (specify a pattern).
+3. write a (shell ???) script to cut a sub block out of an `mtx` matrix (?)
+
+## here is an AWK script to replace positions except 1-5 with astericks 
+```sh
+awk '{print substr($0,1,5) gensub(/./,"*","g",substr($0,6))}'  tmpA.01
+## SED to achieve the same :
+sed -e 's/./*/g6' tmpA.01
+```
+
+overall the script:
+```
+input: intervals [(0 r1), (q2 r2), (q3 r3) ...] and [(0,c1), (b2,c2),,, ]; DEM
+1. generate initial DET and OBS files
+2. write H, L, P from DEM (vecdec mode=3)
+3. for each interval
+  - cut the DET rows (cut)
+  - cut the matrix: rowblock [A B 0] into A and B
+  - use A and existing errors `e` to construct modified DET (A e+s)
+  - use B to decode (vecdec); output error vector using `perr`
+  - use (cut) and (paste) to update errors `e`
+4. At the end use `e` as the predicted error to verify the observables 
+
+```

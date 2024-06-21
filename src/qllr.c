@@ -112,6 +112,51 @@ extern "C"{
   } 
   
 #endif /* USE_QLLR */
+
+/** @brief calculate the energy of the row `i` in `A` */
+static inline qllr_t mzd_row_energ_naive(const qllr_t * const coeff, const mzd_t *A, const int i){
+  qllr_t ans=0;
+  //  mzd_print(A);
+  for(rci_t j = 0; j < A->ncols; ++j)
+    if(mzd_read_bit(A, i, j)){
+      //      printf("non-zero i=%d j=%d coeff=%d\n",i,j,coeff[j]);
+      ans += coeff[j];
+    }
+  return (ans);
+}
+
+#if 0
+static inline qllr_t mzd_row_energ(const qllr_t * const coeff, const mzd_t *A, const int i){
+  return mzd_row_energ_naive(coeff, A, i);
+}
+#else /** substantial speed-up of `mode=0` calculation for large matrices */
+/** @brief calculate the energy of the row `i` in `A` */
+qllr_t mzd_row_energ(const qllr_t * const coeff, const mzd_t *A, const int i){
+#ifndef NDEBUG  
+  if (mzd_is_windowed(A))
+    ERROR("this does not work on a windowed matrix, use `mzd_row_energ_naive()`");  
+#endif   
+  qllr_t ans=0;
+  word const * truerow = mzd_row(A, i);
+  //  mzd_print(A);
+  //  for(rci_t j = 0; j < A->ncols; ++j)
+  int j=-1;
+  while((j=nextelement(truerow,A->width,j+1)) != -1){
+    if(j >= A->ncols)
+      break;
+    ans += coeff[j];
+  }
+#ifndef NDEBUG
+#  ifdef USE_QLLR
+  assert(ans==mzd_row_energ_naive(coeff,A,i));
+#  else
+  assert(fabs(ans-mzd_row_energ_naive(coeff,A,i)) < 0.001 * prm.LLRmin);
+#  endif 
+#endif   
+  return (ans);
+}
+#endif /* if 1 */
+  
   
 #ifdef __cplusplus
 }

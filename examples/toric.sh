@@ -11,8 +11,7 @@ stim=../../Stim/out/stim
 outfile=toric.dat
 
 # program parameters
-dmin=3 # minimum code distance 
-dmax=7 # maximum code distance
+
 p0=0.032 # error probability for j=0 
 jmin=0 # range for calculating p1 and p2 (using p0/2**j )
 jmax=6
@@ -23,18 +22,17 @@ echo "# depolarizing probability p1, measurement error p2" >> $outfile
 echo "# columns: d p1 p2 Nfails Ntotal"
 index=0 # block index to use in gnuplot
 
-for (( d0=$dmin; d0<=$dmax; d0+=2 )) do # distance loop
-    for (( j1=$jmin; j1<=$jmax; j1++ )) ; do #   p1 loop (depolarizing)
+for (( j1=$jmin; j1<=$jmax; j1++ )) ; do #   p1 loop (depolarizing)
       p1=`awk "BEGIN { print ${p0}*exp(-${j1}*log(2)) } "`
       if ((j1==jmax)) ; then p1=0 ; fi
       echo '#' d=$d0 p1=$p1 index=$index >> $outfile         
       echo '#' d=$d0 p1=$p1 index=$index
       echo "# columns: d p1 p2 Nfails Ntotal" >> $outfile
 
-      for (( j2=$jmin; j2<=$jmax; j2++ )) ; do # p2 loop (measurement)
-        p2=`awk "BEGIN { print ${p0}*exp(-${j2}*log(2)) } "`
+      for (( j2=$jmin; j2<=$jmin; j2++ )) ; do # p2 loop (measurement)
+        p2=0
         fnam=surf_d$d0_$j1_$j2 # filename to use
-        fnam=tmp # comment this line to keep all files 
+        fnam=toric_L=4D # comment this line to keep all files 
         # now, generate the stim circuit
         $stim gen --code toric_code --task rotated_memory_x \
           --distance $d0 --rounds $d0 \

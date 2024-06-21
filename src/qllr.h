@@ -174,7 +174,7 @@ static inline qllr_t boxplus(const qllr_t x, const qllr_t y){
       return 1.0/(1.0+exp(x));
   }
 
-
+ qllr_t mzd_row_energ(const qllr_t * const coeff, const mzd_t *A, const int i);
   
 #ifdef __cplusplus
 }

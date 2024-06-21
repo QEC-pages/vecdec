@@ -17,7 +17,7 @@
 #include "util_m4ri.h"
 #include "utils.h"
 #include "mmio.h"
-#include "qllr.h"
+//#include "qllr.h"
 #include <errno.h>
 
 tinymt64_t tinymt;
@@ -25,12 +25,6 @@ tinymt64_t tinymt;
 /** hashing storage helper functions ***** use `uthash.h` ***************************/
 
 
-/** @brief print entire `one_vec_t` structure by pointer */
-void print_one_vec(const one_vec_t * const pvec){
-  printf(" w=%d E=%g cnt=%d [",pvec->weight, dbl_from_llr(pvec->energ),pvec->cnt);
-  for(int i=0; i < pvec->weight; i++)
-    printf("%d%s",pvec->arr[i], i+1 < pvec->weight ? " " :"]\n");
-}
 
 /** some extra io functions *******************************************************/
 
@@ -70,14 +64,12 @@ int nzlist_w_append(FILE *f, const one_vec_t * const vec){
   return 0;
 }
 
-/** @brief prepare to read from an `NZLIST` file */
+/** @brief prepare to read from an `NZLIST` file; return NULL if no file found */
 FILE * nzlist_r_open(const char fnam[], long long int *lineno){
   int cnt;
   FILE *f=fopen(fnam,"r");
-  if(!f){    
-    printf("FILE I/O ERROR: %s\n", strerror(errno));
-    ERROR("can't open file %s for writing",fnam);
-  }
+  if(!f)
+    return(NULL);
   if((EOF == fscanf(f,"%%%% NZLIST %n",&cnt)) || (cnt<9))
     ERROR("invalid signature line, expected '%%%% NZLIST'");
   *lineno=2;  
@@ -258,6 +250,69 @@ void dbl_mm_write( char * const fout, const char fext[],
     free(str);
   }
 }
+
+/** @brief write detector error model (DEM) created by `stim`.
+ * @param fout base file name for writing DEM to
+ * @param fext extension for file name
+ * @param mHt matrix Hx transposed
+ * @param mLt matrix Lx transposed
+ * @param vP column probabilities
+ * @param comment comment string
+ */ 
+void write_dem_file(char *fout, const char fext[],
+		    const csr_t * const mHt, const csr_t * const mLt, const double * const vP,
+		    const char * const comment){
+  int result=0; /**< non-zero if write error */
+  size_t len=strlen(fout)+strlen(fext)+1;
+  char *str;
+
+  if((mHt==NULL)||(mLt==NULL)||(vP==NULL))
+    ERROR("one or more input matrices not defined");
+  if(mHt->rows != mLt->rows)
+    ERROR("mismatched dimensions!");
+  
+  FILE *f;
+  if(strncmp(fout,"stdout",7)!=0){
+    str=calloc(len, sizeof(char));
+    sprintf(str,"%s%s",fout,fext);
+    f=fopen(str,"w");
+  }
+  else{/** fout == "stdout" */
+    str=fout;
+    f=stdout;
+  }
+  if(!f){
+    printf("FILE I/O ERROR: %s\n", strerror(errno)); 
+    ERROR("can't open file '%s' for writing",str);
+  }
+  if(fprintf(f,"# Detector Error Model\n")<0)
+    result++;
+  if(comment!=NULL){
+    if(fprintf(f,"# %s\n",comment)<1)
+      result++;
+  }
+  for(int i=0; i < mHt->rows; i++){
+    if(fprintf(f,"error(%g) ",vP[i])<1)
+      result++;
+    for(int j=mHt->p[i]; j<mHt->p[i+1]; j++)
+      if(fprintf(f,"D%d ",mHt->i[j])<1)
+	result++;
+    for(int j=mLt->p[i]; j<mLt->p[i+1]; j++)
+      if(fprintf(f,"L%d ",mLt->i[j])<1)
+	result++;
+    if(fprintf(f,"\n")<0)
+      result++;
+  }
+  if(result)
+    ERROR("error writing to file '%s'",str);
+  
+  if(strcmp(fout,"stdout")!=0){
+    fclose(f);
+    free(str);
+  }
+}
+
+
 
 /** @brief read detector error model (DEM) created by `stim`.
  * Immediately create CSR matrices `mH` and `mL` and vector `vP`; 

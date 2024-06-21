@@ -1,18 +1,18 @@
 # running bs.sh
 # error probability p1
 # columns: d p1 Nfails Ntotal
-2 0.064 0.408203 4096 2424 # tmp.dem
+2 0.064 0.393799 4096 2483 # tmp.dem
 # columns: d p1 Nfails Ntotal
-2 0.032 0.319824 4096 2786 # tmp.dem
+2 0.032 0.265869 4096 3007 # tmp.dem
 # columns: d p1 Nfails Ntotal
-2 0.016 0.225342 4096 3173 # tmp.dem
+2 0.016 0.149414 4096 3484 # tmp.dem
 # columns: d p1 Nfails Ntotal
-2 0.008 0.153564 4096 3467 # tmp.dem
+2 0.008 0.0849609 4096 3748 # tmp.dem
 # columns: d p1 Nfails Ntotal
-2 0.004 0.128174 4096 3571 # tmp.dem
+2 0.004 0.0458984 4096 3908 # tmp.dem
 # columns: d p1 Nfails Ntotal
-2 0.002 0.0817871 4096 3761 # tmp.dem
+2 0.002 0.0249023 4096 3994 # tmp.dem
 # columns: d p1 Nfails Ntotal
-2 0.001 0.0812988 4096 3763 # tmp.dem
+2 0.001 0.00708008 4096 4067 # tmp.dem
 # columns: d p1 Nfails Ntotal
-2 0.0005 0.0671387 4096 3821 # tmp.dem
+2 0.0005 0.00878906 4096 4060 # tmp.dem

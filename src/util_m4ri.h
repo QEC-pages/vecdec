@@ -323,6 +323,8 @@ static inline int twomat_gauss_one(mzd_t *M, mzd_t *S, const int idx, const int 
  * TODO: add code for List of Pairs 
  */
   int csr_max_row_wght(const csr_t *p);
+
+  long long int csr_min_max_blk(csr_t *mat, int r1, int r2);  
   
 /** 
  * transpose compressed CSR matrix, 
@@ -332,6 +334,13 @@ static inline int twomat_gauss_one(mzd_t *M, mzd_t *S, const int idx, const int 
  */
   csr_t * csr_transpose(csr_t *dst, const csr_t *p);
 
+
+/** 
+ * @brief return a submatrix 
+ * 
+ * rows minR <= i < maxR, cols minC <= j < maxC
+ */
+  csr_t * csr_submatrix(const csr_t * const p, int minR, int maxR, int minC, int maxC);  
   
 /**
  * Convert CSR sparse binary matrix to MZD
@@ -352,6 +361,29 @@ mzd_t *mzd_generator_from_csr(mzd_t *G, const csr_t * const H);
  * C=C+S*B; allocate C if needed.
  */
 mzd_t * csr_mzd_mul(mzd_t *C, const csr_t *S, const mzd_t *B, int clear);
+
+/**
+ * @brief mzd row by sparse multiplication 
+ */
+static inline mzd_t * mzd_row_csr_mul(mzd_t *C, const int rowC,
+			const mzd_t *B, const int rowB, const csr_t *const S, int clear){
+  assert((C!=NULL)&&(B!=NULL)&&(S!=NULL));
+  assert(C->ncols == S->cols);
+  assert(B->ncols == S->rows);
+  assert(rowC < C->nrows);
+  assert(rowB < B->nrows);
+  if(clear)
+    mzd_row_clear_offset(C,rowC,0);
+  for(int i=0; i < S->rows; i++){
+    if(mzd_read_bit(B,rowB, i))
+      for(int ji = S->p[i]; ji < S->p[i+1]; ji++){
+	int j = S->i[ji];
+	mzd_flip_bit(C,rowC,j);
+      }
+  }
+  return C;
+}
+  
 
 /**
  * helper function to compute the weight of the product 
@@ -435,7 +467,10 @@ void csr_mm_write( char * const fout, const char fext[], const csr_t * const mat
 		  const char comment[]);
 
 int read_01(mzd_t *M, FILE *fin, long long int *lineno, const char* fnam,
-	    const int pads, const int debug);  
+	    const int pads, const int debug);
+
+void mzd_write_01(FILE *fout, const mzd_t * const M, const int by_cols, const char* fnam, const int debug);
+void write_01_zeros(FILE *fout, const int count, const char * fnam);  
   
 /** 
  * Permute columns of a CSR matrix with permutation perm.

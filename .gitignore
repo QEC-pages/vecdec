@@ -37,8 +37,8 @@ TAGS
 # Executables
 src/vecdec
 vecdec
-src/iter_dec
-iter_dec
+mtx_sub
+src/mtx_sub
 *.exe
 *.out
 *.app
@@ -67,6 +67,9 @@ iter_dec
 
 # python cache directory
 __pycache__/
+
+# emacs created directory
+auto/
 
 # IDE files
 .idea/
