@@ -27,6 +27,7 @@
 #include "vecdec.h"
 #include "qllr.h"
 #include <stdbool.h>
+#include <float.h>
 
 params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50, .pads=0,
   .rankH=0, .rankG=-1, .rankL=-1, 
@@ -1359,20 +1360,19 @@ void csr_replace_row(csr_t *dest, const csr_t *src, int i) {
 /**
  * @brief Executes simulated annealing to adjust error matrix based on energy changes.
  * @param mEt0_csr The initial error matrix in CSR format to be updated.
- * @param mHz CSR matrix representing the syndrome structure.
- * @param mEt_csr CSR matrix where the results are stored.
  * @param p Structure containing model parameters and error probabilities.
  */
 void simulate_annealing_mcmc(csr_t *mEt0_csr, params_t const * const p,int i) {
-    int max_iterations = 5000;
+    int max_iterations = 400000;
     double final_temperature = 1.0;
-    double cooling_rate = 1.0;
-    double reheating_rate = 1.0;
-    int check_interval = 100;
+    double cooling_rate = 0.6;
+    double reheating_rate = 1.5;
+    int check_interval = 5000;
     double min_acceptance_rate = 0.2;
 
-    //double temperature = csr_row_energ(p->vLLR,mEt0_csr,i);
-    double temperature = 1.0;
+    double temperature = 1e5;
+    //printf("initial temp is %f\n",temperature);
+  
     int iterations = 0;
     int accepted_updates = 0;
 
@@ -1402,128 +1402,290 @@ void simulate_annealing_mcmc(csr_t *mEt0_csr, params_t const * const p,int i) {
     //printf("energy=%f",energ);
 }
 
-/**
- * @brief Solves the equation to determine which ensemble has a lower free energy.
- * @param avg_exp_U_A_minus_U_B_A The average of <exp(U_A - U_B)>_A.
- * @param avg_exp_U_A_minus_U_B_B The average of <exp(U_A - U_B)>_B.
- * @param N_A The number of MCMC steps in ensemble A.
- * @param N_B The number of MCMC steps in ensemble B.
- * @return 1 if ensemble A is preferred, -1 if ensemble B is preferred.
- */
-int solve_free_energy(double avg_exp_U_A_minus_U_B_A, double avg_exp_U_A_minus_U_B_B, int N_A, int N_B) {
-    double x = 1.0;
-    double tolerance = 1e-10;
-    int max_iterations = 1000;
+double fermi_function(double x) {
+    return 1.0 / (1.0 + exp(x));
+}
 
-    for (int iter = 0; iter < max_iterations; ++iter) {
-        double f_x = x - (1 + avg_exp_U_A_minus_U_B_A * N_B / N_A * x) /
-                           ((avg_exp_U_A_minus_U_B_A * x) * (1 + avg_exp_U_A_minus_U_B_B * N_B / N_A * x));
-        double f_x_prime = 1 - ((avg_exp_U_A_minus_U_B_A * N_B / N_A * (1 + avg_exp_U_A_minus_U_B_B * N_B / N_A * x)) -
-                               (1 + avg_exp_U_A_minus_U_B_A * N_B / N_A * x) * avg_exp_U_A_minus_U_B_A * 
-                               (1 + avg_exp_U_A_minus_U_B_B * N_B / N_A * x)) /
-                               pow((avg_exp_U_A_minus_U_B_A * x * (1 + avg_exp_U_A_minus_U_B_B * N_B / N_A * x)), 2);
-        double x_new = x - f_x / f_x_prime;
+double BAR_equation(double ***U, int **N, int i, int j, double Q_ratio) {
+    double sum_i = 0.0, sum_j = 0.0;
+    
+    double C = log(Q_ratio * N[j][i] / N[i][j]);
+    
+    // Check if N[i][j] and N[j][i] are valid
+    if (N[i][j] <= 0 || N[j][i] <= 0) {
+        fprintf(stderr, "Error: Invalid sample count N[%d][%d] = %d, N[%d][%d] = %d\n", 
+                i, j, N[i][j], j, i, N[j][i]);
+        return NAN;
+    }
 
-        if (fabs(x_new - x) < tolerance) {
-            x = x_new;
-            break;
+    // Check if U[j][i] and U[i][j] are valid pointers
+    if (U[j][i] == NULL || U[i][j] == NULL) {
+        fprintf(stderr, "Error: Null pointer encountered for U[%d][%d] or U[%d][%d]\n", j, i, i, j);
+        return NAN;
+    }
+
+    for (int n = 0; n < N[i][j]; n++) {
+        double arg = U[j][i][n] - U[i][j][n] - C;
+        if (isnan(arg) || isinf(arg)) {
+            fprintf(stderr, "Warning: Invalid argument for fermi_function: %f\n", arg);
+            continue;
         }
-        x = x_new;
+        sum_i += fermi_function(arg);
+    }
+    
+    for (int n = 0; n < N[j][i]; n++) {
+        double arg = U[i][j][n] - U[j][i][n] + C;
+        if (isnan(arg) || isinf(arg)) {
+            fprintf(stderr, "Warning: Invalid argument for fermi_function: %f\n", arg);
+            continue;
+        }
+        sum_j += fermi_function(arg);
+    }
+    
+    // Check if sum_i and sum_j are valid
+    if (sum_i == 0.0 || sum_j == 0.0) {
+        fprintf(stderr, "Error: sum_i or sum_j is zero\n");
+        return NAN;
     }
 
-    if (x >= 1.0) {
-        return 1;
-    } else {
-        return -1;
+    double result = Q_ratio - (sum_j / N[j][i]) / (sum_i / N[i][j]) * exp(C);
+    
+    // Check if the result is valid
+    if (isnan(result) || isinf(result)) {
+        fprintf(stderr, "Error: Invalid result in BAR_equation\n");
+        return NAN;
     }
+
+    return result;
 }
 
 
+
+void solve_pairwise_BAR_ratio(double ***U, int **N, int K, double **Q_ratios) {
+    long double tolerance = 1e-12;
+    int max_iterations = 100000;
+
+    for (int i = 0; i < K; i++) {
+        for (int j = i + 1; j < K; j++) {
+            long double Q_low = 0.1;  // Lower bound for Q_ratio
+            long double Q_high = 10;  // Upper bound for Q_ratio
+            long double Q_mid;
+
+            for (int iter = 0; iter < max_iterations; iter++) {
+                Q_mid = (Q_low + Q_high) / 2;  // Arithmetic mean
+                double f_mid = BAR_equation(U, N, i, j, (double)Q_mid);
+
+                if (fabs((double)f_mid) < tolerance) {
+                    break;
+                }
+
+                if (f_mid > 0) {
+                    Q_high = Q_mid;
+                } else {
+                    Q_low = Q_mid;
+                }
+
+                if (fabsl(Q_high - Q_low) < tolerance * fabsl(Q_mid)) {
+                    break;
+                }
+            }
+
+            Q_ratios[i][j] = (double)Q_mid;
+            Q_ratios[j][i] = 1.0 / (double)Q_mid;
+            //printf("Q_ratio(%d,%d) = %Le\n", i, j, Q_mid);
+        }
+    }
+}
+
 void BAR_MCMC(csr_t *mEt0_csr, csr_t *mEt_csr, params_t const * const p, int i) {
-    int max_iterations = 10000;
+    int max_iterations = 1000000;
     double temperature = 1.0;
-    int num_ensembles = p->mK->rows + 1;
 
-    // Create arrays to store flipped error vectors for each Lz row and the original error vector
-    csr_t **error_vectors = malloc(num_ensembles * sizeof(csr_t *));
+    int mK_rows = p->mK->rows;
+    int K = pow(2, mK_rows); // Number of ensembles, 2^k
 
-    // Initialize error vectors
-    error_vectors[0] = csr_copy(mEt0_csr);
+    // Allocate and initialize error_vectors
+    csr_t **error_vectors = malloc(K * sizeof(csr_t *));
+    if (error_vectors == NULL) {
+        ERROR("Memory allocation failed for error_vectors.\n");
+    }
 
-    for (int k = 1; k < num_ensembles; k++) {
+    for (int k = 0; k < K; k++) {
         error_vectors[k] = csr_copy(mEt0_csr);
-        csr_add_row_to_row(error_vectors[k], i, p->mK, k - 1);
+        for (int row = 0; row < mK_rows; row++) {
+            if (k & (1 << row)) {
+                csr_add_row_to_row(error_vectors[k], i, p->mK, row);
+            }
+        }
     }
 
-    // Variables for accumulating statistics
-    double exp_U_A_minus_U_B_A = 0.0;
-    double exp_U_A_minus_U_B_B = 0.0;
-    int N_A = 0;
-    int N_B = 0;
-    double U_A_A = 0;
-    double U_B_A = 0;
-    double U_A_B = 0;
-    double U_B_B = 0;
-    csr_t *current_ensemble = csr_copy(error_vectors[0]);
-
-    // Iterate through each ensemble starting from the second one
-    for (int k = 1; k < num_ensembles; k++) {
-        exp_U_A_minus_U_B_A = 0.0;
-        exp_U_A_minus_U_B_B = 0.0;
-        N_A = 0;
-        N_B = 0;
-
-        // Perform MCMC in the current ensemble
-        for (int iterations = 0; iterations < max_iterations; iterations++) {
-            unsigned int seed = time(NULL);
-            int row_to_add = rand_r(&seed) % (p->mG->rows);
-            // Perform MCMC step for the current ensemble
-            double delta_energy_A = csr_calculate_energy_change(p->vLLR, current_ensemble, p->mG, i, row_to_add);
-            if (delta_energy_A < 0 || exp(-delta_energy_A / temperature) > (double)rand_r(&seed) / RAND_MAX) {
-                csr_add_row_to_row(current_ensemble, i, p->mG, row_to_add);
-                csr_add_row_to_row(error_vectors[k], i, p->mG, row_to_add);
+    // Allocate and initialize U and N arrays
+    double ***U = malloc(K * sizeof(double **));
+    int **N = malloc(K * sizeof(int *));
+    for (int k = 0; k < K; k++) {
+        U[k] = malloc(K * sizeof(double *));
+        N[k] = calloc(K, sizeof(int)); // Initialize N to 0
+        for (int j = 0; j < K; j++) {
+            U[k][j] = malloc(max_iterations * sizeof(double));
+            if (U[k][j] == NULL) {
+                ERROR("Memory allocation failed for U[%d][%d].\n", k, j);
             }
-            U_A_A = csr_row_energ(p->vLLR, current_ensemble, i);
-            U_B_A = csr_row_energ(p->vLLR, error_vectors[k], i);
-            exp_U_A_minus_U_B_A += exp(U_A_A - U_B_A);
-            N_A++;
         }
-
-        // Perform MCMC in the k-th ensemble
-        for (int iterations = 0; iterations < max_iterations; iterations++) {
-            unsigned int seed = time(NULL);
-            int row_to_add = rand_r(&seed) % (p->mG->rows);
-            double delta_energy_B = csr_calculate_energy_change(p->vLLR, error_vectors[k], p->mG, i, row_to_add);
-            if (delta_energy_B < 0 || exp(-delta_energy_B / temperature) > (double)rand_r(&seed) / RAND_MAX) {
-                csr_add_row_to_row(error_vectors[k], i, p->mG, row_to_add);
-                csr_add_row_to_row(current_ensemble, i, p->mG, row_to_add);
-            }
-            U_A_B = csr_row_energ(p->vLLR, current_ensemble, i);
-            U_B_B = csr_row_energ(p->vLLR, error_vectors[k], i);
-            exp_U_A_minus_U_B_B += exp(U_A_B - U_B_B);
-            N_B++;
-        }
-
-        double average_exp_U_A_minus_U_B_A = exp_U_A_minus_U_B_A / N_A;
-        double average_exp_U_A_minus_U_B_B = exp_U_A_minus_U_B_B / N_B;
-        int result = solve_free_energy(average_exp_U_A_minus_U_B_A, average_exp_U_A_minus_U_B_B, N_A, N_B);
-
-        if (result == -1) {
-            csr_free(current_ensemble);
-            current_ensemble = csr_copy(error_vectors[k]);
-        }
-        
     }
-    
 
-    csr_replace_row(mEt_csr, current_ensemble, i);
-    
+    // Monte Carlo sampling
+    double max_energy_diff = -DBL_MAX;
+    double min_energy_diff = DBL_MAX;
 
-    for (int k = 0; k < num_ensembles; k++) {
+    for (int k = 0; k < K; k++) {
+        for (int j = k + 1; j < K; j++) {
+            csr_t *state_A = csr_copy(error_vectors[k]);
+            csr_t *state_B = csr_copy(error_vectors[j]);
+
+            int accepted_A = 0, accepted_B = 0;
+            int check_interval = 1000;
+            double min_acceptance_rate = 0.004;
+
+            // Sample state A
+            for (int iter = 0; iter < max_iterations; iter++) {
+                unsigned int seed = time(NULL);
+                int row_to_add = rand_r(&seed) % (p->mG->rows);
+                
+                double delta_energy = csr_calculate_energy_change(p->vLLR, state_A, p->mG, i, row_to_add);
+                
+                if (delta_energy < 0 || exp(-delta_energy / temperature) > (double)rand_r(&seed) / RAND_MAX) {
+                    csr_add_row_to_row(state_A, i, p->mG, row_to_add);
+                    accepted_A++;
+                }
+                
+                double U_A = csr_row_energ(p->vLLR, state_A, i);
+                double U_B = csr_row_energ(p->vLLR, error_vectors[j], i);
+                double energy_diff = U_B - U_A;
+
+                U[k][j][N[k][j]++] = energy_diff;
+
+                if (energy_diff > max_energy_diff) max_energy_diff = energy_diff;
+                if (energy_diff < min_energy_diff) min_energy_diff = energy_diff;
+
+                // Check acceptance rate and break if too low
+                if (iter % check_interval == check_interval - 1) {
+                    double acceptance_rate_A = (double)accepted_A / check_interval;
+                    if (acceptance_rate_A < min_acceptance_rate) {
+                        break;
+                    }
+                    accepted_A = 0;
+                }
+            }
+
+            // Sample state B
+            for (int iter = 0; iter < max_iterations; iter++) {
+                unsigned int seed = time(NULL);
+                int row_to_add = rand_r(&seed) % (p->mG->rows);
+                
+                double delta_energy = csr_calculate_energy_change(p->vLLR, state_B, p->mG, i, row_to_add);
+                
+                if (delta_energy < 0 || exp(-delta_energy / temperature) > (double)rand_r(&seed) / RAND_MAX) {
+                    csr_add_row_to_row(state_B, i, p->mG, row_to_add);
+                    accepted_B++;
+                }
+                
+                double U_A = csr_row_energ(p->vLLR, error_vectors[k], i);
+                double U_B = csr_row_energ(p->vLLR, state_B, i);
+                double energy_diff = U_A - U_B;
+
+                U[j][k][N[j][k]++] = energy_diff;
+
+                if (energy_diff > max_energy_diff) max_energy_diff = energy_diff;
+                if (energy_diff < min_energy_diff) min_energy_diff = energy_diff;
+
+                // Check acceptance rate and break if too low
+                if (iter % check_interval == check_interval - 1) {
+                    double acceptance_rate_B = (double)accepted_B / check_interval;
+                    if (acceptance_rate_B < min_acceptance_rate) {
+                        break;
+                    }
+                    accepted_B = 0;
+                }
+            }
+
+            csr_free(state_A);
+            csr_free(state_B);
+        }
+    }
+
+    // Calculate scaling factor based on energy difference range
+    double energy_diff_range = max_energy_diff - min_energy_diff;
+    double scaling_factor = 1.0;
+    if (energy_diff_range > 1e2) {  // Adjust this threshold as needed
+        scaling_factor = 1 / energy_diff_range;
+    }
+
+    // Apply scaling to all energy differences
+    for (int k = 0; k < K; k++) {
+        for (int j = 0; j < K; j++) {
+            for (int n = 0; n < N[k][j]; n++) {
+                U[k][j][n] *= scaling_factor;
+            }
+        }
+    }
+
+    // printf("Energy difference statistics:\n");
+    // printf("Maximum value in U before scaling: %e\n", max_energy_diff);
+    // printf("Minimum value in U before scaling: %e\n", min_energy_diff);
+    // printf("Scaling factor: %e\n", scaling_factor);
+
+    // Allocate and initialize Q_ratios
+    double **Q_ratios = malloc(K * sizeof(double *));
+    for (int k = 0; k < K; k++) {
+        Q_ratios[k] = malloc(K * sizeof(double));
+        for (int j = 0; j < K; j++) {
+            Q_ratios[k][j] = 1.0;  // Initialize all ratios to 1
+        }
+    }
+
+    // Solve BAR equations
+    solve_pairwise_BAR_ratio(U, N, K, Q_ratios);
+
+    // Find the state with the largest partition function (smallest free energy)
+    int max_Q_index = 0;
+    double max_log_Q = -INFINITY;
+
+    for (int k = 0; k < K; k++) {
+        double log_Q_k = 0.0;
+        for (int j = 0; j < K; j++) {
+            if (j != k) {
+                log_Q_k += log(Q_ratios[k][j]);
+            }
+        }
+        if (log_Q_k > max_log_Q) {
+            max_log_Q = log_Q_k;
+            max_Q_index = k;
+        }
+    }
+    // Print the chosen ensemble information
+    // printf("Chosen ensemble for row %d: %d\n", i, max_Q_index);
+    // printf("Binary representation of chosen ensemble: ");
+    // for (int row = mK_rows - 1; row >= 0; row--) {
+    //     printf("%d", (max_Q_index & (1 << row)) ? 1 : 0);
+    // }
+    // printf("\n");
+
+    csr_replace_row(mEt_csr, error_vectors[max_Q_index], i);
+
+    // Free allocated memory
+    for (int k = 0; k < K; k++) {
+        for (int j = 0; j < K; j++) {
+            free(U[k][j]);
+        }
+        free(U[k]);
+        free(N[k]);
+        free(Q_ratios[k]);
         csr_free(error_vectors[k]);
     }
+    free(U);
+    free(N);
+    free(Q_ratios);
     free(error_vectors);
-    csr_free(current_ensemble);
 }
 
 
@@ -1570,6 +1732,12 @@ mzd_t *do_decode_BAR(mzd_t *mS, params_t const * const p) {
 
     for (int i = 0; i < mEt0_csr->rows; i++) {
         BAR_MCMC(mEt0_csr,mEt_csr,p,i);
+    }
+
+    csr_compress(mEt_csr);
+
+    for (int i = 0; i < mEt0_csr->rows; i++) {
+        simulate_annealing_mcmc(mEt_csr,p,i);
     }
 
     mzd_t *mEt = mzd_from_csr(NULL, mEt_csr);
