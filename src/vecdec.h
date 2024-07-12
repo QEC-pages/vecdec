@@ -53,7 +53,7 @@ extern "C"{
     int swait; /** gauss decoding steps with no vectors changed to stop (default: `0`, do not stop) */
     int lerr;  /** local search after gauss up to this weight (default: `-1`, no OSD) */
     int maxosd;  /** max column for OSD2 and above (default: `100`) */
-    double bpalpha; /** average LLR parameter; multiply old LLR by `bpalpha` new by `1-bpalpha` (default: `0.5`) */
+    double bpgamma; /** average LLR parameter; multiply old LLR by `bpgamma` new by `1-bpgamma` (default: `0.5`) */
     int bpretry; /** for each syndrome try BP up to this many times  (default: `1`) */
     int mode;  /** operation mode, see help */
     int submode; /** additional options, see help */
@@ -251,7 +251,7 @@ extern "C"{
   "\t steps=[integer]\t: num of RIS or BP decoding steps (default: 50)\n" \
   "\t lerr =[integer]\t: OSD search level (-1, only implemented with `mode=0`, `1`)\n" \
   "\t maxosd=[integer]\t: max column for OSD2 and above (100)\n"	\
-  "\t bpalpha=[float]\t: average LLR scaling coefficient for BP (default 0.5)\n" \
+  "\t bpgamma=[float]\t: average LLR scaling coefficient for BP (default 0.5)\n" \
   "\t bpretry=[integer]\t: retry BP up to this many times per syndrome (1)\n" \
   "\t swait=[integer]\t: Gauss steps w/o new errors to stop (0, do not stop)\n" \
   "\t nvec =[integer]\t: max vector size for decoding (default: 1024)\n" \
@@ -347,7 +347,7 @@ extern "C"{
   "\t 'steps' (number of BP rounds), 'lerr' (OSD level, defaul=-1, on OSD).\n" \
   "\t and 'maxosd', the number of columns for OSD in levels 2 and above.\n" \
   "\t Using 'steps' not higher than 50 is recommended.\n"		\
-  "\t Use 'bpalpha' to specify how averaging is done (default: 0.5).\n"	\
+  "\t Use 'bpgamma' to specify how averaging is done (default: 0.5).\n"	\
   "\t Use 'bpretry' to specify how many times to retry BP (default: 1, do not retry) \n" \
   "\t Use 'qllr' parameters to set LLR quantization\n"\
   "\t   or compile with 'VER=\"\"' option for double LLR values. \n" \

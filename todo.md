@@ -295,7 +295,7 @@ stim sample_dem \
       - [ ] For any `det` with several `obs` values, calculate the
             corresponding probabilities carefully (or just sum the
             probabilities for vectors encountered).
-      - [ ] May introduce lower cut-off by encounter probability (say,
+      - [ ] May introduce lower cut-off by vector probability (say,
             `10^-8` if we expect to run samples of size up to a
             million).
       - [ ] With $x=np$, the probability of any error of weight $w$ is
@@ -327,8 +327,8 @@ stim sample_dem \
         See `GAP` package `QDistRnd`.
   - [ ] Also, ensure that `QDistRnd` `MTX` format is fully compatible
         with `vecdec`.
-  - [ ] Add `alpha` for modified BP, rename current `alpha` to
-        `gamma`.  Also, introduce the parameter `beta` (see Kuo+Lai
+  - [x] rename current `bpalpha` to `bpgamma`.
+  - [ ] Introduce the parameters `beta` and `alpha` (see Kuo+Lai
         papers on modified BP).
   - [ ] make sure `debug=1` prints the values relevant for each mode,
         and also give parameters of the matrices (dimensions, ranks,
@@ -379,7 +379,7 @@ stim sample_dem \
 - [ ] when reading a codewords file, ensure coordinates are not too big (also orthogonality)
 - [ ] OSD1 with `mode=2` can degrade the performance when number of
       `steps` is large. (???)
-- [ ] verify OSD with `mode=0` and `mode=1`
+- [ ] verify OSD with ~~mode=0~~ and `mode=1`
 - [ ] ~~better~~ faster prefactor calculation in `mode=2`
 - [ ] use `istty()` to detect screen vs.\ redirected output in
       `ERROR()` macro; make it color where appropriate.

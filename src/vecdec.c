@@ -29,7 +29,7 @@
 
 params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50, .pads=0,
   .rankH=0, .rankG=-1, .rankL=-1, 
-  .lerr=-1, .maxosd=100, .bpalpha=0.5, .bpretry=1, .swait=0, .maxC=0,
+  .lerr=-1, .maxosd=100, .bpgamma=0.5, .bpretry=1, .swait=0, .maxC=0,
   .dW=0, .minW=INT_MAX, .maxW=0, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
   .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8, .useP=0, .dmin=0,
   .debug=1, .fdem=NULL, .fout="tmp",
@@ -54,7 +54,7 @@ params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50, .pads=0,
 };
 
 params_t prm_default={  .steps=50, .pads=0, 
-  .lerr=-1, .maxosd=100, .bpalpha=0.5, .bpretry=1, .swait=0, .maxC=0,
+  .lerr=-1, .maxosd=100, .bpgamma=0.5, .bpretry=1, .swait=0, .maxC=0,
   .dW=0, .minW=INT_MAX, .maxW=0, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
   .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8, .useP=0, .dmin=0,
   .debug=1, .fout="tmp", .ferr=NULL,
@@ -1228,10 +1228,10 @@ int var_init(int argc, char **argv, params_t *p){
       if (p->debug&4)
 	printf("# read %s, seed=%lld\n",argv[i],p->seed);
     }
-    else if (sscanf(argv[i],"bpalpha=%lg",&val)==1){ /** `bpalpha` */
-      p -> bpalpha = val; /** WARNING: no value verification!!! */
+    else if (sscanf(argv[i],"bpgamma=%lg",&val)==1){ /** `bpgamma` */
+      p -> bpgamma = val; /** WARNING: no value verification!!! */
       if (p->debug&4)
-	printf("# read %s, bpalpha=%g\n",argv[i],p-> bpalpha);
+	printf("# read %s, bpgamma=%g\n",argv[i],p-> bpgamma);
       if(p->mode!=1)
 	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
     }
@@ -1652,7 +1652,7 @@ int var_init(int argc, char **argv, params_t *p){
       if(((p->submode & 4)==0) && (p->submode & 8))
 	ERROR("mode=%d submode=%d invalid (add 4 to submode ->%d for serial-V)",p->mode,p->submode,p->submode | 4);
       if(((p->submode & 2)) || ((p->submode & 3)==0))
-	printf("# use average LLR: aLLR = %g * aLLR + %g * LLR\n",p->bpalpha,1-p->bpalpha);
+	printf("# use average LLR: aLLR = %g * aLLR + %g * LLR\n",p->bpgamma,1-p->bpgamma);
       if((p->submode & 4) && (p->submode & 16))
 	printf("# randomize node order at each step");
     }
@@ -1837,8 +1837,8 @@ int var_init(int argc, char **argv, params_t *p){
     printf("# using variables: mode=%d submode=%d\n",p->mode, p->submode);
     switch(p->mode){
     case 1:
-      printf("# BP decoder parameters: bpalpha=%g bpretry=%d OSD level lerr=%d maxosd=%d\n",
-	     p->bpalpha, p->bpretry, p->lerr,p->maxosd);
+      printf("# BP decoder parameters: bpgamma=%g bpretry=%d OSD level lerr=%d maxosd=%d\n",
+	     p->bpgamma, p->bpretry, p->lerr,p->maxosd);
       /* fall through */      
     case 0:
       if(p->mode==0)
