@@ -1815,9 +1815,9 @@ int var_init(int argc, char **argv, params_t *p){
     if(p->debug &1){
       printf("# mode=%d, running %s decoder ",  p->mode, p->mode==0 ? "vecdec RIS" : "BP");
       switch(p->internal){
-      case 0: printf("use DET %s\n", p->fobs ? "and OBS files" : "file"); break;
-      case 1: printf("internal error generator\n"); break;
-      case 2: printf("reading error vectors from ERR file\n"); break;
+      case 0: printf(": use DET %s\n", p->fobs ? "and OBS files" : "file"); break;
+      case 1: printf(": generating errors internally\n"); break;
+      case 2: printf(": reading error vectors from ERR file\n"); break;
       default: ERROR("this should not happen");
 	break;
       }
@@ -1998,8 +1998,12 @@ int main(int argc, char **argv){
     synd_tot=0, synd_fail=0;
     for(long long int iround=1; iround <= rounds; iround++){
       if(p->debug &1){
-	printf("# starting round %lld of %lld pfail=%g fail=%lld total=%lld\n",
-	       iround, rounds, synd_tot>0 ? (double) synd_fail/synd_tot : 0.5 , synd_fail,synd_tot);
+	printf("# starting round %lld of %lld",
+	       iround, rounds);
+	if(synd_tot>0)
+	  printf(" pfail=%g fail=%lld out of total=%lld\n", (double) synd_fail/synd_tot , synd_fail,synd_tot);
+	else
+	  printf("\n");
 	fflush(stdout);
       }
     
@@ -2069,8 +2073,8 @@ int main(int argc, char **argv){
     if (!((p->fdet)&&(p->fobs==NULL)&&(p->perr))){ /** except in the case of partial decoding */
       if(p->steps > 0){  /** otherwise results are invalid as we assume syndromes to match */
 	if(p->debug&1)
-	  printf("# fail_fraction total_cnt succes_cnt\n");
-	printf(" %g %lld %lld # %s\n",(double) synd_fail/synd_tot, synd_tot, synd_tot-synd_fail,
+	  printf("# fail_fraction total_cnt fail_cnt succes_cnt\n");
+	printf(" %g %lld %lld %lld # %s\n",(double) synd_fail/synd_tot, synd_tot, synd_fail, synd_tot-synd_fail,
 	       p->fdem ? p->fdem : p->finH );
       }   
     }
