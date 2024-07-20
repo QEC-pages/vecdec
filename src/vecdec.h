@@ -53,6 +53,8 @@ extern "C"{
     int swait; /** gauss decoding steps with no vectors changed to stop (default: `0`, do not stop) */
     int lerr;  /** local search after gauss up to this weight (default: `-1`, no OSD) */
     int maxosd;  /** max column for OSD2 and above (default: `100`) */
+    double bpalpha; /** `modified` BP parameter */
+    double bpbeta;  /** `modified` BP parameter */
     double bpgamma; /** average LLR parameter; multiply old LLR by `bpgamma` new by `1-bpgamma` (default: `0.5`) */
     int bpretry; /** for each syndrome try BP up to this many times  (default: `1`) */
     int mode;  /** operation mode, see help */
@@ -80,6 +82,12 @@ extern "C"{
     char *pdet; /** `output file` name for `predicted` detector events */
     char *pobs; /** `output file` name for `predicted` observables */
     char *perr; /** `output file` name for `predicted` error vectors */
+    char *finU; /** `input file` name for `U` (list of likele error vectors for decoding) */
+    char *outU; /** `output file` name for `U` (list of non-trivial error vectors for decoding) */
+    long long int maxU; /** max number of syndrome vectors in `U` hash */
+    qllr_t uE; /** max energy of an error vector in `U` hash*/
+    double uEdbl; /** max energy of an error vector in `U` hash*/
+    int uW; /** max weight of an error vector in `U` hash*/
     int classical; /** `1` if this is a classical code? */
     int internal; /** `1` to generate obs/det internally, `2` to generate from `err` file */
     long long int seed;  /** rng `seed`, set<=0 for automatic */
@@ -233,6 +241,13 @@ extern "C"{
   "\t outC=[string]\t: output file name for codewords in `nzlist` format\n" \
   "\t\t\t (if same as finC, the file will be updated)\n"		\
   "\t maxC=[long long int]\t: max number of codewords to read/write/store\n" \
+  "\t finU=[string]\t: input file name for errors in `nzlist` format\n" \
+  "\t outC=[string]\t: output file name for errors in `nzlist` format\n" \
+  "\t\t\t (if same as finU, the file will be updated)\n"		\
+  "\t maxU=[long long integer]\t: max number of syndrome vectors in hash\n" \
+  "\t\t (if '0', no limit; default: -1, do not use the syndrome hash)\n" \
+  "\t uE=[float]\t: max energy of an error vector in hash (0, no limit)\n" \
+  "\t uW=[integer]\t: max weight of an error vector in hash (0, no limit)\n" \
   "\t epsilon=[double]\t: small probability cutoff (default: 1e-8)\n"	\
   "\t useP=[double]\t: fixed probability value (override values in DEM file)\n"	\
   "\t\t for a quantum code specify 'fdem' OR 'finH' and ( 'finL' OR 'finG' );\n" \
@@ -311,7 +326,15 @@ extern "C"{
   "\t\t with 'time(null)' and 'pid()' for more randomness.\n"		\
   "\t                                                       \n"	
   
+#define HELPU /** common help for decoding `mode=0` and `mode=1` */	\
+  "\t With `maxU` non-negative, use hash storage to store likely syndrome\n" \
+  "\t\t vectors to speed up the decoding ('maxU>0' sets the limit on the\n" \
+  "\t\t number of syndrome vectors in the hash; no limit if '0'). \n"	\
+  "\t\t Max energy / max weight given by 'uE' and 'uW', when positive. \n" \
+  "\t\t 'finU' / 'outU' names of likely error vectors file \n" \
+  "\t\t\t(the file will be overwritten if names are the same). \n" 
 
+  
 #define HELP0 /** help for `mode=0` */  \
   " mode=0 : use basic vectorized (random information set) decoder\n"	\
   "\t No 'submode' can be used with this mode. \n"	\

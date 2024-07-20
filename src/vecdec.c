@@ -1216,6 +1216,37 @@ int var_init(int argc, char **argv, params_t *p){
       if(p->mode<2)
 	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
     }
+    else if (sscanf(argv[i],"maxU=%lld",&lldbg)==1){ /** `maxU` */
+      p -> maxU = lldbg;
+      if (p->debug&4)
+	printf("# read %s, maxU=%lld\n",argv[i],p-> maxU);
+      if(p->mode>=2)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
+    }
+    else if (sscanf(argv[i],"uE=%lg",&val)==1){ /** `uE` */
+      p -> uEdbl = val;
+      if (p->debug&4){
+	printf("# read %s, uE=%g\n", argv[i], p->uEdbl);
+	if (p->uEdbl < 0)
+	  printf("# no limit on error/codeword energies to store\n");
+	else
+	  printf("# setting upper limit on error/codeword energies to store\n");
+      }
+      if(p->mode>=2)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
+    }
+    else if (sscanf(argv[i],"uW=%d",&dbg)==1){ /** `uW` */
+      p -> uW = dbg;
+      if (p->debug&4){
+	printf("# read %s, uW=%d\n",argv[i],p-> uW);
+	if (p->uW < 0)
+	  printf("# no limit on error/codeword weight to store\n");
+	else
+	  printf("# setting upper limit 'minW+%d' on error/codeword weight to store\n",p->uW);
+      }	
+      if(p->mode>=2)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
+    }
     else if (sscanf(argv[i],"nfail=%lld",&lldbg)==1){ /** `nfail` */
       p -> nfail = lldbg;
       if (p->debug&4)
@@ -1375,6 +1406,26 @@ int var_init(int argc, char **argv, params_t *p){
       if (p->debug&4)
 	printf("# read %s, outC=%s\n",argv[i],p->outC);
     }
+    else if (0==strncmp(argv[i],"finU=",5)){ /** `finU` in low-weight errors list */
+      if(strlen(argv[i])>5)
+        p->finU = argv[i]+5;
+      else
+        p->finU = argv[++i]; /**< allow space before file name */
+      if (p->debug&4)
+	printf("# read %s, finU=%s\n",argv[i],p->finU);
+      if(p->mode>=2)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);      
+    }
+    else if (0==strncmp(argv[i],"outU=",5)){ /** `outU` out low-weight errors list */
+      if(strlen(argv[i])>5)
+        p->outU = argv[i]+5;
+      else
+        p->outU = argv[++i]; /**< allow space before file name */
+      if (p->debug&4)
+	printf("# read %s, outU=%s\n",argv[i],p->outU);
+      if(p->mode>=2)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
+    }
     else if (0==strncmp(argv[i],"finG=",5)){/** `finG` degeneracy generator matrix */
       if(strlen(argv[i])>5)
         p->finG = argv[i]+5;
@@ -1478,10 +1529,10 @@ int var_init(int argc, char **argv, params_t *p){
             ||(strcmp(argv[i],"help")==0)){
       switch(p->mode){
       case 0:
-	printf( HELP0);
+	printf( HELP0 "\n" HELPU);
 	break;	
       case 1:
-	printf( HELP1);
+	printf( HELP1 "\n" HELPU);
 	break;	
       case 2:
 	printf( HELP2);
@@ -1639,6 +1690,7 @@ int var_init(int argc, char **argv, params_t *p){
   LLR_table = init_LLR_tables(p->d1,p->d2,p->d3);
 
   p->dE = llr_from_dbl(p->dEdbl);
+  p->uE = llr_from_dbl(p->uEdbl);
   
   switch(p->mode){
   case 1: /** both `mode=1` (BP) and `mode=0` */
