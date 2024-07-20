@@ -68,7 +68,11 @@ static inline double rnd_exponential(void){
   /**< @brief structure to hold sparse vectors in a hash */
   typedef struct ONE_VEC_T {
     UT_hash_handle hh;
-    double energ; /**< sum of LLRs */
+#ifdef USE_QLLR    
+    signed int energ; /**< sum of LLRs */
+#else /* not USE_QLLR */
+    double energ;
+#endif /* USE_QLLR */    
     int weight; /**< number of integers in the list */
     int cnt; /** how many times this vector was encountered */
     //  size_t len; /** `weight*sizeof(int)` (is this really needed?) */

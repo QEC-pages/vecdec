@@ -470,7 +470,16 @@ input: intervals [(0 r1), (q2 r2), (q3 r3) ...] and [(0,c1), (b2,c2),,, ]; DEM
 - [x] Add parameters `uE` and `uW` for max energy / max weight of a codeword to store.
 - [ ] ~~Use~~ `dE` and/or `dW` ~~parameters to decide which vectors should be stored (from zero)~~
       ~~(should we also use some sort of minimum probability limit?)~~
-- [ ] Add the ability to store syndrome -> correct vector pairs in a hash (decoding modes).
+- [ ] Add the ability to store syndrome -> correct vector pairs in a
+      hash (decoding modes).  Implementation: hashable triplet.
+  - Ut_hash_handle
+  - syndrome vector (key)
+  - syndrome weight 
+  - min weight 
+  - min energy
+  - min vector
+  - hash by logical (one_vec_t *): one entry only per vector
+  - hash by actual vectors (one_vec_t *) [must be present here]
 - [ ] Specific implementation (all decoding modes): 
   - [ ] When syndrome matrices are read, rows are verified against
         those stored in a hash (including all-zero syndrome row).  
