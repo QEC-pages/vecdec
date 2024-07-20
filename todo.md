@@ -277,6 +277,46 @@ stim sample_dem \
   - [ ] During BP decoding OSD, store generated vectors in a hash to
         estimate FE for each sector (or just make non-vector-based
         decoding in this case).
+  - [ ] List look-up decoder (use precomputed list of syndromes for small-weight vectors to decode quickly).
+    - [ ] Special mode to generate list of syndromes (generate random
+          vectors; store the corresponding syndromes in hash, along
+          with corresponding observables).  May want to keep the list
+          of syndromes for "close" pairs (where ML is actually
+          needed).  Actual structure (can also use NN to store):
+	  - [ ] When generating error vectors, use `two_vec_err_t` with
+            `det`, `obs`, and `err` vectors, store by `det` first, by
+            `err` second while generating.  At the end, will only keep
+            the syndromes encountered several times (???) -- need to
+            optimize for a given wanted size of the hash list, e.g.,
+            by running some 100 times larger sample).
+      - [ ] Or, can just generate vectors up to some `wmax` weight
+            (these are most likely to be encountered, if `p` is
+            small); if `wmax` is smaller than half of the distance, can ignore possible degeneracy (???)
+      - [ ] For any `det` with several `obs` values, calculate the
+            corresponding probabilities carefully (or just sum the
+            probabilities for vectors encountered).
+      - [ ] May introduce lower cut-off by vector probability (say,
+            `10^-8` if we expect to run samples of size up to a
+            million).
+      - [ ] With $x=np$, the probability of any error of weight $w$ is
+            $x^w/w!\exp(-x)$; there are some $n^w$ error vectors to
+            store.  The amount of speed-up with given `wmax` can be
+            estimated from here.
+      - [ ] Come up with a nice storage format for (`det`,`obs`) pairs.
+    - [ ] Decoding mode (use `finU` to read the look-`U`p list).
+   	  - [ ] Read list of likely syndrome vectors into hash
+      - [ ] After reading the detector events,
+	    - [ ] Create permutation vector of size `nvec`
+        - [ ] Go over syndrome vectors, if small enough weight, seek in hash, if success, record the result
+        - [ ] Indices of the remaining syndrome vectors write into the permutation vector from the end.
+        - [ ] Create a small matrix with syndrome vectors that need decoding
+        - [ ] Output the results in the correct order by going over
+              the list from two ends (different logic depending
+              whether we need to output the observables vectors)
+  - [ ] Detailed hash-ML decoding protocol
+    - [ ] using matrix dual to `H`, run an MC chain; store in hash
+          only the vectors within the range dW and dE (if specified);
+          accumulate the total probability.
 
 - [ ] verification and convenience
   - [x] add help specific for each `mode` (use `vecdec mode=2 help`).
@@ -287,8 +327,8 @@ stim sample_dem \
         See `GAP` package `QDistRnd`.
   - [ ] Also, ensure that `QDistRnd` `MTX` format is fully compatible
         with `vecdec`.
-  - [ ] Add `alpha` for modified BP, rename current `alpha` to
-        `gamma`.  Also, introduce the parameter `beta` (see Kuo+Lai
+  - [x] rename current `bpalpha` to `bpgamma`.
+  - [ ] Introduce the parameters `beta` and `alpha` (see Kuo+Lai
         papers on modified BP).
   - [ ] make sure `debug=1` prints the values relevant for each mode,
         and also give parameters of the matrices (dimensions, ranks,
@@ -339,7 +379,7 @@ stim sample_dem \
 - [ ] when reading a codewords file, ensure coordinates are not too big (also orthogonality)
 - [ ] OSD1 with `mode=2` can degrade the performance when number of
       `steps` is large. (???)
-- [ ] verify OSD with `mode=0` and `mode=1`
+- [ ] verify OSD with ~~mode=0~~ and `mode=1`
 - [ ] ~~better~~ faster prefactor calculation in `mode=2`
 - [ ] use `istty()` to detect screen vs.\ redirected output in
       `ERROR()` macro; make it color where appropriate.
@@ -421,3 +461,23 @@ input: intervals [(0 r1), (q2 r2), (q3 r3) ...] and [(0,c1), (b2,c2),,, ]; DEM
 4. At the end use `e` as the predicted error to verify the observables 
 
 ```
+## memorize syndrome,vector pairs
+- [ ] ~~Come up with a~~ Use the `nz` file format to keep syndrome / vector pairs.
+- [ ] Add `finU` / `outU` parameters to read / write syndrome / vector pairs files
+- [ ] ~~Add hash value for DEM matrices to insure only matching files
+      are read (???) -- or just verify each entry?~~
+- [ ] Add parameter `maxU` for maximum number of syndrome vectors to store.
+- [ ] Add parameters `uE` and `uW` for max energy / max weight of a codeword to store.
+- [ ] ~~Use~~ `dE` and/or `dW` ~~parameters to decide which vectors should be stored (from zero)~~
+      ~~(should we also use some sort of minimum probability limit?)~~
+- [ ] Add the ability to store syndrome -> correct vector pairs in a hash (decoding modes).
+- [ ] Add a special mode to generate error / syndrome pairs to ensure near-ML decoding
+- [ ] Specific implementation (all decoding modes): 
+  - [ ] When syndrome matrices are read, rows are verified against
+        those stored in a hash (including all-zero syndrome row).  
+  - [ ] Only rows which are not found are copied to a separate matrix
+        for processing.
+  - [ ] Permutation vector of size `nvec` is used to match the decoded
+        vectors / observables.  Entries found are written from the
+        back, not found from the front.
+  - [ ] Eventually, should we replace hash storage with NN storage? 

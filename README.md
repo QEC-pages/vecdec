@@ -722,7 +722,7 @@ generated errors, e.g., using the command-line arguments
 
 Activate it with the command-line parameters `mode=1`.  Several
 variants of the BP decoder are implemented; these are controlled by
-the `submode` bitmap, and also by parameters `bpalpha`, `bpretry`,
+the `submode` bitmap, and also by parameters `bpgamma`, `bpretry`,
 `lerr`, and `maxosd`.
 
 ### submode bitmap values 
@@ -753,10 +753,10 @@ BP schedule based on `average LLR`.
 	
 ### additional parameters affecting BP 
 
-- parameter `bpalpha` (allowed range from 0.0 to 1.0; the default
+- parameter `bpgamma` (allowed range from 0.0 to 1.0; the default
   value is `0.5`) sets the coefficient for calculating average LLR
   values.  Smaller values correspond to shorter memory; setting
-  `bpalpha=0` gives the same result at instantaneous LLR.
+  `bpgamma=0` gives the same result at instantaneous LLR.
 
 - parameter `bpretry` (integer, default value `1`, do not retry)
   allows to repeat BP several times using different node permutations.
@@ -925,7 +925,7 @@ corresponding output:
          steps=[integer]        : num of RIS or BP decoding steps (default: 50)
          lerr =[integer]        : OSD search level (-1, only implemented with `mode=0`, `1`)
          maxosd=[integer]       : max column for OSD2 and above (100)
-         bpalpha=[float]        : average LLR scaling coefficient for BP (default 0.5)
+         bpgamma=[float]        : average LLR scaling coefficient for BP (default 0.5)
          bpretry=[integer]      : retry BP up to this many times per syndrome (1)
          swait=[integer]        : Gauss steps w/o new errors to stop (0, do not stop)
          nvec =[integer]        : max vector size for decoding (default: 1024)
@@ -997,7 +997,7 @@ corresponding output:
 	 'steps' (number of BP rounds), 'lerr' (OSD level, defaul=-1, on OSD).
 	 and 'maxosd', the number of columns for OSD in levels 2 and above.
 	 Using 'steps' not higher than 50 is recommended.
-	 Use 'bpalpha' to specify how averaging is done (default: 0.5).
+	 Use 'bpgamma' to specify how averaging is done (default: 0.5).
 	 Use 'bpretry' to specify how many times to retry BP (default: 1, do not retry) 
 	 Use 'qllr' parameters to set LLR quantization
 	   or compile with 'VER=""' option for double LLR values. 

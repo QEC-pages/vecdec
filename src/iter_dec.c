@@ -280,7 +280,7 @@ int do_parallel_BP(qllr_t * outLLR, const mzd_t * const srow,
     
     if(submode&2) /** use average LLR */
       for(int iv = 0; iv< nvar; iv++)
-	aLLR[iv] = llr_from_dbl(p->bpalpha * dbl_from_llr(aLLR[iv]) +(1.0 - p->bpalpha) * dbl_from_llr(xLLR[iv])); 
+	aLLR[iv] = llr_from_dbl(p->bpgamma * dbl_from_llr(aLLR[iv]) +(1.0 - p->bpgamma) * dbl_from_llr(xLLR[iv])); 
 
 #ifndef NDEBUG    
     if(p->debug & 8){
@@ -396,7 +396,7 @@ int do_serialC_BP(qllr_t * outLLR, const mzd_t * const srow,
     
       if(submode&2) /** use average LLR */
 	for(int iv = 0; iv< nvar; iv++)
-	  aLLR[iv] = llr_from_dbl(p->bpalpha * dbl_from_llr(aLLR[iv]) +(1.0 - p->bpalpha) * dbl_from_llr(xLLR[iv])); 
+	  aLLR[iv] = llr_from_dbl(p->bpgamma * dbl_from_llr(aLLR[iv]) +(1.0 - p->bpgamma) * dbl_from_llr(xLLR[iv])); 
 
 #ifndef NDEBUG    
       if(p->debug & 8){
@@ -504,7 +504,7 @@ int do_serialV_BP(qllr_t * outLLR, const mzd_t * const srow,
     
       if(submode&2) /** use average LLR */
 	for(int iv = 0; iv< nvar; iv++)
-	  aLLR[iv] = llr_from_dbl(p->bpalpha * dbl_from_llr(aLLR[iv]) +(1.0 - p->bpalpha) * dbl_from_llr(xLLR[iv])); 
+	  aLLR[iv] = llr_from_dbl(p->bpgamma * dbl_from_llr(aLLR[iv]) +(1.0 - p->bpgamma) * dbl_from_llr(xLLR[iv])); 
 
 #ifndef NDEBUG    
       if(p->debug & 8){
