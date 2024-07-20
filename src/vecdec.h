@@ -312,16 +312,19 @@ extern "C"{
   "\t\t   A detector error model (DEM) file, in the format produced by Stim,\n" \
   "\t contains matrices Hx and Lx, and the error probability vector P.\n" \
   "\t The same code can be obtained by specifying the matrices \n"	\
-  "\t independently, via separate files.\n"				\
+  "\t independently, via separate files.\n\n"				\
   "   The dual CSS matrix Hz can be specified instead of Lx.\n"	\
   "\t In such a case, the internal error generator must be used\n"	\
-  "\t (an attempt to specify 'fdet' and 'fobs' files will result in an error).\n" \
+  "\t (an attempt to specify 'fdet' and 'fobs' files will result in an error).\n\n" \
   "   For a classical code, just give the parity check matrix Hx=H.\n"	\
   "\t In this case G matrix is trivial (has zero rank), and\n"		\
   "\t Lx has all rows of weight '1'.  \n"				\
   "\t Only the internal error generator can be used for classical codes\n" \
   "\t                                                       \n"		\
-  "\t Parameter(s) used by all modes:                     \n"		\
+  "   Note: detection events (syndrome bits) are given by the product 'H*e'\n" \
+  "\t       observables are given by 'L*e'\n"				\
+  "\t                                                          \n"	\
+  "\t Parameter(s) used by all modes:                         \n"	\
   "\t seed=[integer] : when negative or zero, combine provided value\n" \
   "\t\t with 'time(null)' and 'pid()' for more randomness.\n"		\
   "\t                                                       \n"	

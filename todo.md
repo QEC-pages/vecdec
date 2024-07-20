@@ -470,24 +470,16 @@ input: intervals [(0 r1), (q2 r2), (q3 r3) ...] and [(0,c1), (b2,c2),,, ]; DEM
 - [x] Add parameters `uE` and `uW` for max energy / max weight of a codeword to store.
 - [ ] ~~Use~~ `dE` and/or `dW` ~~parameters to decide which vectors should be stored (from zero)~~
       ~~(should we also use some sort of minimum probability limit?)~~
-- [ ] Add the ability to store syndrome -> correct vector pairs in a
-      hash (decoding modes).  Implementation: hashable triplet.
-  - Ut_hash_handle
-  - syndrome vector (key)
-  - syndrome weight 
-  - min weight 
-  - min energy
-  - min vector
-  - hash by logical (one_vec_t *): one entry only per vector
-  - hash by actual vectors (one_vec_t *) [must be present here]
+- [x] Add the ability to store syndrome -> correct vector pairs in a
+      hash (decoding modes).  Implementation: `three_vec_t` structure in `utils.h`.
 - [ ] Specific implementation (all decoding modes): 
   - [ ] When syndrome matrices are read, rows are verified against
-        those stored in a hash (including all-zero syndrome row).  
+        those stored in a hash (including all-zero syndrome row).
   - [ ] Only rows which are not found are copied to a separate matrix
         for processing.
   - [ ] Permutation vector of size `nvec` is used to match the decoded
         vectors / observables.  Entries found are written from the
         back, not found from the front.
-  - [ ] Eventually, should we replace hash storage with NN storage? 
+  - [ ] With `mode=0`, if ML decoding is enabled, hash can be updated.
 - [ ] Add a special mode to generate error / syndrome pairs to ensure
       near-ML decoding for these syndrome vectors

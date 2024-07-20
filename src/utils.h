@@ -79,6 +79,24 @@ static inline double rnd_exponential(void){
     int arr[0]; /** array of `weight` integers, the actual key  */
   } one_vec_t;
 
+  typedef struct OBS_VEC_T {
+    UT_hash_handle hh;
+    double prob; /** sum of probabilities */
+    int weight; /** weight of the vector */
+    int cnt; /** how many entries */
+    int arr[0];
+  } obs_vec_t;
+
+  /**< @brief structure to hold syndrome vectors in a hash */
+  typedef struct THREE_VEC_T {
+    UT_hash_handle hh;
+    int vec_hash_cnt; /** needed? */
+    int obs_hash_cnt; /** if `1`, easy ML decoding */
+    one_vec_t *min_vec; /** the minimum error vector */
+    obs_vec_t *by_obs; /** hash by observable */
+    one_vec_t *by_vec; /** hash by (all) vectors */
+  } three_vec_t;
+  
   /** @brief print entire `one_vec_t` structure by pointer */
   void print_one_vec(const one_vec_t * const pvec);
 
