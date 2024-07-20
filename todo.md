@@ -461,3 +461,23 @@ input: intervals [(0 r1), (q2 r2), (q3 r3) ...] and [(0,c1), (b2,c2),,, ]; DEM
 4. At the end use `e` as the predicted error to verify the observables 
 
 ```
+## memorize syndrome,vector pairs
+- [ ] ~~Come up with a~~ Use the `nz` file format to keep syndrome / vector pairs.
+- [ ] Add `finU` / `outU` parameters to read / write syndrome / vector pairs files
+- [ ] ~~Add hash value for DEM matrices to insure only matching files
+      are read (???) -- or just verify each entry?~~
+- [ ] Add parameter `maxU` for maximum number of syndrome vectors to store.
+- [ ] Add parameters `uE` and `uW` for max energy / max weight of a codeword to store.
+- [ ] ~~Use~~ `dE` and/or `dW` ~~parameters to decide which vectors should be stored (from zero)~~
+      ~~(should we also use some sort of minimum probability limit?)~~
+- [ ] Add the ability to store syndrome -> correct vector pairs in a hash (decoding modes).
+- [ ] Add a special mode to generate error / syndrome pairs to ensure near-ML decoding
+- [ ] Specific implementation (all decoding modes): 
+  - [ ] When syndrome matrices are read, rows are verified against
+        those stored in a hash (including all-zero syndrome row).  
+  - [ ] Only rows which are not found are copied to a separate matrix
+        for processing.
+  - [ ] Permutation vector of size `nvec` is used to match the decoded
+        vectors / observables.  Entries found are written from the
+        back, not found from the front.
+  - [ ] Eventually, should we replace hash storage with NN storage? 
