@@ -861,6 +861,7 @@ csr_t *csr_mm_read(char *fnam, csr_t *mat, int transpose, int debug){
   mat->nz=nz;  // csr_out(mat);
   csr_compress(mat); /* sort entries by row */
   // csr_out(mat);
+  fclose(f);
   return mat;
 }
 
