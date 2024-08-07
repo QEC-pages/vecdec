@@ -82,7 +82,7 @@ extern "C"{
     char *pdet; /** `output file` name for `predicted` detector events */
     char *pobs; /** `output file` name for `predicted` observables */
     char *perr; /** `output file` name for `predicted` error vectors */
-    char *finU; /** `input file` name for `U` (list of likele error vectors for decoding) */
+    char *finU; /** `input file` name for `U` (list of likely error vectors for decoding) */
     char *outU; /** `output file` name for `U` (list of non-trivial error vectors for decoding) */
     long long int numU; /** number of syndrome vectors in `U` hash */
     long long int numE; /** total number of error vectors -> syndrome vectors in `U` hash */

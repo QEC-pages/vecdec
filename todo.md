@@ -473,6 +473,10 @@ input: intervals [(0 r1), (q2 r2), (q3 r3) ...] and [(0,c1), (b2,c2),,, ]; DEM
 - [x] Add the ability to store syndrome -> correct vector pairs in a
       hash (decoding modes).  Implementation: `three_vec_t` structure in `utils.h`.
 - [ ] Specific implementation (all decoding modes): 
+  - [ ] Routine to read binary 01 vectors into sparse format
+  - [ ] Special vector of size `nvec` if it has been decoded (`0`:
+        not, integer: decoder level).  Used to track what to output
+        and where.
   - [ ] When syndrome matrices are read, rows are verified against
         those stored in a hash (including all-zero syndrome row).
   - [ ] Only rows which are not found are copied to a separate matrix
@@ -483,3 +487,28 @@ input: intervals [(0 r1), (q2 r2), (q3 r3) ...] and [(0,c1), (b2,c2),,, ]; DEM
   - [ ] With `mode=0`, if ML decoding is enabled, hash can be updated.
 - [ ] Add a special mode to generate error / syndrome pairs to ensure
       near-ML decoding for these syndrome vectors
+
+## alternative decoders:
+- Look-up from a hash list of small-weight vectors
+- Variant of UF.  
+  1. Start with `r=1` (n.n.), and for every non-zero check node mark surrounding variable nodes, and an empty set `E`.
+  2. Connect these into clusters.
+  3. For each cluster `X`, calculate `H[X]`, and see if the syndrome
+     rows are redundant, and whether a local error can be found
+     locally.  (We can likely use look-up table for this step).
+     Generally, small parameter for this decoder is expected to be
+     `p*z`, where `z` is the degree of the variable node connectivity
+     graph, and `p` is the typical error probability.  Much better
+     than `n*p` for the full-matrix look-up decoding.
+  4. If yes, move the coordinates of the corresponding (min-weight)
+     vector to `E`, and erase from the field.
+  5. If syndrome is non-zero, increase `r` by one, and go back to 2.
+  6. Otherwise, sort coordinates in `E` to get the error vector.
+- Suppose H=A*B is an exact product.  Try two-stage decoding.  Would
+  this be true for concatenated codes?
+- List decoding for multi-step decoders, where we have several vectors
+  and corresponding probabilities on the input of next-step decoder.
+  
+Generally, given the matrix of syndrome rows `HeT`, maintain the list
+of rows already decoded (with the reference to corresponding
+observable or soft-out row), and rows not-yet decoded.

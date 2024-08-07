@@ -907,7 +907,7 @@ int read_01(mzd_t *M, FILE *fin, long long int *lineno, const char* fnam,
 
   ssize_t linelen;
   while((il<lmax) && (!feof(fin)) &&
-        ((linelen = getline(&buf, &bufsiz, fin))>=0)){
+        ((linelen = getline(&buf, &bufsiz, fin))>=0)){ /* including terminating '\n' */
     (*lineno)++;
     switch(buf[0]){
     case '0': case '1':
