@@ -18,8 +18,8 @@ CPP = g++
 #-Wmissing-prototypes   -Wconversion -Wextra
 # -std=gnu11
 VECDEC_HDRS= vecdec.h util_m4ri.h utils.h mmio.h tinymt64.h uthash.h qllr.h 
-VECDEC_SECS= vecdec.c util_m4ri.c utils.c mmio.c tinymt64.c qllr.c iter_dec.c star_poly.c 
-VECDEC_OBJS= vecdec.o util_m4ri.o utils.o tinymt64.o qllr.o iter_dec.o star_poly.o
+VECDEC_SECS= vecdec.c util_m4ri.c utils.c mmio.c tinymt64.c qllr.c iter_dec.c dec_ris.c star_poly.c 
+VECDEC_OBJS= vecdec.o util_m4ri.o utils.o tinymt64.o qllr.o iter_dec.o dec_ris.o star_poly.o
 VECDEC_XTRA= mmio.o 
 ## unused (documentation only): mainpage.h
 
