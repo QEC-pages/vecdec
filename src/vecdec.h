@@ -219,6 +219,7 @@ extern "C"{
   uint32_t getMsb(uint32_t n);
   uint32_t binary_to_gray(const uint32_t binary);
 
+  int do_energ_verify(const qllr_t * const vE, const mzd_t * const mE, const params_t * const p);
   int do_local_search(qllr_t *vE0, mzd_t * mE0, rci_t jstart, int lev,
 		    const qllr_t * const vE, const mzd_t * const mE, const mzd_t * const mH,
 		    const mzp_t * const skip_pivs, const mzp_t * const pivs,

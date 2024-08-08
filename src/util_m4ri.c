@@ -140,17 +140,17 @@ long long int csr_min_max_blk(csr_t *mat, int r1, int r2){
  * return resulting matrix
  * TODO: add code for List of Pairs 
  */
-csr_t * csr_transpose(csr_t *dst, const csr_t *p){
-  int m=p->rows, n=p->cols, nz=p->p[m];
+csr_t * csr_transpose(csr_t *dst, const csr_t * const org){
+  int rows=org->rows, cols=org->cols, nz=org->p[rows];
   if (dst == NULL) 
-    dst = csr_init(NULL,n,m,nz);
-  else if ((dst->cols != m) || (dst->rows != n) || (dst->nzmax < MAX(nz, n+1))) 
+    dst = csr_init(NULL,cols,rows,nz);
+  else if ((dst->cols != rows) || (dst->rows != cols) || (dst->nzmax < MAX(nz, cols+1))) 
     ERROR("Wrong size for return matrix.\n");
   else
     dst->nz=0; /* clear matrix */
-  for(int i=0;i<m;i++)    
-    for(int j=p->p[i]; j < p->p[i+1] ; j++){
-      dst->p[j]=p->i[j]; // pair format, to be compressed later
+  for(int i=0;i<rows;i++)    
+    for(int j=org->p[i]; j < org->p[i+1] ; j++){
+      dst->p[j]=org->i[j]; // pair format, to be compressed later
       dst->i[j]=i ;
     }
   dst->nz=nz;
@@ -444,19 +444,23 @@ csr_t *csr_free(csr_t *p){
  * check existing size and (re)allocate if  needded 
  */
 csr_t *csr_init(csr_t *mat, int rows, int cols, int nzmax){
-  if ((mat!=NULL)&&((mat->nzmax < nzmax)||(mat->nzmax < rows+1))){
-    // mat=csr_free(mat);  /* allocated size was too small */
+  const int max = MAX(nzmax,(rows+1));
+  if((nzmax<0)||(rows<0)||(cols<0))
+    ERROR("invalid parameters rows=%d cols=%d nzmax=%d)\n",rows,cols,nzmax);
+  if ((mat!=NULL)&&((mat->nzmax < max)||(mat->nzmax < rows+1))){
+    /* allocated size was too small */
     /** keep allocated `mat` */
-    mat->p = realloc(mat->p,MAX(nzmax,(rows+1))*sizeof(int));
+    mat->p = realloc(mat->p, max*sizeof(int));
     mat->i = realloc(mat->i, nzmax*sizeof(int));
     if ((mat->p==NULL) || (mat->i==NULL))
       ERROR("csr_init: failed to reallocate CSR rows=%d cols=%d nzmax=%d",
             rows,cols,nzmax);
     mat->nzmax=nzmax;
+    mat->p[0]=0;
   }
   else if(mat==NULL){
     mat=malloc(sizeof(csr_t));  
-    mat->p=calloc(MAX(nzmax,(rows+1)),sizeof(int));
+    mat->p=calloc(max,sizeof(int));
     mat->i=calloc(nzmax,sizeof(int)); 
     if ((mat == NULL) || (mat->p==NULL) || (mat->i==NULL))
       ERROR("csr_init: failed to allocate CSR rows=%d cols=%d nzmax=%d",
@@ -501,11 +505,11 @@ static int cmp_int_pairs(const void *p1, const void *p2){
  * @param nrows matrix dimension
  * @param ncols matrix dimension
  */
-csr_t * csr_from_pairs(csr_t *mat, int nz, int_pair *prs, int nrows, int ncols){
+csr_t * csr_from_pairs(csr_t *mat, const int nz, int_pair * const prs, const int nrows, const int ncols){
   mat = csr_init(mat, nrows, ncols, nz);
   qsort(prs, nz, sizeof(int_pair), cmp_int_pairs);
   int i, j=0;
-  for(i=0;i < mat->rows; i++){
+  for(i=0; i < nrows; i++){
     mat->p[i]=j;
     while ((j<nz) && (prs[j].a == i)){
       mat->i[j]=prs[j].b;
