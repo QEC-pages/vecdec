@@ -53,7 +53,8 @@ params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50, .pads=0,
   .line_err=0,   .line_er0=0,  .line_det=0, .line_obs=0,
   .mE0=NULL,
   .mE=NULL, .mHe=NULL, .mLe=NULL, .mHeT=NULL, .mLeT=NULL,
-  .nzH=0, .nzL=0
+  .nzH=0, .nzL=0,
+  .buffer=NULL, .buffer_size = 0
 };
 
 params_t prm_default={  .steps=50, .pads=0, 
@@ -735,6 +736,10 @@ int do_energ_verify(const qllr_t * const vE, const mzd_t * const mE, const param
 void init_Ht(params_t *p){
   const int n = p->nvar;
   p->mHt = csr_transpose(p->mHt, p->mH);
+  //  csr_t *vv_gr = do_vv_graph(p->mH, p->mHt, p);
+
+  do_clusters(p);
+  
   if(p->mL)
     p->mLt = csr_transpose(p->mLt,p->mL);
   /** todo: fix reallocation logic to be able to reuse the pointers model */

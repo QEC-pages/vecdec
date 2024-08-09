@@ -64,6 +64,23 @@ static inline double rnd_exponential(void){
 
   /** hash storage helper functions *** use `uthash.h` *************************************/
 
+  /**< @brief structure to hold two sparse vectors (syndrome,error) in a hash */
+  typedef struct TWO_VEC_T {
+    UT_hash_handle hh;
+#ifdef USE_QLLR    
+    signed int energ; /**< sum of LLRs */
+#else /* not USE_QLLR */
+    double energ;
+#endif /* USE_QLLR */    
+    int *vec; /** set  to &arr[w_s] */
+    int cnt; /** how many times this vector was encountered */
+    int w_e; /**< weight of error (non-negative) */
+    int w_s; /**< weight of syndrome (non-negative) */
+    int w_tot; /** `= w_e+w_s` */
+    //  size_t len; /** `weight*sizeof(int)` (is this really needed?) */
+    int arr[0]; /** array of `w_tot` integers, the actual key  */
+  } two_vec_t;
+  
 
   /**< @brief structure to hold sparse vectors in a hash */
   typedef struct ONE_VEC_T {

@@ -90,7 +90,7 @@ extern "C"{
     qllr_t uE; /** max energy of an error vector in `U` hash*/
     double uEdbl; /** max energy of an error vector in `U` hash*/
     int uW; /** max weight of an error vector in `U` hash*/
-    three_vec_t *hashU; /** `U` hash location */
+    two_vec_t *hashU; /** `U` hash location */
     int *permHe; /** permutation vector for syndrome bits when hashU is used */
     int classical; /** `1` if this is a classical code? */
     int internal; /** `1` to generate obs/det internally, `2` to generate from `err` file */
@@ -121,6 +121,7 @@ extern "C"{
     qllr_t LLRmin;
     qllr_t LLRmax;
     double epsilon; /** probability to ignore, default `1e-8` */
+    two_vec_t *clusters; /** `hash table` with small-weight clusters and corresponding syndromes */
     one_vec_t *codewords; /** `hash table` with found codewords */
     long long int num_cws; /** `number` of codewords in the `hash` */
     FILE *file_err;
@@ -143,6 +144,8 @@ extern "C"{
     mzd_t *mLe;
     mzd_t *mHeT;
     mzd_t *mLeT;
+    char *buffer;  /** general-purpose buffer */
+    size_t buffer_size; /** its allocated size */
   } params_t;
 
   extern params_t prm;
@@ -226,6 +229,9 @@ extern "C"{
 		      const params_t * const p);
 
   mzd_t *do_decode(mzd_t *mS, params_t const * const p);
+  
+  csr_t * do_vv_graph(const csr_t * const mH, const csr_t * const mHT, const params_t *const p);
+  void do_clusters(params_t * const p);
   
   /** 
    * @brief The help message. 
