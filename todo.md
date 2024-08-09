@@ -489,8 +489,33 @@ input: intervals [(0 r1), (q2 r2), (q3 r3) ...] and [(0,c1), (b2,c2),,, ]; DEM
       near-ML decoding for these syndrome vectors
 
 ## alternative decoders:
-- Look-up from a hash list of small-weight vectors
-- Variant of UF.  
+### Look-up from a hash list of small-weight vectors
+### Variant of UF.
+
+#### The algorithm: 
+1. Start with each non-zero check node, join all neighboring variable
+   nodes into a cluster.  Merge.  
+2. Try look-up decoding in each cluster.  Remove clusters where this
+   is successful (add the corresponding error vectors to the output
+   list).
+3. Check if decoding in a cluster is possible.  If yes, do RIS (?)
+   decoding in remaining clusters; remove.
+4. Try to grow the remaining clusters until some join.  Check whether
+   decoding is possible.  If yes, do RIS (?) decoding.  Otherwise,
+   back to 4 until only one cluster remains.
+5. This requires the following: 
+
+- [x] prepare_v_v_graph (sparse form of vv connectivity graph).
+- [x] given the error vector, init two_vec_t structure
+- [x] check and optionally insert vector in hash (by error vector).  
+- [x] Sort by syndrome vectors and (if multiple `e` per `s`) pick the most likely `e`; 
+- [x] Check and insert vector in hash (by syndrome).
+- [x] clean up the hash 
+- [ ] cluster algorithm implementation: 
+  - variables: `num_clus`; max_clus; `int in_cluster[nvar]`; `int label[nvar]`.
+  - when two clusters are merging, keep the smaller label.
+  - data structure for cluster lists (one for `v`, another for `c` ???)
+
   1. Start with `r=1` (n.n.), and for every non-zero check node mark surrounding variable nodes, and an empty set `E`.
   2. Connect these into clusters.
   3. For each cluster `X`, calculate `H[X]`, and see if the syndrome
@@ -504,10 +529,16 @@ input: intervals [(0 r1), (q2 r2), (q3 r3) ...] and [(0,c1), (b2,c2),,, ]; DEM
      vector to `E`, and erase from the field.
   5. If syndrome is non-zero, increase `r` by one, and go back to 2.
   6. Otherwise, sort coordinates in `E` to get the error vector.
-- Suppose H=A*B is an exact product.  Try two-stage decoding.  Would
-  this be true for concatenated codes?
-- List decoding for multi-step decoders, where we have several vectors
-  and corresponding probabilities on the input of next-step decoder.
+
+### Two-stage decoding when H=A*B is an exact product
+
+Suppose H=A*B is an exact product.  Try two-stage decoding.  Would
+this be true for concatenated codes?
+
+### List decoding for multi-step decoders
+ 
+List decoding for multi-step decoders, where we have several vectors
+and corresponding probabilities on the input of next-step decoder.
   
 Generally, given the matrix of syndrome rows `HeT`, maintain the list
 of rows already decoded (with the reference to corresponding

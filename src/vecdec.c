@@ -32,7 +32,8 @@ params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50, .pads=0,
   .lerr=-1, .maxosd=100, .swait=0, .maxC=0,
   .dW=0, .minW=INT_MAX, .maxW=0, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
   .bpalpha=1, .bpbeta=1, .bpgamma=0.5, .bpretry=1, 
-  .uW=0, .uEdbl=-1, .uE=-1, .numU=0, .numE=0, .maxU=-1, .hashU=NULL, .permHe=NULL,
+  .uW=0, .uEdbl=-1, .uE=-1, .numU=0, .numE=0, .maxU=-1,
+  .hashU_error=NULL, .hashU_syndr=NULL, .permHe=NULL,
   .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8, .useP=0, .dmin=0,
   .debug=1, .fdem=NULL, .fout="tmp",
   .fdet=NULL, .fobs=NULL,  .ferr=NULL,
@@ -1285,7 +1286,7 @@ int var_init(int argc, char **argv, params_t *p){
   
   if (p->seed <= 0){
     long long int seed_old= - p->seed; 
-    p->seed=-(seed_old) + time(NULL)+1000000ul*getpid(); /* ensure a different seed even if started at the same time */
+    p->seed=(seed_old) + time(NULL)+1000000ul*getpid(); /* ensure a different seed even if started at the same time */
     if((p->debug)&&(p->mode!=3))
       printf("# initializing seed=%lld from time(NULL)+1000000ul*getpid()+%lld\n",p->seed, seed_old);
     /** use `tinymt64_generate_double(&pp.tinymt)` for double [0,1] */

@@ -14,32 +14,52 @@
 #include "qllr.h"
 #include "vec.h"
 
-/**
-- *** UFL : union-find lookup decoder 
-- [x] prepare_v_v_graph (sparse form of vv connectivity graph).
-- [x] given the error vector, init two_vec_t structure
-- [ ] check and optionally insert vector in hash (by error vector).  
-- [ ] Sort by syndrome vectors and (if multiple `e` per `s`) pick the most likely `e`; 
-- [ ] Check and insert vector in hash (by syndrome).
-- [ ] clean up the hash 
-- [ ] recursively construct connected clusters from the list of non-zero syndrome bits, label each with smallest `v`; 
-- [ ] maintain (or construct) the list of non-zero syndrome bits associated with each cluster (???)
-- [ ] is it a valid cluster (decoding is possible)?
-- [ ] grow clusters by 1 (or by energy incremement).  
+/** *** UFL : UNION-FIND LOOKUP DECODER *********************/
 
-  int v_in_clus[] list of clusters by initial position `-1`: not in a
-     cluster `int`: position of the cluster head (if `in_clus[x]==x`,
-     this is the head).  Several levels of references are allowed.
-     The actual algorithm: after increment, go over neighbors of each position in a cluster, 
-     if allowed and not yet in this cluster, add (or cluster merge).
-  int c_in_clus[] 
+typedef struct POINT_T {
+  int index; /** index of the `v` or `c` node */
+  struct POINT_T *next;  /** pointer to next node or NULL */
+} point_t; 
+point_t *v_nodes; /** [`nvar`] non-zero value is the number of the next
+		 `v` in cluster */
+point_t *c_nodes; /** [`nchk`] non-zero value is the number of the next
+		 `c` in cluster (only non-zero syndrome bits). */
+int *label;  /** [`nchk+1`] */
 
-- [ ] given the position, find the corresponding cluster, optionally update pointers 
-      along the path to the head.  
-      Return: -1 (not in a cluster), X>=0: cluster starting at X. 
-- [ ] RW decoding in a cluster
+typedef struct CLUSTER_T {
+  int label; /** (by the position of non-zero syndrome bits).
+		 Positive value: label of this cluster.  Negative
+		 value: reference label.*/
+  int num_v;
+  point_t *first_v; 
+  point_t *last_v;
+  int num_c;
+  point_t *first_c;
+  point_t *last_c;
+} cluster_t;
 
- */
+cluster_t *clus; /** [`nchk+1`] list of clusters and associated `v` and `c` lists. */
+int max_clus; /** maximum cluster index */
+int num_clus; 
+
+/** functions to define:
+- [ ] `merge(i,j)`: merge `j` to `i` (reference `label[j]->i`, update linked lists and the counters)  
+- [ ] add vertex `v` to cluster `j` (and merge if needed)
+- [ ] init clusters (from given syndrome vector)
+  - init `v_next`, `c_next` to zero
+  - init `label` to zero (?)
+  - init `clus` to zero.
+- [ ] grow clusters
+- [ ] reset clusters 
+- [ ] look up decoding (given the set of clusters, try to look up the syndrome vectors in the hash).
+- [ ] RIS decoding: 
+ - form local_HT (set of rows in the cluster)
+ - add local syndrome vector 
+ - see if these are linearly independent 
+ - if not, transpose the matrices and do the decoding.
+
+*/
+
 
 csr_t * do_vv_graph(const csr_t * const mH, const csr_t * const mHT, const params_t *const p){
   int max_buf=10, nz=0;
@@ -162,84 +182,106 @@ int next_vec(const int w, int arr[], const int max){
 
 void do_clusters(params_t * const p){
   int wmax=p->uW;
-  int *err = malloc((wmax+2)*sizeof(int));
+  int *err = malloc((wmax)*sizeof(int));
   two_vec_t *entry, *pvec;
-  csr_out(p->mHt);
-  if((0<=wmax)&&(1)){
-    entry = two_vec_init(0,err,p);
-    two_vec_print(entry);
-    const size_t keylen = entry->w_s * sizeof(rci_t);
-    HASH_FIND(hh, p->hashU, entry->arr, keylen, pvec);
-    if(!pvec){ /** vector not found, inserting */	     
-      qllr_t energ=0;
-      for(int i=0; i < entry->w_e; i++) 
-	energ += p->vLLR[entry -> vec[i]];
-      entry->energ=energ;	
-      HASH_ADD(hh, p->hashU, arr, keylen, entry); /** store in the `hash` */	
-    }
-  }
-  printf("# here here\n");
+  int max = p->mHt->rows; 
+  //  csr_out(p->mHt);
 
-  int w=1;
-  if(w<=wmax){
-    for(int i=0; i < p->mHt->rows; i++){
-      err[0]=i;
-      printf("adding i=%d: [ ",i);
-      for(int i=0;i<w;i++)
-	printf("%d%s",err[i],i+1<w?" ":" ]\n");
+  // w=0 vector 
+  entry = two_vec_init(0,err,p);
+  two_vec_print(entry);
+  const size_t keylen = entry->w_e * sizeof(rci_t);
+  HASH_FIND(hh, p->hashU_error, entry->vec, keylen, pvec);
+  if(!pvec) /** vector not found, inserting */	     
+    HASH_ADD(hh, p->hashU_error, vec, keylen, entry); /** store in the `hash` */	
+
+  for(int w=1; w<=wmax; w++){
+    printf("w=%d max=%d \n",w,max);
+    int cnt=0; // initial invalid vector 
+    for(int j=0; j<w; j++)
+      err[j]=j;
+    err[w-1]=w-2;
+      
+    while(next_vec(w,err,max)){
+      cnt++;
       entry = two_vec_init(w,err,p);
       two_vec_print(entry);
-      const size_t keylen = entry->w_s * sizeof(rci_t);
-      HASH_FIND(hh, p->hashU, entry->arr, keylen, pvec);
-      if(!pvec){ /** vector not found, inserting */	     
-	//	qllr_t energ=0;
-	//	for(int i=0; i < entry->w_e; i++) 
-	//	  energ += p->vLLR[entry -> vec[i]];
-	//   entry->energ=energ;	
-	HASH_ADD(hh, p->hashU, arr, keylen, entry); /** store in the `hash` */	
-      }
+      const size_t keylen = entry->w_e * sizeof(rci_t);
+      HASH_FIND(hh, p->hashU_error, entry->vec, keylen, pvec);
+      if(!pvec) /** vector not found, inserting */	     
+	HASH_ADD(hh, p->hashU_error, vec, keylen, entry); /** store in the `hash` */
+      else
+	ERROR("unexpected");
     }
+    int num=1, den=1; /** expected {max \choose w} */
+    for(int i=0; i<w; i++){
+      num *= (max-i);
+      den *= (i+1);
+    }
+    printf("w=%d max=%d cnt=%d expected=%d=%d/%d\n\n",w,max,cnt,num/den,num,den);
   }
-  printf("# here here2 #######################\n\n");
 
-  if(1){
-    HASH_ITER(hh, p->hashU, entry, pvec) {
-      printf("deleting:\n");
-      two_vec_print(entry);
-      HASH_DEL(p->hashU, entry);
-      printf("done.\n");
-    }
-  }
-  
-  if(0){ /** exercise `next_vec()` */ 
-    int err[6], max=6;
-    for(int w=1; w<=6; w++){
-      printf("w=%d max=%d \n",w,max);
-      int cnt=1; // initial vector 
-      for(int j=0; j<w; j++)
-	err[j]=j;
-      for(int i=0; i<w; i++)
-	printf("%d%s",err[i],i+1==w?"\n":"");
-      while(next_vec(w,err,max)){
-	cnt++;
-	printf("w=%d cnt=%d: ",w,cnt);
-	for(int i=0; i<w; i++)
-	  printf("%d%s",err[i],i+1==w?"\n":"");
+  printf("# here here2 #######################\n\n");
+  HASH_SORT(p->hashU_error, by_syndrome);
+
+  printf("move entries syndrome ordering:\n");
+  two_vec_t *tmp=NULL, *good=NULL;
+  HASH_ITER(hh, p->hashU_error, entry, pvec) {
+    if(good){
+      if(by_syndrome(entry,good)==0){
+	int cmp = by_error(good,entry);
+	switch(cmp){
+	case -1: /** good is better */
+	  printf(" -1, deleting entry:\n");
+	  two_vec_print(entry);
+	  HASH_DEL(p->hashU_error, entry);
+	  break;
+	case +1: /** entry is better */
+	  printf(" +1, deleting good:\n");
+	  two_vec_print(good);
+	  HASH_DEL(p->hashU_error,good);
+	  good=entry;
+	  break;
+	case 0:
+	  ERROR(" 0, this should not happen!");
+	}
       }
-      int num=1, den=1; /** expected {max \choose w} */
-      for(int i=0; i<w; i++){
-	num *= (max-i);
-	den *= (i+1);
+      else{
+	printf("moving 'good' to new hash\n");
+	two_vec_print(good);
+	HASH_DEL(p->hashU_error,good);
+	HASH_FIND(hh, p->hashU_syndr, good->arr, good->w_s*sizeof(int), tmp);
+	if(!tmp) /** vector not found, inserting */	     
+	  HASH_ADD(hh, p->hashU_syndr, arr, good->w_s*sizeof(int), good);
+	else
+	  ERROR("unexpected");
+	good=NULL;
       }
-      printf("w=%d max=%d cnt=%d expected=%d=%d/%d\n\n",w,max,cnt,num/den,num,den);
     }
+    else
+      good=entry;
   }
+
+  /** deal with final `good` entry */
+  printf("moving final 'good' to new hash\n");
+  two_vec_print(good);
+  HASH_DEL(p->hashU_error,good);
+  HASH_FIND(hh, p->hashU_syndr, good->arr, good->w_s*sizeof(int), tmp);
+  if(!tmp) /** vector not found, inserting */	     
+    HASH_ADD(hh, p->hashU_syndr, arr, good->w_s*sizeof(int), good);
+  else
+    ERROR("unexpected");
+  good=NULL;
+
+  printf("removing all items by syndrome ##################\n");
+  HASH_ITER(hh, p->hashU_syndr, entry, pvec) {
+    printf("removing\n");
+    two_vec_print(entry);
+    HASH_DEL(p->hashU_syndr,entry);    
+  }
+
+
 }
       
     
     
-/** @brief prepare syndrome vectors for small clusters */
-long long int xdo_clusters(const csr_t * const mH, const csr_t * const mHT, const params_t * const p){
-  
-  return 0;
-}

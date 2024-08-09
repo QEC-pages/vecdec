@@ -90,7 +90,44 @@ static inline double rnd_exponential(void){
       printf(" %d",it->arr[i]);
     printf(" ]\n");
   }
-  
+
+  /** @brief compare two `two_vec_t` structures by syndrome */
+static inline int by_syndrome(void *a, void *b){
+  const two_vec_t * const pa = (two_vec_t *) a;
+  const two_vec_t * const pb = (two_vec_t *) b;
+  if (pa->w_s < pb->w_s)
+    return -1;
+  else if (pa->w_s > pb->w_s)
+    return +1;
+  else{ /** Wa == Wb */
+    for(int i=0; i < pa->w_s; i++){
+      if (pa->arr[i] < pb->arr[i])
+	return -1;
+      else if (pa->arr[i] > pb->arr[i])
+	return +1;
+    }
+  }
+  return 0;
+}
+
+  /** @brief compare two `two_vec_t` structures by error vectors */
+  static inline int by_error(void *a, void *b){
+    const two_vec_t * const pa = (two_vec_t *) a;
+    const two_vec_t * const pb = (two_vec_t *) b;
+    if (pa->w_e < pb->w_e)
+      return -1;
+    else if (pa->w_e > pb->w_e)
+      return +1;
+    else{ /** Wa == Wb */
+      for(int i=0; i < pa->w_e; i++){
+	if (pa->vec[i] < pb->vec[i])
+	  return -1;
+	else if (pa->vec[i] > pb->vec[i])
+	  return +1;
+      }
+    }
+    return 0;
+  }  
 
   /**< @brief structure to hold sparse vectors in a hash */
   typedef struct ONE_VEC_T {
