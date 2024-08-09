@@ -80,6 +80,16 @@ static inline double rnd_exponential(void){
     //  size_t len; /** `weight*sizeof(int)` (is this really needed?) */
     int arr[0]; /** array of `w_tot` integers, the actual key  */
   } two_vec_t;
+
+  static inline void two_vec_print(const two_vec_t * const it){
+    printf("# two_vec: cnt=%d w_e=%d e=[",it->cnt,it->w_e);
+    for(int i=0; i < it->w_e; i++)
+      printf(" %d",it->vec[i]);
+    printf(" ]\n# w_s=%d s=[",it->w_s);
+    for(int i=0; i < it->w_s; i++)
+      printf(" %d",it->arr[i]);
+    printf(" ]\n");
+  }
   
 
   /**< @brief structure to hold sparse vectors in a hash */
