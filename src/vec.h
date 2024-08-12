@@ -32,12 +32,13 @@ typedef struct VEC_T{
 
   /** @brief return empty `vec` with `max` positions reserved */
   static inline vec_t *vec_init(const int max){
-    if(max<=0)
+    if(max<0)
       ERROR("invalid max=%d",max);
     vec_t * ans = calloc(1, sizeof(vec_t)+max*sizeof(int));
     if(!ans)
       ERROR("memory allocation");
     ans->max = max;
+    //    ans->wei = 0;
     return ans;
   }
   

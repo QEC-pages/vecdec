@@ -20,8 +20,8 @@ extern "C"{
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include  "qllr.h" 
-
+#include "qllr.h" 
+#include "vec.h"
 
   typedef enum EXTR_T { TOTAL, CONV_TRIVIAL, CONV_BP, CONV_BP_AVG, CONV_BP_TOT,
     SUCC_TRIVIAL, SUCC_BP, SUCC_OSD, SUCC_TOT, EXTR_MAX } extr_t;
@@ -147,6 +147,8 @@ extern "C"{
     mzd_t *mLeT;
     char *buffer;  /** general-purpose buffer */
     size_t buffer_size; /** its allocated size */
+    vec_t *v1;
+    vec_t *v0; /** temp space for `two_vec_init()` */
   } params_t;
 
   extern params_t prm;
@@ -232,7 +234,10 @@ extern "C"{
   mzd_t *do_decode(mzd_t *mS, params_t const * const p);
   
   csr_t * do_vv_graph(const csr_t * const mH, const csr_t * const mHT, const params_t *const p);
-  void do_clusters(params_t * const p);
+  void do_clusters(params_t * const p); /** exercise */
+  void kill_clusters(params_t * const p);
+  void do_cl_dec(params_t * const p); /** exercise */
+  
   
   /** 
    * @brief The help message. 

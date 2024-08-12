@@ -55,7 +55,7 @@ params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50, .pads=0,
   .mE0=NULL,
   .mE=NULL, .mHe=NULL, .mLe=NULL, .mHeT=NULL, .mLeT=NULL,
   .nzH=0, .nzL=0,
-  .buffer=NULL, .buffer_size = 0
+  .buffer=NULL, .buffer_size = 0, .v0=NULL, .v1=NULL
 };
 
 params_t prm_default={  .steps=50, .pads=0, 
@@ -740,6 +740,8 @@ void init_Ht(params_t *p){
   //  csr_t *vv_gr = do_vv_graph(p->mH, p->mHt, p);
 
   do_clusters(p);
+  do_cl_dec(p); // try cluster-based decoding on existing list of clusters 
+  kill_clusters(p);
   
   if(p->mL)
     p->mLt = csr_transpose(p->mLt,p->mL);
@@ -1660,7 +1662,7 @@ void var_kill(params_t *p){
   if(p->vP){        free(p->vP);    p->vP = NULL;  }
   if(p->vLLR){      free(p->vLLR);  p->vLLR = NULL;}
   if(LLR_table){ free(LLR_table);  LLR_table = NULL;}
-
+  
   p->mH =  csr_free(p->mH);
   p->mHt = csr_free(p->mHt);
   if(p->mL)
@@ -1674,7 +1676,8 @@ void var_kill(params_t *p){
   if(p->mLe) mzd_free(p->mLe);
   if(p->mHeT) mzd_free(p->mHeT);
   if(p->mLeT) mzd_free(p->mLeT);
-
+  if(p->v0) free(p->v0);
+  if(p->v1) free(p->v1);  
 }
 
 int do_err_vecs(params_t * const p){

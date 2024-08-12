@@ -82,6 +82,10 @@ static inline double rnd_exponential(void){
   } two_vec_t;
 
   static inline void two_vec_print(const two_vec_t * const it){
+    if(!it){
+      printf("two_vec_print(): null structure!\n");
+      return;
+    }
     printf("# two_vec: cnt=%d w_e=%d e=[",it->cnt,it->w_e);
     for(int i=0; i < it->w_e; i++)
       printf(" %d",it->vec[i]);
