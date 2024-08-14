@@ -1,0 +1,16 @@
+%%MatrixMarket matrix coordinate integer general
+% Field: GF(2)
+% Repetition code [[7,1,7]] (classical code)
+6 7 12
+1 1 1
+1 2 1
+2 2 1
+2 3 1
+3 3 1
+3 4 1
+4 4 1
+4 5 1
+5 5 1
+5 6 1
+6 6 1
+6 7 1

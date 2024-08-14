@@ -41,6 +41,26 @@ typedef struct VEC_T{
     //    ans->wei = 0;
     return ans;
   }
+
+  /** @brief push `v` at the end of `vec`, return new weight */
+  static inline int vec_push(const int v, vec_t * const vec){
+    if (vec->wei == vec->max)
+      ERROR("vector is full, wei=max=%d",vec->wei);
+    vec->vec[vec->wei++] = v;
+    return vec->wei;
+  }
+
+  /** @brief generate random sparse vector of length `max`, return weight */
+  static inline int vec_rnd(const double p, vec_t * const vec){
+    int w=0;
+    for(int i=0; i< vec->max;i++)
+      if(drandom()<p)
+	vec->vec[w++]=i;
+    vec->wei = w;
+    return w;
+  }
+
+  
   
 /** @brief print entire `vec_t` structure by pointer */
 static inline void vec_print(const vec_t * const pvec){
@@ -183,6 +203,17 @@ static inline void vec_ordered_pos_del(vec_t * const err, _maybe_unused const in
   for(int i=pos; i < err->wei; i++)
       err->vec[i] = err->vec[i+1];
 }
+
+  /**  @brief return 1 if two vectors are equal */
+  static inline int vec_ordered_equal(vec_t * const err, const int w, const int arr[]){
+    if (err->wei != w)
+      return 0;
+    for(int i=0; i< err->wei; i++)
+      if (err->vec[i] != arr[i]){
+	return 0;
+      }
+    return 1;
+  }
 
 #ifdef __cplusplus
 }

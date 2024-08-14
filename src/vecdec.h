@@ -236,8 +236,7 @@ extern "C"{
   csr_t * do_vv_graph(const csr_t * const mH, const csr_t * const mHT, const params_t *const p);
   void do_clusters(params_t * const p); /** exercise */
   void kill_clusters(params_t * const p);
-  void do_cl_dec(params_t * const p); /** exercise */
-  
+  void dec_ufl_exercise(params_t * const p);  
   
   /** 
    * @brief The help message. 

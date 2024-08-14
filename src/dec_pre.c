@@ -28,9 +28,14 @@ typedef struct VNODE_T {
 } vnode_t;
 
 typedef struct CLUSTER_T {
-  int label; /** (by the position of non-zero syndrome bits).
-		 Positive value: label of this cluster.  Negative
-		 value: reference label.*/
+  int label;
+  /** (by the position of non-zero syndrome bits).  Positive value:
+   *   label of this cluster.  This is a `proper` cluster if `label`
+   *   coincides with the cluster index, otherwise `reference` cluster
+   *   which was merged.  
+   * 
+   *   TODO: implement negative label = deleted cluster.
+   */
   int num_poi_v;
   point_t *first_v; /** linked list for associated v-nodes */
   point_t *last_v;
@@ -44,17 +49,16 @@ typedef struct UFL_T {
   const int nvar;
   const int nchk;
   vnode_t * nodes; /** hash storage for occupied nodes */
-  /** TODO: compare performance for taking an int array of nodes */
-  int num_v; /** number of used `v_nodes` */
-  int num_c; /** number of used `c_nodes` */
+  /** TODO: compare performance for taking an int array of nodes instead */
+  int num_v; /** total number of used `v_nodes` (all clusters) */
+  int num_c; /** total number of used `c_nodes` */
   int num_clus; /** number of defined clusters */
+  int num_prop; /** number of proper (non-reference and non-deleted) clusters */
   vec_t *error; /** [`nvar`] current error vector */
   vec_t *syndr; /** [`nchk`] remaining syndrome bits */
-  point_t *v_nodes; /** [`nvar`] non-zero value is the number of the next
-		 `v` in cluster */
-  point_t *c_nodes; /** [`nchk`] non-zero value is the number of the next
-		 `c` in cluster (only non-zero syndrome bits). */
-  vnode_t * spare;  //  int *label;  /** [`nchk`] */
+  point_t *v_nodes; /** [`nvar`] pre-allocated nodes for `v` linked lists in clusters */
+  point_t *c_nodes; /** [`nchk`] same for `c` linked lists */
+  vnode_t * spare;  /** [`nvar`] same for `hash` look-up table in `nodes`*/
   cluster_t clus[0];/** [`nchk`] list of clusters and associated `v` and `c` lists. */
 } ufl_t;
 
@@ -94,10 +98,10 @@ ufl_t *ufl_init(const params_t * const p){
     return NULL;
   }
 
-
+/** @brief print the cluster (its number `cl` is for information purpose) */
 static inline void cluster_print(const int cl, const cluster_t * const u){
   printf("# cluster %d label=%d num_v=%d num_c=%d (%s)\n",cl, u->label, u->num_poi_v, u->num_poi_c,
-	 cl == u->label ? "original" : "reference");
+	 cl == u->label ? "proper" : u->label < 0? "deleted" : "reference");
   if(u->num_poi_v){
     printf("# nodes_v: ");
     int cnt=0;
@@ -119,14 +123,20 @@ static inline void cluster_print(const int cl, const cluster_t * const u){
   }
 }
 
+/** @brief verify structural integrity of a cluster */
 static inline int cluster_verify(const int cl, const cluster_t * const clus){
   int num_err = 0; /** error counter */
-  if(clus->label != cl){ /* not native */
-    if((clus->num_poi_v)||(clus->first_v)||(clus->last_v)||
-       (clus->num_poi_c)||(clus->first_c)||(clus->last_c))
-      printf("err %d: cluster %d label %d : non-empty\n", ++num_err, cl, clus->label);
+  if(clus->label != cl){ /* not proper */
+    if(clus->label >= 0){ /** not erazed */
+      if((clus->num_poi_v)||(clus->first_v)||(clus->last_v)||
+	 (clus->num_poi_c)||(clus->first_c)||(clus->last_c))
+	printf("err %d: cluster %d label %d : non-empty\n", ++num_err, cl, clus->label);
+    }
+    else{
+      printf("erazed cluster %d with nv=%d nc=%d\n",cl, clus->num_poi_v, clus->num_poi_c);
+    }
   }
-  else{ /** native */
+  else{ /** proper */
     if(clus->num_poi_v){  /** `v` nodes present */
       int cnt=0;
       for(point_t * tmp = clus->first_v; tmp != NULL; tmp = tmp ->next, cnt++)      
@@ -158,16 +168,21 @@ static inline int cluster_verify(const int cl, const cluster_t * const clus){
   return 0;
 }
 
+/** @brief verify structural integrity of a `ufl` and its clusters */
 static inline int ufl_verify(const ufl_t * const u){
   int num_err = 0;
-  int num_c = 0, num_v = 0;
+  int num_c = 0, num_v = 0, num_prop=0;
   for (int ic=0; ic< u->num_clus; ic++){
     cluster_verify(ic, & u->clus[ic]);
     num_c += u->clus[ic].num_poi_c;
     num_v += u->clus[ic].num_poi_v;
+    if(u->clus[ic].label == ic)
+      num_prop++;
   }
   if ((num_c!=u->num_c) || (num_c!=u->num_c))
     ERROR("unexpected: num_c=%d cnt=%d num_v=%d cnt=%d",u->num_c, num_c, u->num_v, num_v);
+  if(num_prop != u->num_prop)
+    ERROR("number of proper clusters %d mismatch, expected %d",num_prop, u->num_prop);
   vnode_t *nod, *tmp;
   int cnt=0;
   HASH_ITER(hh, u->nodes, nod, tmp) {
@@ -181,26 +196,41 @@ static inline int ufl_verify(const ufl_t * const u){
   return 0;
 }
 
+/** @brief print out the `ufl` and its clusters */
 static inline void ufl_print(const ufl_t *const u){
   printf("# ufl_strucure num_v=%d num_c=%d num_clus=%d\n",u->num_v, u->num_c, u->num_clus);
-  for(int i=0 ; i< u->num_clus; i++)
+  for(int i=0 ; i< u->num_clus; i++){
     cluster_print(i,& u->clus[i]);
+  }
   vnode_t *tmp, *nod;
-  printf("vnodes in hash: ");
+  printf("# vnodes in hash: ");
   int cnt=0;
   HASH_ITER(hh, u->nodes, nod, tmp) {
     if(cnt > u->nvar)
-      break;      
-    printf("(%d %d -> %d) ",nod->v, nod->clus, u->clus[nod->clus].label);
+      break;
+    int cls = nod->clus;
+    printf("(%d %d",nod->v, cls);
+    while((cls>0) && (cls != u->clus[cls].label)){
+      cls = u->clus[cls].label;
+      printf(" -> %d", cls);
+    }
+    printf(") ");
     cnt++;
   }
   if(cnt != u->num_v)
     ERROR("counted %d expected num_v=%d",cnt, u->num_v);
+  printf("\n");
 }
 
+/** @brief merge `proper` ufl clusters `c2` into `c1` */
 static inline int merge_clus(const int c1, const int c2, ufl_t * const u){
-  assert(c1 != c2); /** sanity check */
+  //  printf("start of merge_clus(%d, %d, ...):\n", c1, c2);
+  //  ufl_print(u);
+  assert((c1 != c2)&&(u->num_prop>=2)&&
+	 (c1>=0)&&(c1 < u->num_clus)&&(u->clus[c1].label==c1)&&
+	 (c2>=0)&&(c2 < u->num_clus)&&(u->clus[c2].label==c2)); /** sanity check */
 
+  u->num_prop--;
   u->clus[c1].num_poi_v += u->clus[c2].num_poi_v;
   u->clus[c2].num_poi_v = 0;
   if( u->clus[c2].last_v ){
@@ -230,33 +260,38 @@ static inline int merge_clus(const int c1, const int c2, ufl_t * const u){
 /** @brief add variable node `v` to cluster `cl` 
  * @return 0 if nothing was done, 1 if just added, 2 if clusters merged 
  */
-static inline int add_v(const int v, int cl, ufl_t * const u){
-  while(u->clus[cl].label != cl)  /** dereference */
+static inline int add_v(const int v, const int cls, ufl_t * const u){
+  int cl = cls;
+  if(cl<0)
+    ERROR("deleted cluster %d encountered\n",cl);
+  while(u->clus[cl].label != cl){  /** dereference */   
     cl = u->clus[cl].label;
+    if(cl<0)
+      ERROR("deleted cluster %d encountered\n",cl);
+  } /** WARNING: this will not work with multiple  cluster removal / growth */
+    
   vnode_t * nod;
   HASH_FIND_INT(u->nodes, &v, nod);
   if(nod){ /** vertex already in a cluster */
+    assert(nod->clus >= 0); /** just in case */
     int lbl = u->clus[nod->clus].label;
-    while(u->clus[lbl].label != lbl)  /** dereference */
+    while((lbl >= 0) &&(u->clus[lbl].label != lbl))  /** dereference */
       lbl = u->clus[lbl].label;
     if(lbl == cl){  /** same `cl`, nothing needs to be done */
       //      printf("found %d, already in %d\n",v,cl);      
       return 0;
     }
+    else if (lbl < 0){
+      ufl_print(u);
+      ERROR("deleted cluster %d encountered\n",nod->clus);
+    }
     /** otherwise merge `cl` and `lbl` clusters */
     //    printf("found %d, already in %d !=  %d\n",v,lbl,cl);      
-    int c1, c2; /** merge `c2` into `c1` */
-    if (cl < lbl){
-      c1=cl; c2=lbl;
-    }
-    else {
-      c1=lbl; c2=cl;
-    }
+    int c1=lbl, c2=cl; /** merge `c2` into `c1` */
+    if (cl < lbl){ c1=cl; c2=lbl; } /** `c1` has the smaller index */
     merge_clus(c1,c2,u);
 #ifndef NDEBUG    
-    //    printf("verify c1=%d\n",c1);
     cluster_verify(c1, & u->clus[c1]);
-    //    printf("verify c2=%d\n",c2);
     cluster_verify(c2, & u->clus[c2]);
 #endif     
     return 2; /** merged clusters */
@@ -275,7 +310,7 @@ static inline int add_v(const int v, int cl, ufl_t * const u){
     }
     u->clus[cl].last_v -> next = tmp;
   }
-  else{ /** last_v == NULL */
+  else{ /** `last_v == NULL`, empty cluster*/
     if((u->clus[cl].num_poi_v != 0) || 
        (u->clus[cl].first_v != NULL)){
       printf("invalid cluster: cl=%d last_v==NULL num_poi_v=%d\n",cl,u->clus[cl].num_poi_v);
@@ -294,54 +329,105 @@ static inline int add_v(const int v, int cl, ufl_t * const u){
   return 1; /** added vertex */
 }
 
-/** @brief start ufl decoding */
-/** assume `u` has been initialized but may need cleaning */
-  int dec_ufl_start(const vec_t * const s, ufl_t * const u, const params_t * const p){
-    /** clean up */
-    vnode_t *nod, *tmp;
-    HASH_ITER(hh, u->nodes, nod, tmp) {
-      HASH_DEL(u->nodes,nod);
-    }
-     for(int i=0; i< u->num_clus; i++){       
-       u->clus[i].first_v = u->clus[i].last_v = NULL;
-       u->clus[i].num_poi_v=0; 
-       u->clus[i].first_c = u->clus[i].last_c = NULL;
-       u->clus[i].num_poi_c=0; 
-     } 
-    u->num_v = u->num_c = u->num_clus =0;
+/** @brief start ufl decoding 
+ *
+ *  given the syndrome vector `s`, construct its cluster decomposition 
+*/
 
-    //    csr_out(p->mH);
-    /** start a cluster for each position in `s` */
-    for (int ic = 0; ic < s->wei; ic++){
-      u->num_clus ++ ;
-      u->clus[ic].label = ic;
-      u->num_c ++; /** c nodes in use total */
-      point_t *tmp = & u->c_nodes[ic];
-      int c = tmp->index = s->vec[ic]; /** check node index = row of `H` */
-      tmp->next = NULL;
-      u->clus[ic].first_c = u->clus[ic].last_c = tmp;
-      u->clus[ic].num_poi_c = 1;
-      u->clus[ic].first_v = u->clus[ic].last_v = NULL;
-      u->clus[ic].num_poi_v = 0;
-      /** attach all neighboring vertices, merging clusters if needed */
-      assert(c < p->mH->rows);
-      for(int iv = p->mH->p[c]; iv < p->mH->p[c+1]; iv++){
-	int v = p->mH->i[iv]; /** variable node index */
-	//	printf("adding v=%d to cluster %d\n",v,ic);
-	add_v(v,ic,u);
-      }
-    }    
-#ifndef NDEBUG
-    ufl_verify(u);
-    if(p->debug & 32){
-      printf("# after dec_ufl_start()\n# s: ");      
-      vec_print(s);
-      ufl_print(u);
+/** assume `u` has been initialized but may need cleaning */
+int dec_ufl_start(const vec_t * const s, ufl_t * const u, const params_t * const p){
+  /** clean up */
+  vnode_t *nod, *tmp;
+  HASH_ITER(hh, u->nodes, nod, tmp) {
+    HASH_DEL(u->nodes,nod);
+  }
+  for(int i=0; i< u->num_clus; i++){       
+    u->clus[i].first_v = u->clus[i].last_v = NULL;
+    u->clus[i].num_poi_v=0; 
+    u->clus[i].first_c = u->clus[i].last_c = NULL;
+    u->clus[i].num_poi_c=0; 
+  } 
+  u->num_v = u->num_c = u->num_clus = u->num_prop = 0;
+  u->error->wei = u->syndr->wei = 0;
+  //  csr_out(p->mH);
+  /** start a cluster for each position in `s` */
+  for (int ic = 0; ic < s->wei; ic++){
+    u->num_clus ++ ;
+    u->num_prop ++ ; 
+    u->clus[ic].label = ic;
+    u->num_c ++; /** c nodes in use total */
+    point_t *tmp = & u->c_nodes[ic];
+    int c = tmp->index = s->vec[ic]; /** check node index = row of `H` */
+    tmp->next = NULL;
+    u->clus[ic].first_c = u->clus[ic].last_c = tmp;
+    u->clus[ic].num_poi_c = 1;
+    u->clus[ic].first_v = u->clus[ic].last_v = NULL;
+    u->clus[ic].num_poi_v = 0;
+    /** attach all neighboring vertices, merging clusters if needed */
+    assert(c < p->mH->rows);
+    for(int iv = p->mH->p[c]; iv < p->mH->p[c+1]; iv++){
+      int v = p->mH->i[iv]; /** variable node index */
+      //      printf("adding v=%d to cluster %d\n",v,ic);
+      add_v(v,ic,u);
     }
+  }    
+#ifndef NDEBUG
+  ufl_verify(u);
+  if(p->debug & 32){
+    printf("# after dec_ufl_start()\n# s: ");      
+    vec_print(s);
+    ufl_print(u);
+    printf("\n");
+  }
 #endif
 
-    return 0;    
+  return 0;    
+}
+
+/** @brief try look-up decoding of the syndrome vectors 
+ * 
+ * make sure that `p->hashU_syndr` has been constructed, 
+ * and the clusters in `u` have been defined.
+ *
+ * @return 1 if success (i.e., found syndrome vector in each cluster)
+ * still need to verify the `obs`
+ */
+int dec_ufl_lookup(ufl_t * const u, const params_t * const p){
+  int num_prop=0;
+  for (int ic=0; ic< u->num_clus; ic++){
+    if(u->clus[ic].label == ic){
+      int beg_c = u->syndr->wei;
+      cluster_t *clus = & u->clus[ic];
+      int cnt=0;
+      for(point_t * tmp = clus->first_c; tmp != NULL; tmp = tmp ->next, cnt++)
+	vec_push(tmp->index, u->syndr);
+      /** sort check node indices for this cluster */
+      int * beg = u->syndr->vec + beg_c; 
+      qsort(beg, cnt, sizeof(rci_t), cmp_rci_t);
+      /** actual lookup */
+      two_vec_t *tmp;
+      HASH_FIND(hh, p->hashU_syndr, beg, cnt*sizeof(int), tmp);
+      if(tmp){ /** vector found, add to `error` */
+	for(int i=0; i<tmp->w_e; i++)
+	  vec_push(tmp->vec[i], u->error);
+	u->clus[ic].label = -1 - ic; /**< eraze this cluster */
+	u->num_prop --; 
+      }
+      else{ /** we dealt with this cluster but failed to match */
+	num_prop++;
+      }
+    }
+    if (num_prop == u->num_prop)
+      break; /** all done, we only need to check all proper clusters */
   }
+  if(u->num_prop==0){ /** success: matched syndrome in every cluster */
+    qsort(u->error->vec, u->error->wei, sizeof(rci_t), cmp_rci_t);
+    assert(u->syndr->wei == u->num_c);
+    return 1; /** `success`; decoded */    
+  }
+  /** TODO: insert some sort of residual decoding here.  Cluster growth? */
+  return 0; /** some clusters remain undecoded */
+}
 
 
 /** functions to define:
@@ -354,7 +440,7 @@ static inline int add_v(const int v, int cl, ufl_t * const u){
 - [ ] grow clusters
 - [x] reset clusters 
 - [x] verify clusters 
-- [ ] look up decoding (given the set of clusters, try to look up the syndrome vectors in the hash).
+- [x] look up decoding (given the set of clusters, try to look up the syndrome vectors in the hash).
 - [ ] RIS decoding: 
  - form local_HT (set of rows in the cluster)
  - add local syndrome vector 
@@ -369,7 +455,7 @@ static inline int add_v(const int v, int cl, ufl_t * const u){
     decodability and use `RIS` decoding 
 
 
-- [ ] simplified `pre` decoding 
+- [x] simplified `pre` decoding 
   - given `s` vector, try to find it as a whole.  If success, return `e` vector
   - construct clusters
   - for each cluster, try to find the syndrome -> `e`; add `v`-nodes
@@ -467,17 +553,27 @@ csr_t * do_vv_graph(const csr_t * const mH, const csr_t * const mHT, const param
   return ans;
 }
 
+/** @brief for `err`or vector of weight `wgt`, compute syndrome vector and init `two_vec_t` 
+ */
 two_vec_t * two_vec_init(const int wgt, const int err[], params_t * const p){
   vec_t *v0 = p->v0, *v1 = p->v1, *tmp;
-  if(!v0){
+  if(!v0){ /** first time use => init temp storage. */
     v0 = p->v0 = vec_init(p->mHt->rows);
     v1 = p->v1 = vec_init(p->mHt->rows);
   }
-
+  qllr_t energ=0;
+  if(p->vLLR){
+    for(int i=0; i < wgt; i++) 
+      energ += p->vLLR[err[i]];
+  }
+  else
+    energ = wgt;
+  
   int w=0;
+  v0->wei=0;
   for(int i=0; i < wgt; i++){
     w=vec_csr_row_combine(v1,v0,p->mHt,err[i]);
-    tmp=v1;v1=v0;v0=tmp; /** `swap the pointers */    
+    tmp=v1;v1=v0;v0=tmp; /** `pointer swap */    
   }
   qsort(v0->vec, w, sizeof(rci_t), cmp_rci_t);
   two_vec_t *ans = malloc(sizeof(two_vec_t)+(w+wgt)*sizeof(int));
@@ -492,17 +588,16 @@ two_vec_t * two_vec_init(const int wgt, const int err[], params_t * const p){
   ans->vec = &( ans->arr[w] );
   for(int j=0 ; j < wgt; j++)
     ans->vec[j] = err[j];
-
- 
+  ans->energ = energ;
+  
   return ans;  
 }
 
 /** @brief alphabetically next vector of weight `w` 
  *  0<= err[0] < err[1] < ... < err[w] < max
  * 
- * use similar approach to non-recursively construct connected error
+ * TODO: use similar approach to non-recursively construct connected error
  * clusters starting from a given check or variable node 
- * 
  * 
  */ 
 int next_vec(const int w, int arr[], const int max){
@@ -531,7 +626,7 @@ void do_clusters(params_t * const p){
 
   // w=0 vector 
   entry = two_vec_init(0,err,p);
-  //  two_vec_print(entry);
+  //    two_vec_print(entry);
   const size_t keylen = entry->w_e * sizeof(rci_t);
   HASH_FIND(hh, p->hashU_error, entry->vec, keylen, pvec);
   if(!pvec) /** vector not found, inserting */	     
@@ -540,7 +635,7 @@ void do_clusters(params_t * const p){
     ERROR("unexpected");
 
   for(int w=1; w<=wmax; w++){
-    //    printf("w=%d max=%d \n",w,max);
+    //        printf("w=%d max=%d \n",w,max);
     int cnt=0; // initial invalid vector 
     for(int j=0; j<w; j++)
       err[j]=j;
@@ -549,7 +644,7 @@ void do_clusters(params_t * const p){
     while(next_vec(w,err,max)){
       cnt++;
       entry = two_vec_init(w,err,p);
-      //      two_vec_print(entry);
+      //            two_vec_print(entry);
       const size_t keylen = entry->w_e * sizeof(rci_t);
       HASH_FIND(hh, p->hashU_error, entry->vec, keylen, pvec);
       if(!pvec) /** vector not found, inserting */	     
@@ -557,13 +652,14 @@ void do_clusters(params_t * const p){
       else
 	ERROR("unexpected");
     }
-#if 0    
+#if 0 /** generate stats */
     int num=1, den=1; /** expected {max \choose w} */
     for(int i=0; i<w; i++){
       num *= (max-i);
       den *= (i+1);
     }
-    printf("w=%d max=%d cnt=%d expected=%d=%d/%d\n\n",w,max,cnt,num/den,num,den);
+    if(p->debug&2)
+      printf("w=%d max=%d cnt=%d expected=%d=%d/%d\n\n",w,max,cnt,num/den,num,den);
 #endif     
   }
   /** TODO: use hash by syndrome (`det`) with secondary hash by `obs`
@@ -576,16 +672,17 @@ void do_clusters(params_t * const p){
   HASH_ITER(hh, p->hashU_error, entry, pvec) {
     if(good){
       if(by_syndrome(entry,good)==0){
-	int cmp = by_error(good,entry);
+	//	int cmp = by_error(good,entry);
+	int cmp = by_energy(good,entry);
 	switch(cmp){
-	case -1: /** good is better */
+	case 0: case -1: /** `good` is same or better, keep it */
 	  //	  printf(" -1, deleting entry:\n");
 	  //	  two_vec_print(entry);
 	  HASH_DEL(p->hashU_error, entry);
 	  free(entry);
 	  entry=NULL;
 	  break;
-	case +1: /** entry is better */
+	case +1: /** `entry` is better, replace `good` */
 	  //	  printf(" +1, deleting good:\n");
 	  //	  two_vec_print(good);
 	  HASH_DEL(p->hashU_error,good);
@@ -593,8 +690,9 @@ void do_clusters(params_t * const p){
 	  good=entry;
 	  entry=NULL;
 	  break;
-	case 0:
-	  ERROR(" 0, this should not happen!");
+	default:
+	  ERROR("this should not happen!");
+	  break;
 	}
       }
       else{ /** `entry` with new syndrome */
@@ -628,11 +726,22 @@ void do_clusters(params_t * const p){
   }
   assert(p->hashU_error == NULL);
   free(err);
+#ifndef NDEBUG
+  if(p->debug&64){
+    int cnt=0;
+    printf("############################# error vectors in hash:\n");
+    HASH_ITER(hh, p->hashU_syndr, entry, pvec) {
+      cnt++;
+      two_vec_print(entry);
+    }
+    printf("############################# total of %d\n\n",cnt);
+  }    
+#endif   
 }
 
 void kill_clusters(params_t * const p){
   two_vec_t *entry, *tmp;
-  printf("removing all errors by syndrome ##################\n");
+  //  printf("removing all errors by syndrome ##################\n");
   HASH_ITER(hh, p->hashU_syndr, entry, tmp) {
     //    printf("removing\n");
     //    two_vec_print(entry);
@@ -642,25 +751,91 @@ void kill_clusters(params_t * const p){
   assert(p->hashU_syndr == NULL);
 }
 
-void do_cl_dec(params_t * const p){
+void dec_ufl_exercise(params_t * const p){
   ufl_t *ufl = ufl_init(p);
-  two_vec_t *entry, *tmp;
-  printf("############### start do_cl_dec()\n");
-  HASH_ITER(hh, p->hashU_syndr, entry, tmp) {
-    printf("decoding w_s=%d\n",entry->w_s);
-    //    two_vec_print(entry);
+  vec_t *err;
+  if(p->useP == 0)
+    ERROR("please set useP=... value\n");
+  
+  err=vec_init(p->nvar);
+  int num_conv=0, num_conv1=0, num_corr1=0, num_corr=0, num_fail=0; /** count of converged, correct */
+  for(int i=0; i< p->ntot;i++){
+    vec_rnd(p->useP, err);
+    
+    two_vec_t * entry = two_vec_init(err->wei,err->vec,p);
     vec_t *svec = vec_init(entry->w_s);
     for(int i=0; i< entry->w_s; i++)
       svec->vec[i] = entry->arr[i];
     svec->wei = entry->w_s;
-    dec_ufl_start(svec, ufl, p);
 #ifndef NDEBUG    
-    ufl_verify(ufl);
-    //    printf("\n\n");
-#endif    
-    free(svec);
-  }
+    if(p->debug&2){
+      printf("decoding w_s=%d\n",entry->w_s);
+    if(p->debug&64)
+      two_vec_print(entry);
+    }
+#endif     
+    free(entry);
 
+    two_vec_t *tmp;
+    //      printf("try for full syndrome vector first\n");
+    
+    HASH_FIND(hh, p->hashU_syndr, svec->vec, svec->wei*sizeof(int), tmp);
+    if(tmp){
+      //      two_vec_print(tmp);
+      //      printf("found full syndrome vector...");
+      num_conv1++;
+      
+      if(vec_ordered_equal(err, tmp->w_e, tmp->vec)){
+	//	printf("success!\n");
+	num_corr1++;
+      }
+      else{
+	//	printf("no match!\n");
+	num_fail++;
+      }
+    }
+    else{ /** single-cluster lookup failed */
+      //      printf("did not find full syndrome vector, going to ufl_start\n");	
+      dec_ufl_start(svec, ufl, p);
+#ifndef NDEBUG    
+      ufl_verify(ufl);
+    //    printf("\n\n");
+#endif
+      int res=dec_ufl_lookup(ufl, p);
+      num_conv += res;    
+
+    /** todo: actually check `obs` here for a quantum code */
+      if(res){ /** converged */
+	int correct = vec_ordered_equal(err, ufl->error->wei, ufl->error->vec);	
+	if(correct)
+	  num_corr ++;
+	else
+	  num_fail ++;
+	
+	if(p->debug&2){
+	  printf("res=%d correct=%d i=%d of %lld; clusters: \n",res,correct, i+1,p->ntot);
+	  if(p->debug&64)
+	    if(!correct)
+	      ufl_print(ufl);
+	}
+      }
+      else{ /** not converged */
+	num_fail++;
+	if(p->debug&2){
+	  printf("res=%d lookup failed i=%d of %lld; clusters: \n",res, i+1,p->ntot);
+	  if(p->debug&64)
+	    ufl_print(ufl);
+	}
+      }
+    }
+    free(svec);
+
+    //    if(p->debug&2)       printf("\n");
+  }
+  printf("# ufl lookup decoding: tot=%lld conv1=%d corr1=%d conv=%d corr=%d fail=%d p_f=%g\n",
+	 p->ntot, num_conv1, num_corr1, num_conv, num_corr, num_fail, (double) num_fail/p->ntot);
+  
+  free(err);
   ufl_free(ufl);
 }
       

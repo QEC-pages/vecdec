@@ -740,7 +740,8 @@ void init_Ht(params_t *p){
   //  csr_t *vv_gr = do_vv_graph(p->mH, p->mHt, p);
 
   do_clusters(p);
-  do_cl_dec(p); // try cluster-based decoding on existing list of clusters 
+  dec_ufl_exercise(p);
+  //  do_cl_dec(p); // try cluster-based decoding on existing list of clusters 
   kill_clusters(p);
   
   if(p->mL)
@@ -1291,7 +1292,7 @@ int var_init(int argc, char **argv, params_t *p){
     p->seed=(seed_old) + time(NULL)+1000000ul*getpid(); /* ensure a different seed even if started at the same time */
     if((p->debug)&&(p->mode!=3))
       printf("# initializing seed=%lld from time(NULL)+1000000ul*getpid()+%lld\n",p->seed, seed_old);
-    /** use `tinymt64_generate_double(&pp.tinymt)` for double [0,1] */
+    /** use `tinymt64_generate_double(&pp.tinymt)` for double `[0,1)` */
   }
   
   tinymt64_init(&tinymt,p->seed);
@@ -1805,7 +1806,7 @@ int main(int argc, char **argv){
 	mzd_write_01(p->file_pdet, prodHe, 1, p->pdet, p->debug);
 	
       mzd_add(prodHe, prodHe, p->mHe);
-      if(!mzd_is_zero(prodHe)){
+      if((p->steps)&&(!mzd_is_zero(prodHe))){
 	if((p->debug&512)||(p->nvec <=64)){
 	  printf("syndromes difference:\n");
 	  mzd_print(prodHe);

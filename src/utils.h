@@ -89,7 +89,7 @@ static inline double rnd_exponential(void){
     printf("# two_vec: cnt=%d w_e=%d e=[",it->cnt,it->w_e);
     for(int i=0; i < it->w_e; i++)
       printf(" %d",it->vec[i]);
-    printf(" ]\n# w_s=%d s=[",it->w_s);
+    printf(" ]%s w_s=%d s=[",it->w_s>20?"\n#":" ",it->w_s);
     for(int i=0; i < it->w_s; i++)
       printf(" %d",it->arr[i]);
     printf(" ]\n");
