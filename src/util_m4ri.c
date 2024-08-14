@@ -879,27 +879,32 @@ int all_space(const char * str) {
 
 /** @brief read up to `lmax` lines from a file in `01` format
 
- * read up to `lmax` binary vectors of length `m` from a `01` file `fin` open
- * for reading.  Place the vectors as columns of matrix `M` of size `m` rows by
- * `lmax` colums.  Lines starting with `#` are silently ignored; a non-`01`
- * line, or a `01` line of an incorrect length will give an error.
+ * read up to `lmax` binary vectors of length `m` from a `01` file
+ * `fin` open for reading.  Place the vectors as rows (or columns) of
+ * matrix `M` of size `lmax` rows by `m` columns (`m` rows by `lmax`
+ * columns if `by_col` is non-zero).  Lines starting with `#` are
+ * silently ignored; a non-`01` line, or a `01` line of an incorrect
+ * length will give an error.
  *
  * @param M initialized output matrix with `lmax` rows and `m` columns
  * @param fin file with 01 data open for reading
  * @param[input,output] lineno current line number in the file.
  * @param fnam file name (for debugging purposes)
- * @param p Other parameters (only `p->debug` is used).
+ * @param pads if non-zero, pad input lines with `0`
+ * @param by_col read the file into columns of the matrix 
+ * @param debug if `(debug&8 !=0)` print some additonal information.
  * @return the number of rows actually read.
  *
  */
 int read_01(mzd_t *M, FILE *fin, long long int *lineno, const char* fnam,
-	    const int pads, const int debug){
+	    const int pads, const int by_col, const int debug){
   if(!M)
     ERROR("expected initialized matrix 'M'!\n");
   else
     mzd_set_ui(M,0);
-  int m   =M->nrows;
-  int lmax=M->ncols, il=0;
+  int m   = by_col ? M->nrows : M->ncols;
+  int lmax= by_col ? M->ncols : M->nrows;
+  int il=0;
   if(!fin)
     ERROR("file 'fin' named '%s' must be open for reading\n",fnam);
   if(debug&8) /** file io */
@@ -920,12 +925,25 @@ int read_01(mzd_t *M, FILE *fin, long long int *lineno, const char* fnam,
 	      "%s:%lld:1: '%s'\n", m,fnam,*lineno,buf);
       else{
 	int len = linelen-1 < m ? linelen-1 : m;
-	for(int i=0; i<len; i++){
-	  if (buf[i]=='1')
-	    mzd_write_bit(M,i,il,1); /** row `i`, col `il` */
-	  else if (buf[i]!='0')
-	    ERROR("invalid 01 line\n"
-		  "%s:%lld:%d: '%s'\n", fnam,*lineno,i+1,buf);
+	if(by_col){
+	  for(int i=0; i<len; i++){
+	    if (buf[i]=='1')	    
+	      mzd_write_bit(M,i,il,1); /** row `i`, col `il` */
+	  
+	    else if (buf[i]!='0')
+	      ERROR("invalid 01 line\n"
+		    "%s:%lld:%d: '%s'\n", fnam,*lineno,i+1,buf);
+	  }
+	}
+	else{ /** by rows */
+	  for(int i=0; i<len; i++){
+	    if (buf[i]=='1')	    
+	      mzd_write_bit(M,il,i,1); /** row `il`, col `i` */
+	    
+	    else if (buf[i]!='0')
+	      ERROR("invalid 01 line\n"
+		    "%s:%lld:%d: '%s'\n", fnam,*lineno,i+1,buf);
+	  }
 	}
 	(il)++; /** success */
       }
@@ -939,6 +957,7 @@ int read_01(mzd_t *M, FILE *fin, long long int *lineno, const char* fnam,
       break;
     }
   }
+  
   if(debug&8) /** file io */
     printf("# read %d 01 rows from file '%s'\n",il,fnam);
   if(buf)

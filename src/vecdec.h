@@ -175,7 +175,7 @@ extern "C"{
   /** @brief prepare an ordered pivot-skip list of length `n-rank` */
   mzp_t * do_skip_pivs(const size_t rank, const mzp_t * const pivs);
   
-  /** functions defined in `iter_dec.c` ******************************************** */
+  /** functions defined in `dec_iter.c` ******************************************** */
   void cnt_out(int print_banner);
   void cnt_update(extr_t which, int iteration);
   void out_llr(const char str[], const int num, const qllr_t llr[]);

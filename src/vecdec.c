@@ -1687,9 +1687,9 @@ int do_err_vecs(params_t * const p){
   /** prepare error vectors ************************************************************/
   switch(p->internal){
   case 0: /** read `det` and `obs` files (each line a column) */
-    il1=read_01(p->mHe,p->file_det, &p->line_det, p->fdet, p->pads, p->debug);
+    il1=read_01(p->mHe,p->file_det, &p->line_det, p->fdet, 1, p->pads, p->debug);
     if(p->fobs){
-      il2=read_01(p->mLe,p->file_obs, &p->line_obs, p->fobs, 0, p->debug);
+      il2=read_01(p->mLe,p->file_obs, &p->line_obs, p->fobs, 1, 0, p->debug);
       if(il1!=il2)
 	ERROR("mismatched DET %s (line %lld) and OBS %s (line %lld) files!",
 	      p->fdet,p->line_det,p->fobs,p->line_obs);
@@ -1700,7 +1700,7 @@ int do_err_vecs(params_t * const p){
       if(p->debug&1)
 	printf("# read %d det events\n",il1);
     if(p->fer0){
-      il2=read_01(p->mE0,p->file_er0, &p->line_er0, p->fer0, 0, p->debug);
+      il2=read_01(p->mE0,p->file_er0, &p->line_er0, p->fer0, 1, 0, p->debug);
       if(il1!=il2)
 	ERROR("mismatched DET %s (line %lld) and ER0 %s (line %lld) files!",
 	      p->fdet,p->line_det,p->fer0,p->line_er0);
@@ -1722,14 +1722,14 @@ int do_err_vecs(params_t * const p){
 
     break;
   case 2: /** read errors from file and generate corresponding `obs` and `det` matrices */
-    il1=read_01(p->mE,p->file_err, &p->line_err, p->ferr, 0, p->debug);
+    il1=read_01(p->mE,p->file_err, &p->line_err, p->ferr, 1, 0, p->debug);
     if(p->debug&1)
       printf("# read %d errors from file %s\n",il1,p->ferr);
     csr_mzd_mul(p->mHe,p->mH,p->mE,1);
     if(p->mL)
       csr_mzd_mul(p->mLe,p->mL,p->mE,1);
     if(p->fer0){
-      il2=read_01(p->mE0,p->file_er0, &p->line_er0, p->fer0, 0, p->debug);
+      il2=read_01(p->mE0,p->file_er0, &p->line_er0, p->fer0, 1, 0, p->debug);
       if(il1!=il2)
 	ERROR("mismatched ERR %s (line %lld) and ER0 %s (line %lld) files!",
 	      p->ferr,p->line_err,p->fer0,p->line_er0);

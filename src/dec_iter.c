@@ -1,7 +1,7 @@
 /**
- *  @file iter_dec.c
+ *  @file dec_iter.c
  *
- * @brief iter_dec - iterative decoder for quantum and classical codes
+ * @brief dec_iter - iterative decoder for quantum and classical codes
  *
  * @author Leonid Pryadko (University of California, Riverside)
  *
