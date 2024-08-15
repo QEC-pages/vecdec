@@ -547,11 +547,11 @@ observable or soft-out row), and rows not-yet decoded.
 ### Actual to-do list 2014/08/15
 
 - [ ] Implement `pre`-decoder for `mode=0`.
-- [ ] Make sure it works for classical codes 
+- [x] Make sure it works for classical codes 
 - [ ] Debug `pre`-decoder and update documentation.
 - [ ] Replace global errors with cluster generation algorithm based on
       a connectivity graph (use v-v graph or its powers).
-- [ ] Generate statistics on rejected clusters (c- and v-node weights)
+- [x] Generate statistics on rejected clusters (c- and v-node weights)
 - [ ] Add ML properties for global errors list (`u`-hash).  To this
       end, add `obs` and an extra hash handle to `two_vec_t`
       structure.

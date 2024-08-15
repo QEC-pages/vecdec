@@ -20,38 +20,52 @@ extern "C"{
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include "qllr.h" 
+#include "qllr.h"
 #include "vec.h"
 
 typedef enum EXTR_T { TOTAL,
-  CONV_TRIVIAL, //! zero-syndrome 
-  SUCC_TRIVIAL, //! zero error vector guess 
+  CONV_TRIVIAL, //! zero-syndrome
+  SUCC_TRIVIAL, //! zero error vector guess
   CONV_LOWW,     //! LOW-Weight error (list decoding from hash)
-  SUCC_LOWW,     //! success 
-  CONV_CLUS,    //! `pre-decoder` based on syndrome clusters 
-  SUCC_CLUS,    //! success 
+  SUCC_LOWW,     //! success
+  CONV_CLUS,    //! `pre-decoder` based on syndrome clusters
+  SUCC_CLUS,    //! success
   CONV_RIS,     //! mode=0 `RIS decoder`, always converges (attempts)
-  SUCC_RIS,    
+  SUCC_RIS,
                 //! mode=1 `BP decoder` flavors
-  NUMB_BP,      //! how many BP attempted 
-  CONV_BP,      //! BP syndrome match 
-  CONV_BP_AVG,  //! BP with averaging syndrome match 
+  NUMB_BP,      //! how many BP attempted
+  CONV_BP,      //! BP syndrome match
+  CONV_BP_AVG,  //! BP with averaging syndrome match
   CONV_BP_TOT,  //! total BP syndrome match
   SUCC_BP,      //! total BP success
   SUCC_OSD,     //! BP followed by OSD success
-  SUCC_TOT,     //! totat success count 
+  SUCC_TOT,     //! totat success count
+  NUM_CLF,      //! number of instances when clusters were run
+  SUM_CLN1,     //! sum of original cluster numbers  `[N]`
+  SUM_CLN2,     //! `[N^2]`
+  SUM_CLC1,     //! `[Nc]` = sum of `Nc`, number of c-nodes in each original cluster
+  SUM_CLC2,     //! `[Nc^2]`
+  SUM_CLV1,     //! `[Nv]` = sum ov `Nv`, number of v-nodes in original clusters
+  SUM_CLV2,     //! `[Nv^2]
+  NUM_XLF,      //! number of instances when cluster decoding failed
+  SUM_XLN1,     //! sum of remaining cluster numbers  `[N]`
+  SUM_XLN2,     //! `[N^2]`
+  SUM_XLC1,     //! `[Nc]` = sum of `Nc`, number of c-nodes in each remaining cluster
+  SUM_XLC2,     //! `[Nc^2]`
+  SUM_XLV1,     //! `[Nv]` = sum ov `Nv`, number of v-nodes in remaining clusters
+  SUM_XLV2,     //! `[Nv^2]
   EXTR_MAX
 } extr_t;
-  
+
 /** various success counters */
 extern long long int cnt[EXTR_MAX];
 extern long long int iter1[EXTR_MAX]; /** sums of BP iteration numbers */
 extern long long int iter2[EXTR_MAX]; /** sums of BP iteration numbers squared */
-  
+
 typedef struct POINT_T {
   int index; /** index of the `v` or `c` node */
   struct POINT_T *next;  /** pointer to next node or NULL */
-} point_t; 
+} point_t;
 
 typedef struct VNODE_T {
   UT_hash_handle hh;
@@ -64,8 +78,8 @@ typedef struct CLUSTER_T {
   /** (by the position of non-zero syndrome bits).  Positive value:
    *   label of this cluster.  This is a `proper` cluster if `label`
    *   coincides with the cluster index, otherwise `reference` cluster
-   *   which was merged.  
-   * 
+   *   which was merged.
+   *
    *   TODO: implement negative label = deleted cluster.
    */
   int num_poi_v;
@@ -93,7 +107,7 @@ typedef struct UFL_T {
   vnode_t * spare;  /** [`nvar`] same for `hash` look-up table in `nodes`*/
   cluster_t clus[0];/** [`nchk`] list of clusters and associated `v` and `c` lists. */
 } ufl_t;
-  
+
   /** structure to hold global variables */
   typedef struct PARAMS_T {
     int nchk; /** rows in `H` or `r` (set in the `input file`) */
@@ -110,7 +124,7 @@ typedef struct UFL_T {
     long long int ntot;  /** total number of syndromes to generate (default: `1`) */
     long long int nfail; /** when non-zero, num of fails to terminate the run (default: `0`, do not terminate) */
     long long int maxC; /** when non-zero, max number of codewords (default: `0`, no maximum) */
-    int dmin; /** if non-zero, terminate distance calculation immediately when a vector 
+    int dmin; /** if non-zero, terminate distance calculation immediately when a vector
 		  of weight `d`<=`dmin` is found, return `-d` (default: 0) */
     int swait; /** gauss decoding steps with no vectors changed to stop (default: `0`, do not stop) */
     int lerr;  /** local search after gauss up to this weight (default: `-1`, no OSD) */
@@ -123,7 +137,7 @@ typedef struct UFL_T {
     int submode; /** additional options, see help */
     int d1, d2, d3; /** QLLR parameters for BP */
     int use_stdout; /** with mode=3 */
-    int debug; /** `debug` information */ 
+    int debug; /** `debug` information */
     char *finH; /** `input file` name for Hx=H (if input separately or a classical code) */
     char *finA; /** `input file` name for additional matrix A*e0+ H*e=s (for mode=0,1 only) with `s` given explicitly as `fdet` */
     char *finL; /** `input file` name for Lx=L (if input separately or a classical code) */
@@ -177,8 +191,8 @@ typedef struct UFL_T {
     csr_t *mG; /** sparse version of generator matrix `G=Hz` (by rows) */
     /** rows of `G` orthogonal to rows of both `H` and `L` */
     /** rows of `H` orthogonal to rows of both `G` and `K` */
-    /** `rank L` = `rank K` = `k`, the number of encoded qubits.  Any non-zero linear combination of rows of `L` 
-	gives a non-zero product with (some) rows of `K` and similarly, any such combination of rows of `K` 
+    /** `rank L` = `rank K` = `k`, the number of encoded qubits.  Any non-zero linear combination of rows of `L`
+	gives a non-zero product with (some) rows of `K` and similarly, any such combination of rows of `K`
 	gives a non-zero product with some rows of `L` (we do not require `L Kt=Identity`) */
     //    int maxJ;	/** memory to initially allocate for local storage */
     qllr_t LLRmin;
@@ -220,8 +234,8 @@ typedef struct UFL_T {
   extern params_t prm;
 
   /** @bried helper structure to sort by probabilities (inv by LLR) */
-  typedef struct IPPAIR_T {int index; qllr_t llr; } ippair_t; 
-  
+  typedef struct IPPAIR_T {int index; qllr_t llr; } ippair_t;
+
   /** @brief helper function to sort `ippair_t`
    *  use `qsort(array, len, sizeof(ippair_t), cmp_ippairs);`
    */
@@ -236,23 +250,23 @@ typedef struct UFL_T {
   }
 
   /** @brief return permutation = decreasing probabilities (increasing LLR) */
-  mzp_t * sort_by_llr(mzp_t *perm, const qllr_t vLLR[], params_t const * const p);  
+  mzp_t * sort_by_llr(mzp_t *perm, const qllr_t vLLR[], params_t const * const p);
 
   /** @brief prepare an ordered pivot-skip list of length `n-rank` */
   mzp_t * do_skip_pivs(const size_t rank, const mzp_t * const pivs);
-  
+
   /** functions defined in `dec_iter.c` ******************************************** */
   void cnt_out(int print_banner, const params_t * const p);
   void cnt_update(extr_t which, int iteration);
   void out_llr(const char str[], const int num, const qllr_t llr[]);
-  
+
   int syndrome_check(const qllr_t LLR[], const mzd_t * const syndrome,
 		     const csr_t * const H,
 		     _maybe_unused const params_t * const p);
-  
+
   int do_osd_start(qllr_t * LLR, const mzd_t * const srow,
 		   const csr_t * const H, const params_t * const p);
-  
+
   int do_parallel_BP(qllr_t * outLLR, const mzd_t * const srow,
 		   const csr_t * const H, const csr_t * const Ht,
 		     const qllr_t LLR[], const params_t * const p);
@@ -264,14 +278,14 @@ typedef struct UFL_T {
   int do_serialV_BP(qllr_t * outLLR, const mzd_t * const srow,
 		    const csr_t * const H, const csr_t * const Ht,
 		    const qllr_t LLR[], const params_t * const p);
-  
+
   int do_dec_bp_one(qllr_t ans[], const mzd_t * const srow, params_t const * const p);
   /** function defined in `star_poly.c` ********************************************* */
-  
+
   /** @brief replace the DEM (matrices Ht, Lt, and LLR vector) with star-triangle transformed */
   int star_triangle(csr_t * Ht, csr_t * Lt, qllr_t *LLR, const one_vec_t * const codewords,
 		  _maybe_unused const long int debug);
-  
+
   /** @brief create K=Lz matrix with minimum weight rows from a list of codewords in hash */
   csr_t * do_K_from_C(const csr_t * const mLt, const one_vec_t * const codewords,
 		      const int k, const int n, const int minW, const int maxW,
@@ -280,9 +294,9 @@ typedef struct UFL_T {
   /** @brief create G=Hz matrix with minimum weight rows from a list of codewords in hash */
   csr_t * do_G_from_C(const csr_t * const mLt, const one_vec_t * const codewords,
 		      const int num_need, const int minW, int maxW,
-		      _maybe_unused const int debug);  
-  
-  csr_t * do_G_matrix(const csr_t * const mHt, const csr_t * const mLt, const qllr_t LLR[], 
+		      _maybe_unused const int debug);
+
+  csr_t * do_G_matrix(const csr_t * const mHt, const csr_t * const mLt, const qllr_t LLR[],
 		      const int rankG, const int debug);
 
   /** calculate partition function */
@@ -299,16 +313,19 @@ typedef struct UFL_T {
 		      const params_t * const p);
 
   mzd_t *do_decode(mzd_t *mS, params_t const * const p);
-  
+
   csr_t * do_vv_graph(const csr_t * const mH, const csr_t * const mHT, const params_t *const p);
   void do_clusters(params_t * const p); /** exercise */
   void kill_clusters(params_t * const p);
   //  void dec_ufl_exercise(params_t * const p);
   int dec_ufl_one(const mzd_t * const srow, params_t * const p);
-  ufl_t *ufl_free( ufl_t *s);  
-  /** 
-   * @brief The help message. 
-   * 
+  ufl_t *ufl_free( ufl_t *s);
+  void ufl_cnt_print(const params_t * const p);
+  void ufl_cnt_update(const int which, const ufl_t * const u, const params_t * const p);
+
+  /**
+   * @brief The help message.
+   *
    * @todo: This has to be checked and updated, especially the `debug` options.
    */
 #define USAGE                                                           \
@@ -417,16 +434,16 @@ typedef struct UFL_T {
   "\t Parameter(s) used by all modes:                         \n"	\
   "\t seed=[integer] : when negative or zero, combine provided value\n" \
   "\t\t with 'time(null)' and 'pid()' for more randomness.\n"		\
-  "\t                                                       \n"	
-  
+  "\t                                                       \n"
+
 #define HELPU /** common help for decoding `mode=0` and `mode=1` */	\
   "\t With 'uW' non-negative, use hash storage to store likely syndrome\n" \
   "\t\t vectors to speed up the decoding ('maxU>0' sets the limit on the\n" \
   "\t\t number of syndrome vectors in the hash; no limit if '0'). \n"	\
   "\t\t 'finU' / 'outU' names of likely error vectors file (not implemented)\n" \
-  "\t\t\t(the file will be overwritten if names are the same). \n" 
+  "\t\t\t(the file will be overwritten if names are the same). \n"
 
-  
+
 #define HELP0 /** help for `mode=0` */  \
   " mode=0 : use basic vectorized (random information set) decoder\n"	\
   "\t No 'submode' can be used with this mode. \n"	\
@@ -445,7 +462,7 @@ typedef struct UFL_T {
   "\t Use 'pads=1' to pad lines in 'fdet' file with zeros.\n"	\
   "\t Set 'nfail' and/or 'swait' for early termination.\n"		\
   "\t Total of 'ntot' errors will be read or generated in chunks of 'nvec'.\n" \
-  "\t                                                       \n"	
+  "\t                                                       \n"
 
 #define HELP1 /** help for `mode=1` */  \
   " mode=1.[submode] : use one of several iterative decoder versions\n"	\
@@ -477,7 +494,7 @@ typedef struct UFL_T {
   "\t Use 'pads=1' to pad lines in 'fdet' file with zeros.\n"	\
   "\t Set 'nfail' and/or 'swait' for early termination.\n"		\
   "\t Total of 'ntot' errors will be read or generated in chunks of 'nvec'.\n" \
-  "\t                                                       \n"	
+  "\t                                                       \n"
 
 #define HELP2 /** help for `mode=2` */  \
   " mode=2 : Generate most likely fault vectors, estimate Prob(Fail).\n" \
@@ -497,7 +514,7 @@ typedef struct UFL_T {
   "\t Specify a single DEM file 'fdem', or 'finH', 'finL', and 'finP'\n" \
   "\t separately (either 'finL' or 'finG' is needed for a quantum code).\n" \
   "\t Use 'useP' to override error probability values in DEM file.   \n" \
-  "\n"	
+  "\n"
 
 #define HELP3 /** help for `mode=3` */  \
   " mode=3 : Export matrices associated with the code.\n" \
@@ -518,7 +535,7 @@ typedef struct UFL_T {
   "\t ${fout}H.mmx, ${fout}G.mmx, ${fout}L.mmx, ${fout}K.mmx, and ${fout}P.mmx\n" \
   "\t with 'fout=stdout' all output is sent to 'stdout'\n"		\
 
-  
+
 #ifdef __cplusplus
 }
 #endif

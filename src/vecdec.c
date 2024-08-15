@@ -1926,8 +1926,8 @@ int main(int argc, char **argv){
 	  if(!p->err)
 	    p->err=vec_init(p->nvar); /** temporary storage */
 	  if(!p->obs)
-	    p->obs=vec_init(p->mLt->cols);
-	  assert(p->nvar >= p->mLt->rows);
+	    p->obs=vec_init(p->mL->rows);
+	  assert(p->nvar >= p->mL->rows);
 	  vec_t *vobs = csr_vec_mul(p->err, p->obs, p->mLt, p->ufl->error, 1);
 	  if(p->pobs){
 	    write_01_vec(p->file_pobs, vobs, p->mL->rows, p->pobs); /** obs prediction */
@@ -1983,6 +1983,8 @@ int main(int argc, char **argv){
 	  break;
       }
     }    
+    if(p->debug&1)
+      ufl_cnt_print(p);
     cnt_out(p->debug&1,p);
     if(srow)
       mzd_free(srow);
