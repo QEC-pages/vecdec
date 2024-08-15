@@ -70,7 +70,61 @@ static inline void vec_print(const vec_t * const pvec){
   printf("]\n");
 }
 
+#define DO_CAREFUL_WRITE(ch,fout,fnam)		\
+  do{						\
+    if(ch != fputc(ch,fout)){			\
+      int err=ferror(fout);					\
+      printf("file write error %d:\n%s\n",err,strerror(err));	\
+      ERROR("error writing to file %s\n",fnam);			\
+    }								\
+  }								\
+  while(0)
 
+/** @brief write `vec` as a 01 line to `fout` named `fnam` */
+static inline void write_01_vec(FILE *fout, const vec_t * const vec, const int count, const char * fnam){
+  if(!vec)
+    ERROR("expected initialized vecor 'vec'!\n");
+  if(!fout)
+    ERROR("file 'fout' named %s must be open for writing\n",fnam);
+  int j=0;
+  for(int i=0; i<vec->wei; i++, j++){
+    for(/* carry over j */ ; j < vec->vec[i]; j++)
+      DO_CAREFUL_WRITE('0',fout,fnam);
+    DO_CAREFUL_WRITE('1',fout,fnam);
+  }
+  for(/* carry over j */ ; j < count; j++)
+    DO_CAREFUL_WRITE('0',fout,fnam);
+  DO_CAREFUL_WRITE('\n',fout,fnam);
+}
+
+  static inline int mzd_row_vec_match(const mzd_t * const mat, const int row, const vec_t * const vec){
+    const word * const rawrow = mat->rows[row];
+    int idx=0;
+    for(int i=0; i<vec->wei; i++){
+      int idx_vec = vec->vec[i];
+      if(((idx=nextelement(rawrow,mat->width,idx))!=-1)&&(idx < mat->ncols)){
+	if(idx++ != idx_vec)
+	  return 0; /** match failed */
+      }
+    }
+    if(((idx=nextelement(rawrow,mat->width,idx))!=-1)||(idx >= mat->ncols))
+      return 0;
+    return 1;
+  }
+  
+
+  static inline vec_t * vec_from_arr(const int wei, const int * const arr){
+    vec_t * ans = vec_init(wei);
+    for(int i=0; i< wei; i++)
+      ans->vec[i] = arr[i];
+    ans->wei = wei;
+    return ans;
+  }
+
+  static inline vec_t * vec_copy(const vec_t * const org){
+    return vec_from_arr(org->wei, org->vec);
+  }
+  
 // v1[:] = v0[:] + mat[row,:]
 // @ return weight of the resulting vector   
 static inline int vec_csr_row_combine(vec_t * const v1, const vec_t * const v0,
@@ -108,6 +162,39 @@ static inline int vec_csr_row_combine(vec_t * const v1, const vec_t * const v0,
   
   v1->wei = i1;
   return i1; /** weith of the out vector */
+}
+
+  /**
+   * @brief sparse matrix by sparse vector multiplication
+   * v0 = v0 + e*H; use vectors v0, v1 (v0 is destroyed)
+   * v1 used for temp storage (it is destroyed)
+   * WARNING: set v0->wei=0 to eraze it 
+   */  
+static inline vec_t * csr_vec_mul(vec_t * tmp, vec_t * v0, csr_t *H, const vec_t * const err, int clear){
+  //  vec_t *v0 = p->v0, *tmp = p->v1, *tmp;
+  vec_t *tmp2;
+  const int wgt = err->wei;
+#ifndef NDEBUG
+  if ((!tmp) || (!v0) || (!H))
+    ERROR("all arguments must be allocated: tmp=%p v0=%p H=%p\n",tmp,v0,H);
+  if(tmp == v0)
+    ERROR("the two vectors should not be the same !");
+  if((tmp->max < H->cols) || (v0->max < H->cols))
+    ERROR("this should not happen tmp->max=%d v0->max=%d H[%d,%d]",tmp->max, v0->max, H->rows, H->cols);
+#endif
+  if(clear)
+    v0->wei=0;
+  int w=0;
+  for(int i=0; i < wgt; i++){
+#ifndef NDEBUG    
+    if(err->vec[i]>=H->rows)
+      ERROR("invalid input vector: err->vec[%d]=%d H->rows=%d\n",i,err->vec[i],H->rows);
+#endif     
+    w=vec_csr_row_combine(tmp,v0,H,err->vec[i]);
+    tmp2=tmp;tmp=v0;v0=tmp2; /** `pointer swap */    
+  }
+  qsort(v0->vec, w, sizeof(rci_t), cmp_rci_t);
+  return v0;
 }
 
 /** @brief insert `j` (originally absent) into ordered array, return position */

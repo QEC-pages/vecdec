@@ -23,14 +23,76 @@ extern "C"{
 #include "qllr.h" 
 #include "vec.h"
 
-  typedef enum EXTR_T { TOTAL, CONV_TRIVIAL, CONV_BP, CONV_BP_AVG, CONV_BP_TOT,
-    SUCC_TRIVIAL, SUCC_BP, SUCC_OSD, SUCC_TOT, EXTR_MAX } extr_t;
+typedef enum EXTR_T { TOTAL,
+  CONV_TRIVIAL, //! zero-syndrome 
+  SUCC_TRIVIAL, //! zero error vector guess 
+  CONV_LOWW,     //! LOW-Weight error (list decoding from hash)
+  SUCC_LOWW,     //! success 
+  CONV_CLUS,    //! `pre-decoder` based on syndrome clusters 
+  SUCC_CLUS,    //! success 
+  CONV_RIS,     //! mode=0 `RIS decoder`, always converges (attempts)
+  SUCC_RIS,    
+                //! mode=1 `BP decoder` flavors
+  NUMB_BP,      //! how many BP attempted 
+  CONV_BP,      //! BP syndrome match 
+  CONV_BP_AVG,  //! BP with averaging syndrome match 
+  CONV_BP_TOT,  //! total BP syndrome match
+  SUCC_BP,      //! total BP success
+  SUCC_OSD,     //! BP followed by OSD success
+  SUCC_TOT,     //! totat success count 
+  EXTR_MAX
+} extr_t;
   
-  /** various success counters */
-  extern long long int cnt[EXTR_MAX];
-  extern long long int iter1[EXTR_MAX]; /** sums of BP iteration numbers */
-  extern long long int iter2[EXTR_MAX]; /** sums of BP iteration numbers squared */
+/** various success counters */
+extern long long int cnt[EXTR_MAX];
+extern long long int iter1[EXTR_MAX]; /** sums of BP iteration numbers */
+extern long long int iter2[EXTR_MAX]; /** sums of BP iteration numbers squared */
   
+typedef struct POINT_T {
+  int index; /** index of the `v` or `c` node */
+  struct POINT_T *next;  /** pointer to next node or NULL */
+} point_t; 
+
+typedef struct VNODE_T {
+  UT_hash_handle hh;
+  int v; /** key: variable node */
+  int clus; /** cluster reference */
+} vnode_t;
+
+typedef struct CLUSTER_T {
+  int label;
+  /** (by the position of non-zero syndrome bits).  Positive value:
+   *   label of this cluster.  This is a `proper` cluster if `label`
+   *   coincides with the cluster index, otherwise `reference` cluster
+   *   which was merged.  
+   * 
+   *   TODO: implement negative label = deleted cluster.
+   */
+  int num_poi_v;
+  point_t *first_v; /** linked list for associated v-nodes */
+  point_t *last_v;
+  int num_poi_c;
+  point_t *first_c; /** linked list for associated c-nodes */
+  point_t *last_c;
+} cluster_t;
+
+/** @brief structure with full information on cluster structure for UFL decoder */
+typedef struct UFL_T {
+  const int nvar;
+  const int nchk;
+  vnode_t * nodes; /** hash storage for occupied nodes */
+  /** TODO: compare performance for taking an int array of nodes instead */
+  int num_v; /** total number of used `v_nodes` (all clusters) */
+  int num_c; /** total number of used `c_nodes` */
+  int num_clus; /** number of defined clusters */
+  int num_prop; /** number of proper (non-reference and non-deleted) clusters */
+  vec_t *error; /** [`nvar`] current error vector */
+  vec_t *syndr; /** [`nchk`] remaining syndrome bits */
+  point_t *v_nodes; /** [`nvar`] pre-allocated nodes for `v` linked lists in clusters */
+  point_t *c_nodes; /** [`nchk`] same for `c` linked lists */
+  vnode_t * spare;  /** [`nvar`] same for `hash` look-up table in `nodes`*/
+  cluster_t clus[0];/** [`nchk`] list of clusters and associated `v` and `c` lists. */
+} ufl_t;
   
   /** structure to hold global variables */
   typedef struct PARAMS_T {
@@ -147,8 +209,11 @@ extern "C"{
     mzd_t *mLeT;
     char *buffer;  /** general-purpose buffer */
     size_t buffer_size; /** its allocated size */
-    vec_t *v1;
-    vec_t *v0; /** temp space for `two_vec_init()` */
+    vec_t *v1; /** allocated to `nchk` */
+    vec_t *v0; /** allocated to `nchk` temp space for `two_vec_init()` */
+    vec_t *err;  /** allocated to `nvec` */
+    vec_t *svec; /** allocated to `nchk` */
+    ufl_t *ufl;
   } params_t;
 
   extern params_t prm;
@@ -176,7 +241,7 @@ extern "C"{
   mzp_t * do_skip_pivs(const size_t rank, const mzp_t * const pivs);
   
   /** functions defined in `dec_iter.c` ******************************************** */
-  void cnt_out(int print_banner);
+  void cnt_out(int print_banner, const params_t * const p);
   void cnt_update(extr_t which, int iteration);
   void out_llr(const char str[], const int num, const qllr_t llr[]);
   
@@ -199,6 +264,7 @@ extern "C"{
 		    const csr_t * const H, const csr_t * const Ht,
 		    const qllr_t LLR[], const params_t * const p);
   
+  int do_dec_bp_one(qllr_t ans[], const mzd_t * const srow, params_t const * const p);
   /** function defined in `star_poly.c` ********************************************* */
   
   /** @brief replace the DEM (matrices Ht, Lt, and LLR vector) with star-triangle transformed */
@@ -236,8 +302,9 @@ extern "C"{
   csr_t * do_vv_graph(const csr_t * const mH, const csr_t * const mHT, const params_t *const p);
   void do_clusters(params_t * const p); /** exercise */
   void kill_clusters(params_t * const p);
-  void dec_ufl_exercise(params_t * const p);  
-  
+  //  void dec_ufl_exercise(params_t * const p);
+  int dec_ufl_one(const mzd_t * const srow, params_t * const p);
+  ufl_t *ufl_free( ufl_t *s);  
   /** 
    * @brief The help message. 
    * 

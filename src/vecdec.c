@@ -55,7 +55,8 @@ params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50, .pads=0,
   .mE0=NULL,
   .mE=NULL, .mHe=NULL, .mLe=NULL, .mHeT=NULL, .mLeT=NULL,
   .nzH=0, .nzL=0,
-  .buffer=NULL, .buffer_size = 0, .v0=NULL, .v1=NULL
+  .buffer=NULL, .buffer_size = 0, .v0=NULL, .v1=NULL, .err=NULL, .svec=NULL,
+  .ufl=NULL
 };
 
 params_t prm_default={  .steps=50, .pads=0, 
@@ -193,7 +194,7 @@ mzp_t * do_skip_pivs(const size_t rank, const mzp_t * const pivs){
 
 /** @brief construct `L` matrix for a classical code orthogonal to rows of `H`
  * 
- * The matrix should have `k` rows of weight `1` each.
+ * The resulting matrix should have `k` rows of weight `1` each.
  */
 csr_t * do_L_classical(const csr_t * const H, const params_t * const p){
   assert((H!=NULL) && (H->nz == -1));
@@ -507,7 +508,6 @@ void do_hash_remove_reduc(const int min_dW, params_t *const p){
   }
   p->num_cws = count;
 }
-  
 
 /** @brief see if the codeword needs to be added to hash, return pointer */
 one_vec_t * do_hash_check(const int ee[], int weight, params_t * const p){
@@ -540,7 +540,6 @@ one_vec_t * do_hash_check(const int ee[], int weight, params_t * const p){
   }
   return pvec;
 }
-
 
 /** @brief Random Information Set search for small-E logical operators.
  *
@@ -737,13 +736,17 @@ int do_energ_verify(const qllr_t * const vE, const mzd_t * const mE, const param
 void init_Ht(params_t *p){
   const int n = p->nvar;
   p->mHt = csr_transpose(p->mHt, p->mH);
+  //! construct v-v graph 
   //  csr_t *vv_gr = do_vv_graph(p->mH, p->mHt, p);
-
-  do_clusters(p);
-  dec_ufl_exercise(p);
-  //  do_cl_dec(p); // try cluster-based decoding on existing list of clusters 
-  kill_clusters(p);
-  
+  if(p->uW){
+    if(p->debug&1)
+      printf("# generating errors of weight up to %d\n",p->uW);
+    p->v0 = vec_init(p->nchk);
+    p->v1 = vec_init(p->nchk);
+    do_clusters(p);
+  }
+    if(p->debug&1)
+  printf("# initialize matrices\n");
   if(p->mL)
     p->mLt = csr_transpose(p->mLt,p->mL);
   /** todo: fix reallocation logic to be able to reuse the pointers model */
@@ -1678,7 +1681,12 @@ void var_kill(params_t *p){
   if(p->mHeT) mzd_free(p->mHeT);
   if(p->mLeT) mzd_free(p->mLeT);
   if(p->v0) free(p->v0);
-  if(p->v1) free(p->v1);  
+  if(p->v1) free(p->v1);
+  if(p->svec) free(p->svec);
+  if(p->err) free(p->err);
+  if(p->ufl) ufl_free(p->ufl);
+  if(p->hashU_syndr)
+    kill_clusters(p);
 }
 
 int do_err_vecs(params_t * const p){
@@ -1867,6 +1875,7 @@ int main(int argc, char **argv){
 
     const int do_file_output = (p->perr) || (p->pdet) || (p->pobs);
     mzd_t *pErr=NULL, *pHerr=NULL, *pLerr=NULL;
+    mzd_t *srow=mzd_init(1,p->nchk);
     if(do_file_output){
       pErr=mzd_init(1,p->nvar);
       if(p->pdet)
@@ -1876,7 +1885,7 @@ int main(int argc, char **argv){
     }
     
     for(long long int iround=1; iround <= rounds; iround++){
-      if(p->debug &1){
+      if(p->debug&1){
 	printf("# starting round %lld of %lld pfail=%g fail=%lld total=%lld\n", iround, rounds,
 	       cnt[TOTAL] ? (double) (cnt[TOTAL]-cnt[SUCC_TOT])/cnt[TOTAL] : 0.5, cnt[TOTAL]-cnt[SUCC_TOT], cnt[TOTAL]);
 	fflush(stdout);
@@ -1888,53 +1897,49 @@ int main(int argc, char **argv){
       p->mLeT = mzd_transpose(p->mLeT,p->mLe);
       for(long long int ierr = 0; ierr < ierr_tot; ierr++){ /** cycle over errors */
 	cnt[TOTAL]++;
-	int succ_BP = 0, succ_OSD = 0;
-	if(mzd_row_is_zero(p->mHeT,ierr)){
-	  //	  printf("ierr=%d of tot=%d\n",ierr,ierr_tot);
-	  if(p->perr) 
-	    write_01_zeros(p->file_perr, p->mH->cols, p->perr); /** trivial prediction */
-	  if(p->pdet) 
-	    write_01_zeros(p->file_pdet, p->mH->rows, p->pdet); /** trivial prediction */
-	  if(p->pobs) 
-	    write_01_zeros(p->file_pobs, p->mL->rows, p->pobs); /** trivial prediction */
-	  cnt_update(CONV_TRIVIAL,0); /** trivial convergence after `0` steps */
-	  if(mzd_row_is_zero(p->mLeT,ierr)){
-	    cnt[SUCC_TRIVIAL]++;
-	    cnt[SUCC_TOT]++;
-	  }
-	  if(p->debug & 128)
-	    printf("error %lld of %lld is trivial\n",ierr+1,ierr_tot);
-	  continue ; /** next error / syndrome vector pair */     
-	}
-	else{ /** non-trivial syndrome */
 #ifndef NDEBUG	  
-	  if((p->debug&8)&&(p->nvar <= 256)&&(p->debug &512)){
-	    printf("non-trivial error %lld of %lld:\n",ierr+1,ierr_tot);
-	    if(p->mE) /** print column as row */	      
-	      for(int i=0; i<p->nvar; i++)
-		printf("%s%d%s",i==0?"[":" ",mzd_read_bit(p->mE,i,ierr),i+1<p->nvar?"":"]\n");
-	    mzd_print_row(p->mHeT,ierr);
-	    mzd_print_row(p->mLeT,ierr);
-	    out_llr("i",p->nvar,p->vLLR);
-	  }
+	if((p->debug&8)&&(p->nvar <= 256)&&(p->debug&512)){
+	  printf("non-trivial error %lld of %lld:\n",ierr+1,ierr_tot);
+	  if(p->mE) /** print column as row */	      
+	    for(int i=0; i<p->nvar; i++)
+	      printf("%s%d%s",i==0?"[":" ",mzd_read_bit(p->mE,i,ierr),i+1<p->nvar?"":"]\n");
+	  mzd_print_row(p->mHeT,ierr);
+	  mzd_print_row(p->mLeT,ierr);
+	  out_llr("i",p->nvar,p->vLLR);
+	}
 #endif 	  
-	  mzd_t * const srow = mzd_init_window(p->mHeT, ierr,0, ierr+1,p->nchk); /* syndrome row */
-	  if(p->submode&4){ /** bit 2 is set, use serial schedule */
-	    if(p->submode&8)
-	      succ_BP = do_serialV_BP(ans, srow, p->mH, p->mHt, p->vLLR, p);
-	    else
-	      succ_BP = do_serialC_BP(ans, srow, p->mH, p->mHt, p->vLLR, p);
+	//	mzd_t * const srow = mzd_init_window(p->mHeT, ierr,0, ierr+1,p->nchk); /* syndrome row */
+	//! TODO: why does the above fail? 
+	mzd_copy_row(srow,0,p->mHeT,ierr); /** syndrome row in question */
+	int res_pre = dec_ufl_one(srow,p);
+	if(res_pre){ /** pre-decoder success */
+	  if(p->perr) 
+	    write_01_vec(p->file_perr, p->ufl->error, p->mH->cols, p->perr); /** error prediction */
+	  if(p->pdet){	      
+	    write_01_vec(p->file_pdet, p->ufl->syndr, p->mH->rows, p->pdet); /** syndrome prediction */
 	  }
-	  else{             /** bit 2 is not set, parallel schedule */
-	    succ_BP = do_parallel_BP(ans, srow, p->mH, p->mHt, p->vLLR, p);	   
+	  if(!p->v0)
+	    p->v0=vec_init(p->nchk);
+	  vec_t *vobs = csr_vec_mul(p->v1, p->v0, p->mLt, p->ufl->error, 1);
+	  if(p->pobs){
+	    write_01_vec(p->file_pobs, vobs, p->mL->rows, p->pobs); /** obs prediction */
 	  }
-	  if((!succ_BP) && (p->lerr >=0)){
-	    if(p->debug&128)
-	      printf("ierr=%lld starting OSD lerr=%d maxosd=%d\n",ierr,p->lerr, p->maxosd);
-	    do_osd_start(ans,srow,p->mH,p);
-	    succ_OSD=1;
+	  //	  cnt_update(CONV_TRIVIAL,0); /** trivial convergence after `0` steps */
+	  if(mzd_row_vec_match(p->mLeT,ierr,vobs)){
+	      cnt[SUCC_TOT]++;
+	      switch(res_pre){
+	      case 1: cnt[SUCC_TRIVIAL]++; break;
+	      case 2: cnt[SUCC_LOWW]++; break;
+	      case 3: cnt[SUCC_CLUS]++; break;
+	      default: ERROR("unexpected"); break;
+	      }
+	    continue ; /** next error / syndrome vector pair */     	    
 	  }
-
+	}
+	else{ /** failed `pre`, do actual BP */
+	  cnt[NUMB_BP]++;
+	  int conv = do_dec_bp_one(ans,srow,p);
+	  int conv_BP = conv>>1, conv_OSD = conv%2;
 	  if(do_file_output){ /** output predicted values */
 	    mzd_row_clear_offset(pErr,0,0);
 	    for(int i=0; i < p->nvar; i++)
@@ -1952,31 +1957,27 @@ int main(int argc, char **argv){
 	    }
 	  }
 	  if (!((p->fdet)&&(p->fobs==NULL)&&(p->perr))){ /** except the case of partial decoding */  
-	    if((succ_BP)||(succ_OSD)){ /** `convergence success`  */	      
+	    if((conv_BP)||(conv_OSD)){ /** `convergence success`  */	      
 	      mzd_t * const obsrow = mzd_init_window(p->mLeT, ierr,0, ierr+1,p->mLeT->ncols);
 	      if(syndrome_check(ans, obsrow, p->mL, p)){
 		cnt[SUCC_TOT]++;
-		if(succ_BP)
+		if(conv_BP)
 		  cnt[SUCC_BP]++;
 		else
 		  cnt[SUCC_OSD]++;
 	      }
 	      mzd_free(obsrow);
-	    }
-	  
-	    if(p->debug&16)
-	      printf("i=%lld of %lld succ=%d\n",ierr,ierr_tot,succ_BP);
+	    }	  
 	  }
-	  else if(p->debug&16)
-	    printf("i=%lld of %lld\n",ierr,ierr_tot);
-
-	  mzd_free(srow);
 	}
+	//	mzd_free(srow);
 	if((p->nfail) && cnt[TOTAL]-cnt[SUCC_TOT] >= p->nfail)
 	  break;
       }
     }    
-    cnt_out(p->debug&1);
+    cnt_out(p->debug&1,p);
+    if(srow)
+      mzd_free(srow);
     if(pErr)
       mzd_free(pErr);
     if(pHerr)

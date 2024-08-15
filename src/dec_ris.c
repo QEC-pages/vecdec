@@ -305,3 +305,14 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
   mzp_free(pivs);
   return mEt0;
 }
+
+/** @brief common wrapper for RIS decoder 
+ * 
+ * @param mST syndrome matrix (one vector per row)
+ */
+mzd_t *do_dec_ris_vector(mzd_t *mST, params_t const * const p){
+  mzd_t *mS = mzd_transpose(NULL,mST);
+  mzd_t *mET = do_decode(mS, p);
+  mzd_free(mS);
+  return mET;
+}
