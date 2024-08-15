@@ -562,8 +562,8 @@ void do_clusters(params_t * const p){
   long long int cnt_err=0, cnt_synd=0;
   for(int w=1; w<=wmax; w++){
     //        printf("w=%d max=%d \n",w,max);
-    int cnt=0; // initial invalid vector 
-    for(int j=0; j<w; j++)
+    int cnt=0; 
+    for(int j=0; j<w; j++) // initial invalid vector 
       err->vec[j]=j;
     err->vec[w-1]=w-2;/** this is a kludge to ensure all vectors show up below */
     err->wei=w;
@@ -574,8 +574,14 @@ void do_clusters(params_t * const p){
       //            two_vec_print(entry);
       const size_t keylen = entry->w_e * sizeof(rci_t);
       HASH_FIND(hh, p->hashU_error, entry->vec, keylen, pvec);
-      if(!pvec) /** vector not found, inserting */	     
+      if(!pvec){ /** vector not found, inserting */	     
 	HASH_ADD(hh, p->hashU_error, vec, keylen, entry); /** store in the `hash` */
+	if((p->maxU > 0) && (cnt_err + cnt >= p->maxU)){
+	  if(p->debug&1)
+	    printf("# reached limit of maxU=%lld errors\n",p->maxU);	  
+	  break;
+	}
+      }
       else
 	ERROR("unexpected");
     }

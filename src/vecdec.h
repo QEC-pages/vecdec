@@ -149,8 +149,8 @@ typedef struct UFL_T {
     long long int numU; /** number of syndrome vectors in `U` hash */
     long long int numE; /** total number of error vectors -> syndrome vectors in `U` hash */
     long long int maxU; /** max number of syndrome vectors in `U` hash */
-    qllr_t uE; /** max energy of an error vector in `U` hash*/
-    double uEdbl; /** max energy of an error vector in `U` hash*/
+    //    qllr_t uE; /** max energy of an error vector in `U` hash*/
+    //    double uEdbl; /** max energy of an error vector in `U` hash*/
     int uW; /** max weight of an error vector in `U` hash*/
     two_vec_t *hashU_error; /** `U` hash location by error vector */
     two_vec_t *hashU_syndr; /** `U` hash location by syndrome */
@@ -336,7 +336,6 @@ typedef struct UFL_T {
   "\t\t\t (if same as finU, the file will be updated)\n"		\
   "\t maxU=[long long integer]\t: max number of syndrome vectors in hash\n" \
   "\t\t (if '0', no limit; default: -1, do not use the syndrome hash)\n" \
-  "\t uE=[float]\t: max energy of an error vector in hash (0, no limit)\n" \
   "\t uW=[integer]\t: max weight of an error vector in hash (0, no limit)\n" \
   "\t epsilon=[double]\t: small probability cutoff (default: 1e-8)\n"	\
   "\t useP=[double]\t: fixed probability value (override values in DEM file)\n"	\
@@ -420,11 +419,10 @@ typedef struct UFL_T {
   "\t                                                       \n"	
   
 #define HELPU /** common help for decoding `mode=0` and `mode=1` */	\
-  "\t With `maxU` non-negative, use hash storage to store likely syndrome\n" \
+  "\t With 'uW' non-negative, use hash storage to store likely syndrome\n" \
   "\t\t vectors to speed up the decoding ('maxU>0' sets the limit on the\n" \
   "\t\t number of syndrome vectors in the hash; no limit if '0'). \n"	\
-  "\t\t Max energy / max weight given by 'uE' and 'uW', when positive. \n" \
-  "\t\t 'finU' / 'outU' names of likely error vectors file \n" \
+  "\t\t 'finU' / 'outU' names of likely error vectors file (not implemented)\n" \
   "\t\t\t(the file will be overwritten if names are the same). \n" 
 
   

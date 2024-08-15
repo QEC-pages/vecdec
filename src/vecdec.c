@@ -32,7 +32,8 @@ params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50, .pads=0,
   .lerr=-1, .maxosd=100, .swait=0, .maxC=0,
   .dW=0, .minW=INT_MAX, .maxW=0, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
   .bpalpha=1, .bpbeta=1, .bpgamma=0.5, .bpretry=1, 
-  .uW=0, .uEdbl=-1, .uE=-1, .numU=0, .numE=0, .maxU=-1,
+  .uW=0, //.uEdbl=-1, .uE=-1,
+  .numU=0, .numE=0, .maxU=-1,
   .hashU_error=NULL, .hashU_syndr=NULL, .permHe=NULL,
   .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8, .useP=0, .dmin=0,
   .debug=1, .fdem=NULL, .fout="tmp",
@@ -62,7 +63,8 @@ params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50, .pads=0,
 params_t prm_default={  .steps=50, .pads=0, 
   .lerr=-1, .maxosd=100, .bpgamma=0.5, .bpretry=1, .swait=0, .maxC=0,
   .dW=0, .minW=INT_MAX, .maxW=0, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
-  .uW=0, .uEdbl=-1, .uE=-1, .maxU=-1, .bpalpha=1, .bpbeta=1,
+  .uW=0, //.uEdbl=-1, .uE=-1,
+  .maxU=-1, .bpalpha=1, .bpbeta=1,
   .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8, .useP=0, .dmin=0,
   .debug=1, .fout="tmp", .ferr=NULL,
   .mode=-1, .submode=0, .use_stdout=0, 
@@ -951,7 +953,8 @@ int var_init(int argc, char **argv, params_t *p){
       if(p->mode>=2)
 	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
     }
-    else if (sscanf(argv[i],"uE=%lg",&val)==1){ /** `uE` */
+#if 0    
+    else if (sscanf(argv[i],"uE=%lg",&val)==1){ /** `uE`  */
       p -> uEdbl = val;
       if (p->debug&4){
 	printf("# read %s, uE=%g\n", argv[i], p->uEdbl);
@@ -963,6 +966,7 @@ int var_init(int argc, char **argv, params_t *p){
       if(p->mode>=2)
 	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
     }
+#endif     
     else if (sscanf(argv[i],"uW=%d",&dbg)==1){ /** `uW` */
       p -> uW = dbg;
       if (p->debug&4){
@@ -1418,7 +1422,7 @@ int var_init(int argc, char **argv, params_t *p){
   LLR_table = init_LLR_tables(p->d1,p->d2,p->d3);
 
   p->dE = llr_from_dbl(p->dEdbl);
-  p->uE = llr_from_dbl(p->uEdbl);
+  //  p->uE = llr_from_dbl(p->uEdbl);
   
   switch(p->mode){
   case 1: /** both `mode=1` (BP) and `mode=0` */
