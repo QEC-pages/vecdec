@@ -1800,6 +1800,37 @@ int main(int argc, char **argv){
     
       if( !(ierr_tot = do_err_vecs(p)))
 	break; /** no more rounds */
+#if 0 /* TRY pre-decoding */
+      int *status = calloc(ierr_tot,sizeof(int)); /** non-zero value = success pre_dec */
+      p->mHeT = mzd_transpose(p->mHeT,p->mHe);
+      mzd_t *mE0=mzd_init(p->nvec,p->nvar);
+      long long int cnt_pre = 0;
+      for(long long int ierr = 0; ierr < ierr_tot; ierr++){ /** cycle over errors */
+	mzd_copy_row(srow,0,p->mHeT,ierr); /** syndrome row in question */
+	int res_pre = dec_ufl_one(srow,p);
+	if(res_pre){ /** pre-decoder success */
+	  mzd_row_from_vec(mE0,ierr,ufl->error);
+	  status[ierr] = res_pre;
+	  cnt_pre++;
+	}
+      }
+      if(cnt_pre < ierr_tot){ /** some decoder failures */
+	long long int num = ierr_tot - cnt_pre;
+	mzd_t *mST = mzd_init(p->nchk,num);
+	for(long long int ierr =0, cnt=0 ; ierr < ierr_tot; ierr++){
+	  if(!status[ierr])
+	    mzd_copy_row(mST, cnt++, mHeT,ierr);
+	}
+	mzd_t * mS = mzd_transpose(NULL,mST);
+	mzd_t * mE2=do_decode(mS, p); /** each row a decoded error vector */
+	for(long long int ierr =0, cnt=0 ; ierr < ierr_tot; ierr++){
+	  if(!status[ierr]){
+	    mzd_copy_row(mE0, ierr, mE2,cnt++);
+	    status[ierr]=4;
+	  }
+	}	
+      }
+#endif /* TRY pre-decoding */      
 
       // actually decode and generate error vectors
       mzd_t *mE0=NULL;

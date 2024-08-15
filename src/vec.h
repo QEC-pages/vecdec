@@ -111,6 +111,18 @@ static inline void write_01_vec(FILE *fout, const vec_t * const vec, const int c
       return 0;
     return 1;
   }
+
+  static inline void mzd_row_add_vec(mzd_t * const mat, const int row, const vec_t * const vec, const int clear){
+    if(clear)
+      mzd_row_clear_offset(mat,row,0);
+    for(int i=0; i<vec->wei; i++){
+      int idx = vec->vec[i];
+#ifndef NDEBUG
+      assert(idx < mat->ncols);
+#endif       
+      mzd_flip_bit(mat,row,idx);
+    }
+  }
   
 
   static inline vec_t * vec_from_arr(const int wei, const int * const arr){
