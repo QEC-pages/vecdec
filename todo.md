@@ -543,3 +543,23 @@ and corresponding probabilities on the input of next-step decoder.
 Generally, given the matrix of syndrome rows `HeT`, maintain the list
 of rows already decoded (with the reference to corresponding
 observable or soft-out row), and rows not-yet decoded.
+
+### Actual to-do list 2014/08/15
+
+- [ ] Implement `pre`-decoder for `mode=0`.
+- [ ] Make sure it works for classical codes 
+- [ ] Debug `pre`-decoder and update documentation.
+- [ ] Replace global errors with cluster generation algorithm based on
+      a connectivity graph (use v-v graph or its powers).
+- [ ] Generate statistics on rejected clusters (c- and v-node weights)
+- [ ] Add ML properties for global errors list (`u`-hash).  To this
+      end, add `obs` and an extra hash handle to `two_vec_t`
+      structure.
+- [ ] Enable min-W operation with no `P` defined (`useP=none` with a DEM)
+- [ ] Come up with a protocol to check whether a cluster can be decoded 
+- [ ] Add BP / RIS decoders for individual clusters (hope that BP
+      would converge better with many cycles cut); also, as an
+      alternative to block-wise just-in-time decoding.
+- [ ] Try to figure out why BP is so slow (excessive memory allocation?)
+- [ ] Rewrite debug statements (reasonable debug bits)
+- [ ] All debugging output -> `stderr`

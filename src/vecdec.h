@@ -211,7 +211,8 @@ typedef struct UFL_T {
     size_t buffer_size; /** its allocated size */
     vec_t *v1; /** allocated to `nchk` */
     vec_t *v0; /** allocated to `nchk` temp space for `two_vec_init()` */
-    vec_t *err;  /** allocated to `nvec` */
+    vec_t *err;  /** allocated to `nvar` */
+    vec_t *obs;  /** allocated to `mL->rows` */
     vec_t *svec; /** allocated to `nchk` */
     ufl_t *ufl;
   } params_t;

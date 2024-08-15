@@ -56,7 +56,8 @@ params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50, .pads=0,
   .mE0=NULL,
   .mE=NULL, .mHe=NULL, .mLe=NULL, .mHeT=NULL, .mLeT=NULL,
   .nzH=0, .nzL=0,
-  .buffer=NULL, .buffer_size = 0, .v0=NULL, .v1=NULL, .err=NULL, .svec=NULL,
+  .buffer=NULL, .buffer_size = 0, .v0=NULL, .v1=NULL,
+  .err=NULL, .svec=NULL, .obs=NULL,
   .ufl=NULL
 };
 
@@ -1922,9 +1923,12 @@ int main(int argc, char **argv){
 	  if(p->pdet){	      
 	    write_01_vec(p->file_pdet, p->ufl->syndr, p->mH->rows, p->pdet); /** syndrome prediction */
 	  }
-	  if(!p->v0)
-	    p->v0=vec_init(p->nchk);
-	  vec_t *vobs = csr_vec_mul(p->v1, p->v0, p->mLt, p->ufl->error, 1);
+	  if(!p->err)
+	    p->err=vec_init(p->nvar); /** temporary storage */
+	  if(!p->obs)
+	    p->obs=vec_init(p->mLt->cols);
+	  assert(p->nvar >= p->mLt->rows);
+	  vec_t *vobs = csr_vec_mul(p->err, p->obs, p->mLt, p->ufl->error, 1);
 	  if(p->pobs){
 	    write_01_vec(p->file_pobs, vobs, p->mL->rows, p->pobs); /** obs prediction */
 	  }

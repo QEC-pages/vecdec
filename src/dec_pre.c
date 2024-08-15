@@ -365,7 +365,7 @@ int dec_ufl_lookup(ufl_t * const u, const params_t * const p){
       HASH_FIND(hh, p->hashU_syndr, beg, cnt*sizeof(int), tmp);
       if(tmp){ /** vector found, add to `error` */
 	for(int i=0; i<tmp->w_e; i++)
-	  vec_push(tmp->vec[i], u->error);
+	  vec_push(tmp->err[i], u->error);
 	u->clus[ic].label = -1 - ic; /**< eraze this cluster */
 	u->num_prop --; 
       }
@@ -521,9 +521,9 @@ two_vec_t * two_vec_init(const vec_t * const err, params_t * const p){
   ans->w_e = err->wei;
   ans->w_s = v0->wei;
   ans->w_tot = err->wei + v0->wei;
-  ans->vec = &( ans->arr[v0->wei] );
+  ans->err = &( ans->arr[v0->wei] );
   for(int j=0 ; j < err->wei; j++)
-    ans->vec[j] = err->vec[j];
+    ans->err[j] = err->vec[j];
   ans->energ = energ;
   
   return ans;  
@@ -573,9 +573,9 @@ void do_clusters(params_t * const p){
       entry = two_vec_init(err,p);
       //            two_vec_print(entry);
       const size_t keylen = entry->w_e * sizeof(rci_t);
-      HASH_FIND(hh, p->hashU_error, entry->vec, keylen, pvec);
+      HASH_FIND(hh, p->hashU_error, entry->err, keylen, pvec);
       if(!pvec){ /** vector not found, inserting */	     
-	HASH_ADD(hh, p->hashU_error, vec, keylen, entry); /** store in the `hash` */
+	HASH_ADD(hh, p->hashU_error, err, keylen, entry); /** store in the `hash` */
 	if((p->maxU > 0) && (cnt_err + cnt >= p->maxU)){
 	  if(p->debug&1)
 	    printf("# reached limit of maxU=%lld errors\n",p->maxU);	  
@@ -733,7 +733,7 @@ int dec_ufl_one(const mzd_t * const srow, params_t * const p){
       ans = 2; /** low weight match */
       cnt[CONV_LOWW]++;
       for(int i=0; i<tmp->w_e; i++)
-	ufl->error->vec[i] = tmp->vec[i];
+	ufl->error->vec[i] = tmp->err[i];
       ufl->error->wei = tmp->w_e;
       for(int i=0; i<tmp->w_s; i++)
 	ufl->syndr->vec[i] = tmp->arr[i];

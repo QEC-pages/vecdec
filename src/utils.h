@@ -72,7 +72,7 @@ static inline double rnd_exponential(void){
 #else /* not USE_QLLR */
     double energ;
 #endif /* USE_QLLR */    
-    int *vec; /** set  to &arr[w_s] */
+    int *err; /** was `vec` set  to &arr[w_s] */
     int cnt; /** how many times this vector was encountered */
     int w_e; /**< weight of error (non-negative) */
     int w_s; /**< weight of syndrome (non-negative) */
@@ -88,7 +88,7 @@ static inline double rnd_exponential(void){
     }
     printf("# two_vec: cnt=%d w_e=%d e=[",it->cnt,it->w_e);
     for(int i=0; i < it->w_e; i++)
-      printf(" %d",it->vec[i]);
+      printf(" %d",it->err[i]);
     printf(" ]%s w_s=%d s=[",it->w_s>20?"\n#":" ",it->w_s);
     for(int i=0; i < it->w_s; i++)
       printf(" %d",it->arr[i]);
@@ -124,9 +124,9 @@ static inline int by_syndrome(void *a, void *b){
       return +1;
     else{ /** Wa == Wb */
       for(int i=0; i < pa->w_e; i++){
-	if (pa->vec[i] < pb->vec[i])
+	if (pa->err[i] < pb->err[i])
 	  return -1;
-	else if (pa->vec[i] > pb->vec[i])
+	else if (pa->err[i] > pb->err[i])
 	  return +1;
       }
     }
