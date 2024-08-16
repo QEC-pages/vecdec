@@ -549,7 +549,7 @@ observable or soft-out row), and rows not-yet decoded.
 - [x] Implement `pre`-decoder for `mode=0`.
 - [x] Make sure it works for classical codes 
 - [x] Debug `pre`-decoder and update documentation.
-- [ ] Replace global errors with cluster generation algorithm based on
+- [x] Replace global errors with cluster generation algorithm based on
       a connectivity graph (use v-v graph or its powers).
 - [x] Generate statistics on rejected clusters (c- and v-node weights)
 - [ ] Add ML properties for global errors list (`u`-hash).  To this
