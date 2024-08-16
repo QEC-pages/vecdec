@@ -140,17 +140,17 @@ long long int csr_min_max_blk(csr_t *mat, int r1, int r2){
  * return resulting matrix
  * TODO: add code for List of Pairs 
  */
-csr_t * csr_transpose(csr_t *dst, const csr_t *p){
-  int m=p->rows, n=p->cols, nz=p->p[m];
+csr_t * csr_transpose(csr_t *dst, const csr_t * const org){
+  int rows=org->rows, cols=org->cols, nz=org->p[rows];
   if (dst == NULL) 
-    dst = csr_init(NULL,n,m,nz);
-  else if ((dst->cols != m) || (dst->rows != n) || (dst->nzmax < MAX(nz, n+1))) 
+    dst = csr_init(NULL,cols,rows,nz);
+  else if ((dst->cols != rows) || (dst->rows != cols) || (dst->nzmax < MAX(nz, cols+1))) 
     ERROR("Wrong size for return matrix.\n");
   else
     dst->nz=0; /* clear matrix */
-  for(int i=0;i<m;i++)    
-    for(int j=p->p[i]; j < p->p[i+1] ; j++){
-      dst->p[j]=p->i[j]; // pair format, to be compressed later
+  for(int i=0;i<rows;i++)    
+    for(int j=org->p[i]; j < org->p[i+1] ; j++){
+      dst->p[j]=org->i[j]; // pair format, to be compressed later
       dst->i[j]=i ;
     }
   dst->nz=nz;
@@ -444,19 +444,23 @@ csr_t *csr_free(csr_t *p){
  * check existing size and (re)allocate if  needded 
  */
 csr_t *csr_init(csr_t *mat, int rows, int cols, int nzmax){
-  if ((mat!=NULL)&&((mat->nzmax < nzmax)||(mat->nzmax < rows+1))){
-    // mat=csr_free(mat);  /* allocated size was too small */
+  const int max = MAX(nzmax,(rows+1));
+  if((nzmax<0)||(rows<0)||(cols<0))
+    ERROR("invalid parameters rows=%d cols=%d nzmax=%d)\n",rows,cols,nzmax);
+  if ((mat!=NULL)&&((mat->nzmax < max)||(mat->nzmax < rows+1))){
+    /* allocated size was too small */
     /** keep allocated `mat` */
-    mat->p = realloc(mat->p,MAX(nzmax,(rows+1))*sizeof(int));
+    mat->p = realloc(mat->p, max*sizeof(int));
     mat->i = realloc(mat->i, nzmax*sizeof(int));
     if ((mat->p==NULL) || (mat->i==NULL))
       ERROR("csr_init: failed to reallocate CSR rows=%d cols=%d nzmax=%d",
             rows,cols,nzmax);
     mat->nzmax=nzmax;
+    mat->p[0]=0;
   }
   else if(mat==NULL){
     mat=malloc(sizeof(csr_t));  
-    mat->p=calloc(MAX(nzmax,(rows+1)),sizeof(int));
+    mat->p=calloc(max,sizeof(int));
     mat->i=calloc(nzmax,sizeof(int)); 
     if ((mat == NULL) || (mat->p==NULL) || (mat->i==NULL))
       ERROR("csr_init: failed to allocate CSR rows=%d cols=%d nzmax=%d",
@@ -501,11 +505,11 @@ static int cmp_int_pairs(const void *p1, const void *p2){
  * @param nrows matrix dimension
  * @param ncols matrix dimension
  */
-csr_t * csr_from_pairs(csr_t *mat, int nz, int_pair *prs, int nrows, int ncols){
+csr_t * csr_from_pairs(csr_t *mat, const int nz, int_pair * const prs, const int nrows, const int ncols){
   mat = csr_init(mat, nrows, ncols, nz);
   qsort(prs, nz, sizeof(int_pair), cmp_int_pairs);
   int i, j=0;
-  for(i=0;i < mat->rows; i++){
+  for(i=0; i < nrows; i++){
     mat->p[i]=j;
     while ((j<nz) && (prs[j].a == i)){
       mat->i[j]=prs[j].b;
@@ -537,6 +541,8 @@ csr_t * csr_from_mzd(csr_t *mat, const mzd_t * const orig){
     const word * const rawrow = orig->rows[i];
     while(((idx=nextelement(rawrow,orig->width,idx))!=-1)&&(idx<orig->ncols)){
       mat->i[j++]=idx++;
+      if(idx >= orig->ncols)
+	break;
     }
 #else /** naive version */
     for(int idx=0; idx< orig->ncols; idx++)
@@ -861,6 +867,7 @@ csr_t *csr_mm_read(char *fnam, csr_t *mat, int transpose, int debug){
   mat->nz=nz;  // csr_out(mat);
   csr_compress(mat); /* sort entries by row */
   // csr_out(mat);
+  fclose(f);
   return mat;
 }
 
@@ -874,27 +881,32 @@ int all_space(const char * str) {
 
 /** @brief read up to `lmax` lines from a file in `01` format
 
- * read up to `lmax` binary vectors of length `m` from a `01` file `fin` open
- * for reading.  Place the vectors as columns of matrix `M` of size `m` rows by
- * `lmax` colums.  Lines starting with `#` are silently ignored; a non-`01`
- * line, or a `01` line of an incorrect length will give an error.
+ * read up to `lmax` binary vectors of length `m` from a `01` file
+ * `fin` open for reading.  Place the vectors as rows (or columns) of
+ * matrix `M` of size `lmax` rows by `m` columns (`m` rows by `lmax`
+ * columns if `by_col` is non-zero).  Lines starting with `#` are
+ * silently ignored; a non-`01` line, or a `01` line of an incorrect
+ * length will give an error.
  *
  * @param M initialized output matrix with `lmax` rows and `m` columns
  * @param fin file with 01 data open for reading
  * @param[input,output] lineno current line number in the file.
  * @param fnam file name (for debugging purposes)
- * @param p Other parameters (only `p->debug` is used).
+ * @param pads if non-zero, pad input lines with `0`
+ * @param by_col read the file into columns of the matrix 
+ * @param debug if `(debug&8 !=0)` print some additonal information.
  * @return the number of rows actually read.
  *
  */
 int read_01(mzd_t *M, FILE *fin, long long int *lineno, const char* fnam,
-	    const int pads, const int debug){
+	    const int pads, const int by_col, const int debug){
   if(!M)
     ERROR("expected initialized matrix 'M'!\n");
   else
     mzd_set_ui(M,0);
-  int m   =M->nrows;
-  int lmax=M->ncols, il=0;
+  int m   = by_col ? M->nrows : M->ncols;
+  int lmax= by_col ? M->ncols : M->nrows;
+  int il=0;
   if(!fin)
     ERROR("file 'fin' named '%s' must be open for reading\n",fnam);
   if(debug&8) /** file io */
@@ -906,7 +918,7 @@ int read_01(mzd_t *M, FILE *fin, long long int *lineno, const char* fnam,
 
   ssize_t linelen;
   while((il<lmax) && (!feof(fin)) &&
-        ((linelen = getline(&buf, &bufsiz, fin))>=0)){
+        ((linelen = getline(&buf, &bufsiz, fin))>=0)){ /* including terminating '\n' */
     (*lineno)++;
     switch(buf[0]){
     case '0': case '1':
@@ -915,12 +927,25 @@ int read_01(mzd_t *M, FILE *fin, long long int *lineno, const char* fnam,
 	      "%s:%lld:1: '%s'\n", m,fnam,*lineno,buf);
       else{
 	int len = linelen-1 < m ? linelen-1 : m;
-	for(int i=0; i<len; i++){
-	  if (buf[i]=='1')
-	    mzd_write_bit(M,i,il,1); /** row `i`, col `il` */
-	  else if (buf[i]!='0')
-	    ERROR("invalid 01 line\n"
-		  "%s:%lld:%d: '%s'\n", fnam,*lineno,i+1,buf);
+	if(by_col){
+	  for(int i=0; i<len; i++){
+	    if (buf[i]=='1')	    
+	      mzd_write_bit(M,i,il,1); /** row `i`, col `il` */
+	  
+	    else if (buf[i]!='0')
+	      ERROR("invalid 01 line\n"
+		    "%s:%lld:%d: '%s'\n", fnam,*lineno,i+1,buf);
+	  }
+	}
+	else{ /** by rows */
+	  for(int i=0; i<len; i++){
+	    if (buf[i]=='1')	    
+	      mzd_write_bit(M,il,i,1); /** row `il`, col `i` */
+	    
+	    else if (buf[i]!='0')
+	      ERROR("invalid 01 line\n"
+		    "%s:%lld:%d: '%s'\n", fnam,*lineno,i+1,buf);
+	  }
 	}
 	(il)++; /** success */
       }
@@ -934,6 +959,7 @@ int read_01(mzd_t *M, FILE *fin, long long int *lineno, const char* fnam,
       break;
     }
   }
+  
   if(debug&8) /** file io */
     printf("# read %d 01 rows from file '%s'\n",il,fnam);
   if(buf)

@@ -29,8 +29,12 @@
 
 params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50, .pads=0,
   .rankH=0, .rankG=-1, .rankL=-1, 
-  .lerr=-1, .maxosd=100, .bpgamma=0.5, .bpretry=1, .swait=0, .maxC=0,
+  .lerr=-1, .maxosd=100, .swait=0, .maxC=0,
   .dW=0, .minW=INT_MAX, .maxW=0, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
+  .bpalpha=1, .bpbeta=1, .bpgamma=0.5, .bpretry=1, 
+  .uW=2, .uR=4, //.uEdbl=-1, .uE=-1,
+  .numU=0, .numE=0, .maxU=0,
+  .hashU_error=NULL, .hashU_syndr=NULL, .permHe=NULL,
   .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8, .useP=0, .dmin=0,
   .debug=1, .fdem=NULL, .fout="tmp",
   .fdet=NULL, .fobs=NULL,  .ferr=NULL,
@@ -40,6 +44,7 @@ params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50, .pads=0,
   .LLRmin=0, .LLRmax=0, .codewords=NULL, .num_cws=0,
   .finH=NULL, .finL=NULL, .finG=NULL, .finK=NULL, .finP=NULL,
   .finC=NULL, .outC=NULL, 
+  .finU=NULL, .outU=NULL, 
   .vP=NULL, .vLLR=NULL, .mH=NULL, .mHt=NULL,
   .mL=NULL, .mLt=NULL,  .mA=NULL, .mAt=NULL,
   .internal=0, 
@@ -50,12 +55,17 @@ params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50, .pads=0,
   .line_err=0,   .line_er0=0,  .line_det=0, .line_obs=0,
   .mE0=NULL,
   .mE=NULL, .mHe=NULL, .mLe=NULL, .mHeT=NULL, .mLeT=NULL,
-  .nzH=0, .nzL=0
+  .nzH=0, .nzL=0,
+  .buffer=NULL, .buffer_size = 0, .v0=NULL, .v1=NULL,
+  .err=NULL, .svec=NULL, .obs=NULL,
+  .ufl=NULL
 };
 
 params_t prm_default={  .steps=50, .pads=0, 
   .lerr=-1, .maxosd=100, .bpgamma=0.5, .bpretry=1, .swait=0, .maxC=0,
   .dW=0, .minW=INT_MAX, .maxW=0, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
+  .uW=2, .uR=4, //.uEdbl=-1, .uE=-1,
+  .maxU=0, .bpalpha=1, .bpbeta=1,
   .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8, .useP=0, .dmin=0,
   .debug=1, .fout="tmp", .ferr=NULL,
   .mode=-1, .submode=0, .use_stdout=0, 
@@ -187,7 +197,7 @@ mzp_t * do_skip_pivs(const size_t rank, const mzp_t * const pivs){
 
 /** @brief construct `L` matrix for a classical code orthogonal to rows of `H`
  * 
- * The matrix should have `k` rows of weight `1` each.
+ * The resulting matrix should have `k` rows of weight `1` each.
  */
 csr_t * do_L_classical(const csr_t * const H, const params_t * const p){
   assert((H!=NULL) && (H->nz == -1));
@@ -501,7 +511,6 @@ void do_hash_remove_reduc(const int min_dW, params_t *const p){
   }
   p->num_cws = count;
 }
-  
 
 /** @brief see if the codeword needs to be added to hash, return pointer */
 one_vec_t * do_hash_check(const int ee[], int weight, params_t * const p){
@@ -534,7 +543,6 @@ one_vec_t * do_hash_check(const int ee[], int weight, params_t * const p){
   }
   return pvec;
 }
-
 
 /** @brief Random Information Set search for small-E logical operators.
  *
@@ -724,301 +732,29 @@ int do_energ_verify(const qllr_t * const vE, const mzd_t * const mE, const param
   return nfail;
 }
 
-/**
- * @brief do local search up to `p->lerr` inclusive recursively
- * @param vE0 best energy values for each `e` a row in `mE0`
- * @param mE0 best error vectors so far for each syndrome (rows)
- * @param jstart start local search from this column in `mH`
- * @param lev recusion level, must not exceed `p->lerr`
- * @param vE current energy values for each `e` a row in `mE`
- * @param mE input error vectors (rows)
- * @param mH check matrix in row echelon form (pivots in `pivs`)
- * @param skip_pivs `sorted` list of `n-rank` non-pivot positions in `mH`
- * @param pivs list of `rank` pivots returned by gauss (length = `n`)
- * @param p pointer to the remaining program parameters
- * @return number of updated error vectors
- * @todo: see if binary ops + transposition is faster
- */
-int do_local_search(qllr_t *vE0, mzd_t * mE0, rci_t jstart, int lev,
-		    const qllr_t * const vE, const mzd_t * const mE, const mzd_t * const mH,
-		    const mzp_t * const skip_pivs, const mzp_t * const pivs,
-		    const params_t * const p){
-  assert(lev<=p->lerr);
-  int last_lev = lev < p->lerr ? 0 : 1;
-  qllr_t *vE1 = NULL;
-  mzd_t *mE1 = NULL; //mzd_copy(NULL,mE); /** error vectors to update */
-  if(p->debug&128)
-    printf("entering %slev=%d / %d of recursion jstart=%d\n",last_lev? "last " :"",lev,p->lerr, jstart);  
-#ifndef NDEBUG
-  if(0 != do_energ_verify(vE0,mE0,p)){
-    mzd_print(mE0);
-    ERROR("energy value mismatch vE0, mE0 at lev=%d of %d \n",lev, p->lerr);
-  }
-  if(0 != do_energ_verify(vE,mE,p)){
-    mzd_print(mE0);
-    ERROR("energy value mismatch vE, mE at lev=%d of %d \n",lev, p->lerr);
-  }
-#endif   
-  int ich_here=0, ich_below=0;
-  rci_t knum = skip_pivs->length; /** number of non-pivot cols in `mH` to go over */
-  rci_t rank = p->nvar - knum; /** number of valid pivot cols */
-  rci_t rnum; /** number of non-zero entries in rlis (for each `j`) */
-  int * rlis = malloc(rank * sizeof(int));
-  if(!rlis) ERROR("memory allocation failed!");
-  if(!last_lev){
-    vE1 = malloc(sizeof(qllr_t) * mE0->nrows);
-    if(!vE1) ERROR("memory allocation failed!");
-  }
 
-  for(rci_t j=jstart; j<knum; j++){ /** `j`th `non-pivot` entry */
-    if (!last_lev){
-      mE1 = mzd_copy(mE1,mE); /** fresh copy of error vectors to update */
-      memcpy(vE1,vE,sizeof(qllr_t) * mE0->nrows );
-    }
-    rci_t jj=skip_pivs->values[j]; /** actual `non-pivot` column we are looking at */
-    rnum=0; /** prepare list of positions to update for `jj`th col of `mH` */
-    for(rci_t ir=0; ir<rank; ir++)
-      if(mzd_read_bit(mH,ir,jj)) /** non-zero bit */
-        rlis[rnum++] = pivs->values[ir]; /** column of `mH` to update */
-#ifndef NDEBUG
-    if (p->debug & 128){
-      printf("jj=%d rlis: ",jj);
-      for(int ir=0; ir< rnum; ir++)
-        printf(" %d%s",rlis[ir],ir+1==rnum?"\n":"");
-    }
-#endif
-
-    for(rci_t is=0; is < mE->nrows; is++){ /** syndrome rows */
-#ifndef NDEBUG      
-      if(mzd_read_bit(mE,is,jj)) /** sanity check */
-        ERROR("bit found at is=%d jj=%d\n",is,jj);
-#endif 
-      if(vE0[is] >= 2 * p->LLRmin){/** TODO: add more reasonable cutoff here */
-        qllr_t energ = vE[is];
-	/** calculate updated energy only */
-        energ += p->vLLR[jj];
-        for(rci_t ir = 0 ;  ir < rnum; ++ir){
-	  const int ii = rlis[ir]; /** position to update */
-          if(mzd_read_bit(mE,is,ii))
-            energ -= p->vLLR[ii]; /** `1->0` flip */
-          else
-            energ += p->vLLR[ii]; /** `0->1` flip */
-        }
-	if(!last_lev){ /* calculate updated error vector */
-	  vE1[is]=energ;
-	  mzd_flip_bit(mE1,is,jj);
-	  for(rci_t ir = 0 ;  ir < rnum; ++ir)
-	    mzd_flip_bit(mE1, is, rlis[ir]);
-	}
-        if(energ < vE0[is]-1e-10){
-#ifndef NDEBUG
-          if(p->debug & 128){/** inf set decoding */
-            printf("lev=%d j=%d jj=%d is=%d E0=%g E=%g success\n", lev,j,jj,is,
-		   dbl_from_llr(vE0[is]),dbl_from_llr(energ));
-          }
-#endif
-          vE0[is]=energ;
-	  if (!last_lev)
-	    mzd_copy_row(mE0,is, mE1,is);
-	  else{
-	    mzd_copy_row(mE0,is, mE,is);
-	    mzd_flip_bit(mE0,is,jj);
-	    for(rci_t ir = 0 ;  ir < rnum; ++ir)
-	      mzd_flip_bit(mE0, is, rlis[ir]);
-	  }
-          ich_here++;
-        }
-      }
-    }
-
-    if(!last_lev){ /** go up one recursion level */
-      if(j+1<knum){
-        ich_below+=do_local_search(vE0,mE0,j+1,lev+1,vE1,mE1, mH, skip_pivs, pivs,p);
-      }
-    }
-  }
-  if(p->debug & 128)
-    if(ich_here + ich_below)
-      printf("exiting lev=%d of recursion, here ch=%d below ch=%d\n",
-             lev,ich_here, ich_below);
-  free(rlis);
-  if (mE1)
-    mzd_free(mE1);
-  if (vE1)
-    free(vE1);
-  return ich_below+ich_here;
-}
-
-/**
- * @brief actual syndrome-based decoding routine
- * @param mS the matrix with syndromes (each column)
- * @param p structure with error model information
- * @return binary matrix of min weight errors / each syndrome
- ***************** todo: reuse some matrices? ***************/
-mzd_t *do_decode(mzd_t *mS, params_t const * const p){
-  mzd_t * mH = mzd_from_csr(NULL, p->mH);
-
-  mzd_t * mE = mzd_init(mH->ncols,mS->ncols); /**< error vectors by col */
-  qllr_t *vE = calloc(mS->ncols,sizeof(qllr_t)); /**< best energies */
-  if((!mE) || (!vE))
-    ERROR("memory allocation failed!\n");
-
-  mzp_t * perm=mzp_init(p->nvar); /** identity column permutation */
-  mzp_t * pivs=mzp_init(p->nvar); /** list of pivot columns */
-  if((!pivs) || (!perm))
-    ERROR("memory allocation failed!\n");
-  mzd_set_ui(mE,0); /** zero matrix to store `errors by column` */
-
-  /** first pass ******************************************* */
-  int rank=0;
-  if (p->steps > 0){
-    perm = sort_by_llr(perm, p->vLLR, p);   /** order of decreasing `p` */
-    /** full row echelon form (gauss elimination) using the order of `p`,
-     * on the block matrix `[H|S]` (in fact, two matrices).
-     */
-    for(int i=0; i< p->nvar; i++){
-      int col=perm->values[i];
-      int ret=twomat_gauss_one(mH,mS, col, rank);
-      if(ret)
-	pivs->values[rank++]=col;
-    }
-    if((p->debug &4)&&(p->debug &512)){ /** debug gauss */
-      printf("rank=%d\n",rank);
-      //    printf("perm: "); mzp_out(perm);
-      //    printf("pivs: "); mzp_out(pivs);
-      //    printf("mH:\n");
-      //    mzd_print(mH);
-      //    printf("mS:\n");
-      //    mzd_print(mS);
-    }
-    
-    // for each syndrome, calculate error vector and energy
-    for(int i=0;i< rank; i++)
-      mzd_copy_row(mE,pivs->values[i],mS,i);
-  }
-  mzd_t *mEt0 = mzd_transpose(NULL,mE);
-  for(int i=0; i< mS->ncols; i++)
-    vE[i]=mzd_row_energ(p->vLLR,mEt0,i);
-
-  if(p->debug & 512){
-    printf("mEt0 after round 0:\n");
-    mzd_print(mEt0);
-  }
-
-  if((p->steps > 0) &&(p->lerr > 0)){  /** do information-set decoding `**********************` */
-    mzp_t * skip_pivs = do_skip_pivs(rank, pivs);
-    mzd_t * mEt1=NULL;
-    qllr_t *vE1=NULL;
-    if (p->lerr > 1){
-      mEt1 = mzd_copy(NULL, mEt0);
-      vE1 = malloc(sizeof(qllr_t) * mEt0->nrows);  if(!vE1) ERROR("memory allocation failed!");
-      memcpy(vE1,vE,sizeof(qllr_t) * mEt0->nrows);
-    }
-    do_local_search(vE, mEt0, 0, 1,
-		    p->lerr > 1 ? vE1 : vE,
-		    p->lerr > 1 ? mEt1 : mEt0, mH, skip_pivs, pivs, p);
-    if(p->debug & 512){
-      printf("mEt0 after local search:\n");
-      mzd_print(mEt0);
-    }
-    mzp_free(skip_pivs);
-    //    if (p->lerr > 1){
-    if (mEt1){
-      mzd_free(mEt1);
-      mEt1=NULL;
-    }
-    if (vE1){
-      free(vE1);
-      vE1=NULL;
-    }
-  }
-
-  int iwait=0, ichanged=0;
-  /** main loop over permutations * `***************************` */
-  for (int ii=1; ii< p->steps; ii++){
-    pivs=mzp_rand(pivs); /** random pivots LAPAC-style */
-    mzp_set_ui(perm,1); perm=perm_p_trans(perm,pivs,0); /**< corresponding permutation */
-    /** todo: make it probability-dependent */
-    rank=0;
-    for(int i=0; i< p->nvar; i++){
-      int col=perm->values[i];
-      int ret=twomat_gauss_one(mH,mS, col, rank);
-      if(ret)
-        pivs->values[rank++]=col;
-    }
-    // for each syndrome, calculate error vector and energy; update minima
-    mzd_set_ui(mE,0); /** zero matrix */
-    for(int i=0;i< rank; i++)
-      mzd_copy_row(mE,pivs->values[i],mS,i);
-    ichanged=0;
-    mzd_t * mEt = mzd_transpose(NULL, mE);
-    qllr_t *vE1=NULL;
-    if(p->lerr > 0){  /** do information-set decoding `**********************` */
-      vE1 = malloc(sizeof(qllr_t) * mEt0->nrows);
-      if(!vE1) ERROR("memory allocation failed!");
-    }
-    for(int i=0; i< mEt->nrows; i++){
-      qllr_t energ=mzd_row_energ(p->vLLR,mEt,i);
-      if(p->lerr > 0)
-	vE1[i]=energ;
-      if(energ < vE[i]){
-	vE[i]=energ;
-	mzd_copy_row(mEt0,i,mEt,i);
-	ichanged++;
-      }
-    }
-    if(ichanged){
-      if(p->debug & 512){
-        if(p->debug &4){ /** debug gauss */
-          printf("after round %d rank=%d\n",ii,rank);
-          //          printf("perm: "); mzp_out(perm);
-          //          printf("pivs: "); mzp_out(pivs);
-          //          printf("mH:\n");
-          //          mzd_print(mH);
-          //          printf("mS:\n");
-          //          mzd_print(mS);
-        }
-        printf("mEt0:\n");
-        mzd_print(mEt0);
-      }
-    }
-    if(p->lerr > 0){  /** do information-set decoding `**********************` */
-      mzp_t * skip_pivs = do_skip_pivs(rank, pivs);
-      do_local_search(vE, mEt0, 0, 1, vE1, mEt, mH, skip_pivs, pivs, p);
-      if(p->debug & 512){
-        printf("mEt0 after local search:\n");
-        mzd_print(mEt0);
-      }
-      mzp_free(skip_pivs);
-      //      if (p->lerr > 1)
-      if(vE1){
-	free(vE1);
-	vE1=NULL;
-      }
-    }
-
-    mzd_free(mEt);
-    iwait = ichanged > 0 ? 0 : iwait+1 ;
-    if(p->debug&8) /** convergence information */
-      if(ichanged)
-        printf(" ii=%d of %d changed=%d\n",ii,p->steps,ichanged);
-    if((p->swait > 0)&&(iwait > p->swait))
-      break;
-  }
-  /** clean-up */
-  mzd_free(mH);
-  mzd_free(mE);
-  free(vE);
-  mzp_free(perm);
-  mzp_free(pivs);
-  return mEt0;
-}
 
 /** @brief one more matrix initialization routine 
  */
 void init_Ht(params_t *p){
   const int n = p->nvar;
   p->mHt = csr_transpose(p->mHt, p->mH);
+  //! construct v-v graph 
+  //  csr_t *vv_gr = do_vv_graph(p->mH, p->mHt, p);
+  if(p->uW>0){
+    if(p->debug&1){
+      if(p->uR==0)
+	printf("# generating errors of weight up to %d for syndrome hash\n",p->uW);
+      else 
+	printf("# generating error clusters of w <= %d and radius <= %d for syndrome hash\n",p->uW, p->uR);
+    }
+    p->v0 = vec_init(p->nchk);
+    p->v1 = vec_init(p->nchk);
+    if(p->uW >=0)
+      do_clusters(p);
+  }
+    if(p->debug&1)
+  printf("# initialize matrices\n");
   if(p->mL)
     p->mLt = csr_transpose(p->mLt,p->mL);
   /** todo: fix reallocation logic to be able to reuse the pointers model */
@@ -1216,6 +952,55 @@ int var_init(int argc, char **argv, params_t *p){
       if(p->mode<2)
 	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
     }
+    else if (sscanf(argv[i],"maxU=%lld",&lldbg)==1){ /** `maxU` */
+      p -> maxU = lldbg;
+      if (p->debug&4)
+	printf("# read %s, maxU=%lld\n",argv[i],p-> maxU);
+      if(p->mode>=2)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
+    }
+#if 0    
+    else if (sscanf(argv[i],"uE=%lg",&val)==1){ /** `uE`  */
+      p -> uEdbl = val;
+      if (p->debug&4){
+	printf("# read %s, uE=%g\n", argv[i], p->uEdbl);
+	if (p->uEdbl < 0)
+	  printf("# no limit on error/codeword energies to store\n");
+	else
+	  printf("# setting upper limit on error/codeword energies to store\n");
+      }
+      if(p->mode>=2)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
+    }
+#endif     
+    else if (sscanf(argv[i],"uW=%d",&dbg)==1){ /** `uW` */
+      p -> uW = dbg;
+      if (p->debug&4){
+	printf("# read %s, uW=%d\n",argv[i],p-> uW);
+	if (p->uW < 0)
+	  printf("# will not attempt pre-decoding\n");
+	else if (p->uW == 0)
+	  printf("# will only skip zero syndrome vectors\n");
+	else
+	  printf("# will pre-compute syndromes for clusters of weight up to %d\n",p->uW);
+      }	
+      if(p->mode>=2)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
+    }
+    else if (sscanf(argv[i],"uR=%d",&dbg)==1){ /** `uR` */
+      p -> uR = dbg;
+      if (p->debug&4){
+	printf("# read %s, uR=%d\n",argv[i],p-> uR);
+	if (p->uR < 0)
+	  ERROR("invalid uR value");
+	else if (p->uR == 0)
+	  printf("# will use any errors of weight up to uW=%d for syndrome hash\n",p->uW);
+	else
+	  printf("# will use r-local v-v error clusters for syndrome hash, r<=uR\n");
+      }	
+      if(p->mode>=2)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
+    }
     else if (sscanf(argv[i],"nfail=%lld",&lldbg)==1){ /** `nfail` */
       p -> nfail = lldbg;
       if (p->debug&4)
@@ -1375,6 +1160,26 @@ int var_init(int argc, char **argv, params_t *p){
       if (p->debug&4)
 	printf("# read %s, outC=%s\n",argv[i],p->outC);
     }
+    else if (0==strncmp(argv[i],"finU=",5)){ /** `finU` in low-weight errors list */
+      if(strlen(argv[i])>5)
+        p->finU = argv[i]+5;
+      else
+        p->finU = argv[++i]; /**< allow space before file name */
+      if (p->debug&4)
+	printf("# read %s, finU=%s\n",argv[i],p->finU);
+      if(p->mode>=2)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);      
+    }
+    else if (0==strncmp(argv[i],"outU=",5)){ /** `outU` out low-weight errors list */
+      if(strlen(argv[i])>5)
+        p->outU = argv[i]+5;
+      else
+        p->outU = argv[++i]; /**< allow space before file name */
+      if (p->debug&4)
+	printf("# read %s, outU=%s\n",argv[i],p->outU);
+      if(p->mode>=2)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
+    }
     else if (0==strncmp(argv[i],"finG=",5)){/** `finG` degeneracy generator matrix */
       if(strlen(argv[i])>5)
         p->finG = argv[i]+5;
@@ -1478,10 +1283,10 @@ int var_init(int argc, char **argv, params_t *p){
             ||(strcmp(argv[i],"help")==0)){
       switch(p->mode){
       case 0:
-	printf( HELP0);
+	printf( HELP0 "\n" HELPU);
 	break;	
       case 1:
-	printf( HELP1);
+	printf( HELP1 "\n" HELPU);
 	break;	
       case 2:
 	printf( HELP2);
@@ -1513,10 +1318,10 @@ int var_init(int argc, char **argv, params_t *p){
   
   if (p->seed <= 0){
     long long int seed_old= - p->seed; 
-    p->seed=-(seed_old) + time(NULL)+1000000ul*getpid(); /* ensure a different seed even if started at the same time */
+    p->seed=(seed_old) + time(NULL)+1000000ul*getpid(); /* ensure a different seed even if started at the same time */
     if((p->debug)&&(p->mode!=3))
       printf("# initializing seed=%lld from time(NULL)+1000000ul*getpid()+%lld\n",p->seed, seed_old);
-    /** use `tinymt64_generate_double(&pp.tinymt)` for double [0,1] */
+    /** use `tinymt64_generate_double(&pp.tinymt)` for double `[0,1)` */
   }
   
   tinymt64_init(&tinymt,p->seed);
@@ -1639,6 +1444,7 @@ int var_init(int argc, char **argv, params_t *p){
   LLR_table = init_LLR_tables(p->d1,p->d2,p->d3);
 
   p->dE = llr_from_dbl(p->dEdbl);
+  //  p->uE = llr_from_dbl(p->uEdbl);
   
   switch(p->mode){
   case 1: /** both `mode=1` (BP) and `mode=0` */
@@ -1792,7 +1598,6 @@ int var_init(int argc, char **argv, params_t *p){
     //      printf(" P[%d]=%g \n",i,p->vP[i]);
   }
   
-  
   if(p->fdet){/** expect both `fdet` and `fobs` to be defined */
     p->internal=0;
     p->file_det=fopen(p->fdet, "r");
@@ -1868,7 +1673,10 @@ int var_init(int argc, char **argv, params_t *p){
       ERROR("mode=%d not defined\n",p->mode);
     }
   }
-
+  /** reset the counters */
+  for (int i=0; i < EXTR_MAX; i++)
+    cnt[i]=0;
+  
   return 0;
 };
 
@@ -1886,7 +1694,7 @@ void var_kill(params_t *p){
   if(p->vP){        free(p->vP);    p->vP = NULL;  }
   if(p->vLLR){      free(p->vLLR);  p->vLLR = NULL;}
   if(LLR_table){ free(LLR_table);  LLR_table = NULL;}
-
+  
   p->mH =  csr_free(p->mH);
   p->mHt = csr_free(p->mHt);
   if(p->mL)
@@ -1900,7 +1708,13 @@ void var_kill(params_t *p){
   if(p->mLe) mzd_free(p->mLe);
   if(p->mHeT) mzd_free(p->mHeT);
   if(p->mLeT) mzd_free(p->mLeT);
-
+  if(p->v0) free(p->v0);
+  if(p->v1) free(p->v1);
+  if(p->svec) free(p->svec);
+  if(p->err) free(p->err);
+  if(p->ufl) ufl_free(p->ufl);
+  if(p->hashU_syndr)
+    kill_clusters(p);
 }
 
 int do_err_vecs(params_t * const p){
@@ -1909,9 +1723,9 @@ int do_err_vecs(params_t * const p){
   /** prepare error vectors ************************************************************/
   switch(p->internal){
   case 0: /** read `det` and `obs` files (each line a column) */
-    il1=read_01(p->mHe,p->file_det, &p->line_det, p->fdet, p->pads, p->debug);
+    il1=read_01(p->mHe,p->file_det, &p->line_det, p->fdet, 1, p->pads, p->debug);
     if(p->fobs){
-      il2=read_01(p->mLe,p->file_obs, &p->line_obs, p->fobs, 0, p->debug);
+      il2=read_01(p->mLe,p->file_obs, &p->line_obs, p->fobs, 1, 0, p->debug);
       if(il1!=il2)
 	ERROR("mismatched DET %s (line %lld) and OBS %s (line %lld) files!",
 	      p->fdet,p->line_det,p->fobs,p->line_obs);
@@ -1922,7 +1736,7 @@ int do_err_vecs(params_t * const p){
       if(p->debug&1)
 	printf("# read %d det events\n",il1);
     if(p->fer0){
-      il2=read_01(p->mE0,p->file_er0, &p->line_er0, p->fer0, 0, p->debug);
+      il2=read_01(p->mE0,p->file_er0, &p->line_er0, p->fer0, 1, 0, p->debug);
       if(il1!=il2)
 	ERROR("mismatched DET %s (line %lld) and ER0 %s (line %lld) files!",
 	      p->fdet,p->line_det,p->fer0,p->line_er0);
@@ -1944,14 +1758,14 @@ int do_err_vecs(params_t * const p){
 
     break;
   case 2: /** read errors from file and generate corresponding `obs` and `det` matrices */
-    il1=read_01(p->mE,p->file_err, &p->line_err, p->ferr, 0, p->debug);
+    il1=read_01(p->mE,p->file_err, &p->line_err, p->ferr, 1, 0, p->debug);
     if(p->debug&1)
       printf("# read %d errors from file %s\n",il1,p->ferr);
     csr_mzd_mul(p->mHe,p->mH,p->mE,1);
     if(p->mL)
       csr_mzd_mul(p->mLe,p->mL,p->mE,1);
     if(p->fer0){
-      il2=read_01(p->mE0,p->file_er0, &p->line_er0, p->fer0, 0, p->debug);
+      il2=read_01(p->mE0,p->file_er0, &p->line_er0, p->fer0, 1, 0, p->debug);
       if(il1!=il2)
 	ERROR("mismatched ERR %s (line %lld) and ER0 %s (line %lld) files!",
 	      p->ferr,p->line_err,p->fer0,p->line_er0);
@@ -1987,38 +1801,80 @@ int main(int argc, char **argv){
   long long int ierr_tot=0, rounds=(long long int )ceil((double) p->ntot / (double) p->nvec);
   if(((p->mode == 0) || (p->mode == 1)) && (p->debug & 2))
     printf("# ntot=%lld nvec=%d will do calculation in %lld rounds\n",p->ntot,p->nvec,rounds);
+  mzd_t *mE0=NULL;
 
   switch(p->mode){
-    long long int synd_tot, synd_fail; /** case 0 */
+    long long int synd_fail; 
+    int *status;                   
+    mzd_t *srow;                  /** case 0, case 1 */
     qllr_t *ans;                  /** case 1 */
     size_t size;                  /** case 3 */
     char * comment;
   case 0: /** `mode=0` internal `vecdec` decoder */
     /** at least one round always */
-    synd_tot=0, synd_fail=0;
+    synd_fail=0;
+    srow=mzd_init(1,p->nchk);
+
     for(long long int iround=1; iround <= rounds; iround++){
       if(p->debug &1){
-	printf("# starting round %lld of %lld",
-	       iround, rounds);
-	if(synd_tot>0)
-	  printf(" pfail=%g fail=%lld out of total=%lld\n", (double) synd_fail/synd_tot , synd_fail,synd_tot);
+	printf("# starting round %lld of %lld",   iround, rounds);
+	if(cnt[TOTAL])
+	  printf(" pfail=%g fail=%lld out of total=%lld\n",
+		 (double) (cnt[TOTAL]-cnt[SUCC_TOT])/cnt[TOTAL],  cnt[TOTAL]-cnt[SUCC_TOT], cnt[TOTAL]);
 	else
 	  printf("\n");
-	fflush(stdout);
       }
     
       if( !(ierr_tot = do_err_vecs(p)))
 	break; /** no more rounds */
-
-      // actually decode and generate error vectors
-      mzd_t *mE0=NULL;
+      if(p->uW >= 0){ /** pre-decoding enabled */
+	status = calloc(ierr_tot,sizeof(int)); /** non-zero value = success pre_dec */
+	if(!status) ERROR("memory allocation");
+	p->mHeT = mzd_transpose(p->mHeT,p->mHe);
+	mE0=mzd_init(p->nvec,p->nvar);
+	long long int cnt_pre = 0;
+	for(long long int ierr = 0; ierr < ierr_tot; ierr++){ /** cycle over errors */
+	  mzd_copy_row(srow,0,p->mHeT,ierr); /** syndrome row in question */       
+	  int res_pre = dec_ufl_one(srow,p);
+	  if(res_pre){ /** pre-decoder success */
+	    mzd_row_add_vec(mE0,ierr,p->ufl->error,1);
+	    status[ierr] = res_pre;
+	    cnt_pre++;
+	  }
+	}
+	if(cnt_pre < ierr_tot){ /** some pre-decoder failures */
+	  long long int num = ierr_tot - cnt_pre;
+	  mzd_t *mST = mzd_init(num,p->nchk);
+	  for(long long int ierr =0, row=0 ; ierr < ierr_tot; ierr++){
+	    if(!status[ierr])
+	      mzd_copy_row(mST, row++,p->mHeT,ierr);
+	  }
+	  mzd_t * mS = mzd_transpose(NULL,mST);
+	  mzd_t * mE2=do_decode(mS, p); /** each row a decoded error vector */
+	  for(long long int ierr =0, row=0 ; ierr < ierr_tot; ierr++){
+	    if(!status[ierr]){
+	      mzd_copy_row(mE0, ierr, mE2, row++);
+	      status[ierr]=4;
+	      cnt[CONV_RIS]++;
+	    }
+	  }
+	  mzd_free(mE2);
+	  mzd_free(mS);
+	  mzd_free(mST);
+	}
+      }
+      else{ /* no pre-decoding */      
+	status=NULL;
+	// actually decode and generate error vectors
 #ifndef NDEBUG  /** need `mHe` later */
-      mzd_t *mS=mzd_copy(NULL,p->mHe);
-      mE0=do_decode(mS, p); /** each row a decoded error vector */
-      mzd_free(mS); mS=NULL;
+	mzd_t *mS=mzd_copy(NULL,p->mHe);
+	mE0=do_decode(mS, p); /** each row a decoded error vector */
+	mzd_free(mS); mS=NULL;
 #else
-      mE0=do_decode(p->mHe, p); /** each row a decoded error vector */
+	mE0=do_decode(p->mHe, p); /** each row a decoded error vector */
 #endif /* NDEBUG */
+	cnt[CONV_RIS] += ierr_tot;
+      }  
       mzd_t *mE0t = mzd_transpose(NULL, mE0);
       mzd_free(mE0); mE0=NULL;
         
@@ -2028,7 +1884,7 @@ int main(int argc, char **argv){
 	mzd_write_01(p->file_pdet, prodHe, 1, p->pdet, p->debug);
 	
       mzd_add(prodHe, prodHe, p->mHe);
-      if(!mzd_is_zero(prodHe)){
+      if((p->steps)&&(!mzd_is_zero(prodHe))){
 	if((p->debug&512)||(p->nvec <=64)){
 	  printf("syndromes difference:\n");
 	  mzd_print(prodHe);
@@ -2053,29 +1909,63 @@ int main(int argc, char **argv){
 	mzd_write_01(p->file_pobs, prodLe, 1,p->pobs, p->debug);
 
       mzd_add(prodLe, prodLe, p->mLe);
-
       int fails=0;
-      for(rci_t ic=0; ic< ierr_tot; ic++){
-	rci_t ir=0;
-	if(mzd_find_pivot(prodLe, ir, ic, &ir, &ic)){
-	  fails++;
+      if(p->uW >=0){ /** pre-decoding enabled */
+	assert(status);
+	rci_t j=0;
+	for(rci_t ic=0; ic < ierr_tot; ic++){
+	  rci_t ir=0;
+	  if(mzd_find_pivot(prodLe, ir, ic, &ir, &ic)){
+	    //	    printf("# j=%d pivot at %d\n",j, ic);
+	    cnt[SUCC_TOT] += ic - j;
+	    while(j<ic){ /** success */
+	      switch(status[j++]){
+	      case 1 : cnt[SUCC_TRIVIAL]++; break;
+	      case 2 : cnt[SUCC_LOWW]++; break;
+	      case 3 : cnt[SUCC_CLUS]++; break;
+	      case 4 : cnt[SUCC_RIS]++;  break;
+	      default: ERROR("unexpected");
+	      }
+	    }
+	    j++;
+	    fails++;
+	  }
+	  else /** no more pivots */
+	    break;            
 	}
-	else /** no more pivots */
-	  break;
+	cnt[SUCC_TOT] += ierr_tot - j;      
+	while(j<ierr_tot){ /** success */
+	  switch(status[j++]){
+	  case 1 : cnt[SUCC_TRIVIAL]++; break;
+	  case 2 : cnt[SUCC_LOWW]++; break;
+	  case 3 : cnt[SUCC_CLUS]++; break;
+	  case 4 : cnt[SUCC_RIS]++;  break;
+	  default: ERROR("unexpected");
+	  }
+	}
+      }
+      else{ /** no pre-decoding */
+	for(rci_t ic=0; ic < ierr_tot; ic++){
+	  rci_t ir=0;
+	  if(mzd_find_pivot(prodLe, ir, ic, &ir, &ic))
+	    fails++;	
+	  else /** no more pivots */
+	    break;
+	}      
+	cnt[SUCC_RIS] += ierr_tot - fails;
+	cnt[SUCC_TOT] += ierr_tot - fails;
       }
       /** update the global counts */
-      synd_tot  += ierr_tot; /** was: prodLe->ncols */
       synd_fail += fails;
+      cnt[TOTAL] += ierr_tot;
       mzd_free(prodLe); prodLe=NULL;
+      if (status){ free(status); status=NULL; }
       if((p->nfail > 0) && (synd_fail >= p->nfail))
 	break;
     }
     if (!((p->fdet)&&(p->fobs==NULL)&&(p->perr))){ /** except in the case of partial decoding */
       if(p->steps > 0){  /** otherwise results are invalid as we assume syndromes to match */
-	if(p->debug&1)
-	  printf("# fail_fraction total_cnt fail_cnt succes_cnt\n");
-	printf(" %g %lld %lld %lld # %s\n",(double) synd_fail/synd_tot, synd_tot, synd_fail, synd_tot-synd_fail,
-	       p->fdem ? p->fdem : p->finH );
+	cnt_out(p->debug&1,p);
       }   
     }
     else if(p->debug&1)
@@ -2089,6 +1979,7 @@ int main(int argc, char **argv){
 
     const int do_file_output = (p->perr) || (p->pdet) || (p->pobs);
     mzd_t *pErr=NULL, *pHerr=NULL, *pLerr=NULL;
+    srow=mzd_init(1,p->nchk);
     if(do_file_output){
       pErr=mzd_init(1,p->nvar);
       if(p->pdet)
@@ -2098,7 +1989,7 @@ int main(int argc, char **argv){
     }
     
     for(long long int iround=1; iround <= rounds; iround++){
-      if(p->debug &1){
+      if(p->debug&1){
 	printf("# starting round %lld of %lld pfail=%g fail=%lld total=%lld\n", iround, rounds,
 	       cnt[TOTAL] ? (double) (cnt[TOTAL]-cnt[SUCC_TOT])/cnt[TOTAL] : 0.5, cnt[TOTAL]-cnt[SUCC_TOT], cnt[TOTAL]);
 	fflush(stdout);
@@ -2110,53 +2001,54 @@ int main(int argc, char **argv){
       p->mLeT = mzd_transpose(p->mLeT,p->mLe);
       for(long long int ierr = 0; ierr < ierr_tot; ierr++){ /** cycle over errors */
 	cnt[TOTAL]++;
-	int succ_BP = 0, succ_OSD = 0;
-	if(mzd_row_is_zero(p->mHeT,ierr)){
-	  //	  printf("ierr=%d of tot=%d\n",ierr,ierr_tot);
-	  if(p->perr) 
-	    write_01_zeros(p->file_perr, p->mH->cols, p->perr); /** trivial prediction */
-	  if(p->pdet) 
-	    write_01_zeros(p->file_pdet, p->mH->rows, p->pdet); /** trivial prediction */
-	  if(p->pobs) 
-	    write_01_zeros(p->file_pobs, p->mL->rows, p->pobs); /** trivial prediction */
-	  cnt_update(CONV_TRIVIAL,0); /** trivial convergence after `0` steps */
-	  if(mzd_row_is_zero(p->mLeT,ierr)){
-	    cnt[SUCC_TRIVIAL]++;
-	    cnt[SUCC_TOT]++;
-	  }
-	  if(p->debug & 128)
-	    printf("error %lld of %lld is trivial\n",ierr+1,ierr_tot);
-	  continue ; /** next error / syndrome vector pair */     
-	}
-	else{ /** non-trivial syndrome */
 #ifndef NDEBUG	  
-	  if((p->debug&8)&&(p->nvar <= 256)&&(p->debug &512)){
-	    printf("non-trivial error %lld of %lld:\n",ierr+1,ierr_tot);
-	    if(p->mE) /** print column as row */	      
-	      for(int i=0; i<p->nvar; i++)
-		printf("%s%d%s",i==0?"[":" ",mzd_read_bit(p->mE,i,ierr),i+1<p->nvar?"":"]\n");
-	    mzd_print_row(p->mHeT,ierr);
-	    mzd_print_row(p->mLeT,ierr);
-	    out_llr("i",p->nvar,p->vLLR);
-	  }
+	if((p->debug&8)&&(p->nvar <= 256)&&(p->debug&512)){
+	  printf("non-trivial error %lld of %lld:\n",ierr+1,ierr_tot);
+	  if(p->mE) /** print column as row */	      
+	    for(int i=0; i<p->nvar; i++)
+	      printf("%s%d%s",i==0?"[":" ",mzd_read_bit(p->mE,i,ierr),i+1<p->nvar?"":"]\n");
+	  mzd_print_row(p->mHeT,ierr);
+	  mzd_print_row(p->mLeT,ierr);
+	  out_llr("i",p->nvar,p->vLLR);
+	}
 #endif 	  
-	  mzd_t * const srow = mzd_init_window(p->mHeT, ierr,0, ierr+1,p->nchk); /* syndrome row */
-	  if(p->submode&4){ /** bit 2 is set, use serial schedule */
-	    if(p->submode&8)
-	      succ_BP = do_serialV_BP(ans, srow, p->mH, p->mHt, p->vLLR, p);
-	    else
-	      succ_BP = do_serialC_BP(ans, srow, p->mH, p->mHt, p->vLLR, p);
+	//	mzd_t * const srow = mzd_init_window(p->mHeT, ierr,0, ierr+1,p->nchk); /* syndrome row */
+	//! TODO: why does the above fail? 
+	mzd_copy_row(srow,0,p->mHeT,ierr); /** syndrome row in question */
+	int res_pre=0;
+	if(p->uW >=0)
+	  res_pre = dec_ufl_one(srow,p);
+	if(res_pre){ /** pre-decoder success */
+	  if(p->perr) 
+	    write_01_vec(p->file_perr, p->ufl->error, p->mH->cols, p->perr); /** error prediction */
+	  if(p->pdet){	      
+	    write_01_vec(p->file_pdet, p->ufl->syndr, p->mH->rows, p->pdet); /** syndrome prediction */
 	  }
-	  else{             /** bit 2 is not set, parallel schedule */
-	    succ_BP = do_parallel_BP(ans, srow, p->mH, p->mHt, p->vLLR, p);	   
+	  if(!p->err)
+	    p->err=vec_init(p->nvar); /** temporary storage */
+	  if(!p->obs)
+	    p->obs=vec_init(p->mL->rows);
+	  assert(p->nvar >= p->mL->rows);
+	  vec_t *vobs = csr_vec_mul(p->err, p->obs, p->mLt, p->ufl->error, 1);
+	  if(p->pobs){
+	    write_01_vec(p->file_pobs, vobs, p->mL->rows, p->pobs); /** obs prediction */
 	  }
-	  if((!succ_BP) && (p->lerr >=0)){
-	    if(p->debug&128)
-	      printf("ierr=%lld starting OSD lerr=%d maxosd=%d\n",ierr,p->lerr, p->maxosd);
-	    do_osd_start(ans,srow,p->mH,p);
-	    succ_OSD=1;
+	  //	  cnt_update(CONV_TRIVIAL,0); /** trivial convergence after `0` steps */
+	  if(mzd_row_vec_match(p->mLeT,ierr,vobs)){
+	      cnt[SUCC_TOT]++;
+	      switch(res_pre){
+	      case 1: cnt[SUCC_TRIVIAL]++; break;
+	      case 2: cnt[SUCC_LOWW]++; break;
+	      case 3: cnt[SUCC_CLUS]++; break;
+	      default: ERROR("unexpected"); break;
+	      }
+	    continue ; /** next error / syndrome vector pair */     	    
 	  }
-
+	}
+	else{ /** failed `pre`, do actual BP */
+	  cnt[NUMB_BP]++;
+	  int conv = do_dec_bp_one(ans,srow,p);
+	  int conv_BP = conv>>1, conv_OSD = conv%2;
 	  if(do_file_output){ /** output predicted values */
 	    mzd_row_clear_offset(pErr,0,0);
 	    for(int i=0; i < p->nvar; i++)
@@ -2174,31 +2066,29 @@ int main(int argc, char **argv){
 	    }
 	  }
 	  if (!((p->fdet)&&(p->fobs==NULL)&&(p->perr))){ /** except the case of partial decoding */  
-	    if((succ_BP)||(succ_OSD)){ /** `convergence success`  */	      
+	    if((conv_BP)||(conv_OSD)){ /** `convergence success`  */	      
 	      mzd_t * const obsrow = mzd_init_window(p->mLeT, ierr,0, ierr+1,p->mLeT->ncols);
 	      if(syndrome_check(ans, obsrow, p->mL, p)){
 		cnt[SUCC_TOT]++;
-		if(succ_BP)
+		if(conv_BP)
 		  cnt[SUCC_BP]++;
 		else
 		  cnt[SUCC_OSD]++;
 	      }
 	      mzd_free(obsrow);
-	    }
-	  
-	    if(p->debug&16)
-	      printf("i=%lld of %lld succ=%d\n",ierr,ierr_tot,succ_BP);
+	    }	  
 	  }
-	  else if(p->debug&16)
-	    printf("i=%lld of %lld\n",ierr,ierr_tot);
-
-	  mzd_free(srow);
 	}
+	//	mzd_free(srow);
 	if((p->nfail) && cnt[TOTAL]-cnt[SUCC_TOT] >= p->nfail)
 	  break;
       }
     }    
-    cnt_out(p->debug&1);
+    if(p->debug&1)
+      ufl_cnt_print(p);
+    cnt_out(p->debug&1,p);
+    if(srow)
+      mzd_free(srow);
     if(pErr)
       mzd_free(pErr);
     if(pHerr)

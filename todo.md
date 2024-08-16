@@ -463,21 +463,103 @@ input: intervals [(0 r1), (q2 r2), (q3 r3) ...] and [(0,c1), (b2,c2),,, ]; DEM
 ```
 ## memorize syndrome,vector pairs
 - [ ] ~~Come up with a~~ Use the `nz` file format to keep syndrome / vector pairs.
-- [ ] Add `finU` / `outU` parameters to read / write syndrome / vector pairs files
+- [x] Add `finU` / `outU` parameters to read / write syndrome / vector pairs files
 - [ ] ~~Add hash value for DEM matrices to insure only matching files
       are read (???) -- or just verify each entry?~~
-- [ ] Add parameter `maxU` for maximum number of syndrome vectors to store.
-- [ ] Add parameters `uE` and `uW` for max energy / max weight of a codeword to store.
+- [x] Add parameter `maxU` for maximum number of syndrome vectors to store.
+- [x] Add parameters `uE` and `uW` for max energy / max weight of a codeword to store.
 - [ ] ~~Use~~ `dE` and/or `dW` ~~parameters to decide which vectors should be stored (from zero)~~
       ~~(should we also use some sort of minimum probability limit?)~~
-- [ ] Add the ability to store syndrome -> correct vector pairs in a hash (decoding modes).
-- [ ] Add a special mode to generate error / syndrome pairs to ensure near-ML decoding
+- [x] Add the ability to store syndrome -> correct vector pairs in a
+      hash (decoding modes).  Implementation: `three_vec_t` structure in `utils.h`.
 - [ ] Specific implementation (all decoding modes): 
+  - [ ] Routine to read binary 01 vectors into sparse format
+  - [ ] Special vector of size `nvec` if it has been decoded (`0`:
+        not, integer: decoder level).  Used to track what to output
+        and where.
   - [ ] When syndrome matrices are read, rows are verified against
-        those stored in a hash (including all-zero syndrome row).  
+        those stored in a hash (including all-zero syndrome row).
   - [ ] Only rows which are not found are copied to a separate matrix
         for processing.
   - [ ] Permutation vector of size `nvec` is used to match the decoded
         vectors / observables.  Entries found are written from the
         back, not found from the front.
-  - [ ] Eventually, should we replace hash storage with NN storage? 
+  - [ ] With `mode=0`, if ML decoding is enabled, hash can be updated.
+- [ ] Add a special mode to generate error / syndrome pairs to ensure
+      near-ML decoding for these syndrome vectors
+
+## alternative decoders:
+### Look-up from a hash list of small-weight vectors
+### Variant of UF.
+
+#### The algorithm: 
+1. Start with each non-zero check node, join all neighboring variable
+   nodes into a cluster.  Merge.  
+2. Try look-up decoding in each cluster.  Remove clusters where this
+   is successful (add the corresponding error vectors to the output
+   list).
+3. Check if decoding in a cluster is possible.  If yes, do RIS (?)
+   decoding in remaining clusters; remove.
+4. Try to grow the remaining clusters until some join.  Check whether
+   decoding is possible.  If yes, do RIS (?) decoding.  Otherwise,
+   back to 4 until only one cluster remains.
+5. This requires the following: 
+
+- [x] prepare_v_v_graph (sparse form of vv connectivity graph).
+- [x] given the error vector, init two_vec_t structure
+- [x] check and optionally insert vector in hash (by error vector).  
+- [x] Sort by syndrome vectors and (if multiple `e` per `s`) pick the most likely `e`; 
+- [x] Check and insert vector in hash (by syndrome).
+- [x] clean up the hash 
+- [ ] cluster algorithm implementation: 
+  - variables: `num_clus`; max_clus; `int in_cluster[nvar]`; `int label[nvar]`.
+  - when two clusters are merging, keep the smaller label.
+  - data structure for cluster lists (one for `v`, another for `c` ???)
+
+  1. Start with `r=1` (n.n.), and for every non-zero check node mark surrounding variable nodes, and an empty set `E`.
+  2. Connect these into clusters.
+  3. For each cluster `X`, calculate `H[X]`, and see if the syndrome
+     rows are redundant, and whether a local error can be found
+     locally.  (We can likely use look-up table for this step).
+     Generally, small parameter for this decoder is expected to be
+     `p*z`, where `z` is the degree of the variable node connectivity
+     graph, and `p` is the typical error probability.  Much better
+     than `n*p` for the full-matrix look-up decoding.
+  4. If yes, move the coordinates of the corresponding (min-weight)
+     vector to `E`, and erase from the field.
+  5. If syndrome is non-zero, increase `r` by one, and go back to 2.
+  6. Otherwise, sort coordinates in `E` to get the error vector.
+
+### Two-stage decoding when H=A*B is an exact product
+
+Suppose H=A*B is an exact product.  Try two-stage decoding.  Would
+this be true for concatenated codes?
+
+### List decoding for multi-step decoders
+ 
+List decoding for multi-step decoders, where we have several vectors
+and corresponding probabilities on the input of next-step decoder.
+  
+Generally, given the matrix of syndrome rows `HeT`, maintain the list
+of rows already decoded (with the reference to corresponding
+observable or soft-out row), and rows not-yet decoded.
+
+### Actual to-do list 2014/08/15
+
+- [x] Implement `pre`-decoder for `mode=0`.
+- [x] Make sure it works for classical codes 
+- [x] Debug `pre`-decoder and update documentation.
+- [ ] Replace global errors with cluster generation algorithm based on
+      a connectivity graph (use v-v graph or its powers).
+- [x] Generate statistics on rejected clusters (c- and v-node weights)
+- [ ] Add ML properties for global errors list (`u`-hash).  To this
+      end, add `obs` and an extra hash handle to `two_vec_t`
+      structure.
+- [ ] Enable min-W operation with no `P` defined (`useP=none` with a DEM)
+- [ ] Come up with a protocol to check whether a cluster can be decoded 
+- [ ] Add BP / RIS decoders for individual clusters (hope that BP
+      would converge better with many cycles cut); also, as an
+      alternative to block-wise just-in-time decoding.
+- [ ] Try to figure out why BP is so slow (excessive memory allocation?)
+- [ ] Rewrite debug statements (reasonable debug bits)
+- [ ] All debugging output -> `stderr`

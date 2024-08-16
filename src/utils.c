@@ -391,6 +391,8 @@ void read_dem_file(char *fnam, void * ptrs[3], int debug){
             inL[iL++].b = n;
             if(debug & 32) printf("n=%d iL=%d val=%d k=%d\n",n,iD,val,k);
           }
+	  else if (c[0]=='^') /** entry added by `--decompose_errors` switch in `stim` */
+	    c++;            /** just ignore */
           else
             ERROR("unrecognized entry %s"
 		  "%s:%zu:%zu: '%s'\n",c,fnam,lineno,col+1,buf);
@@ -416,8 +418,10 @@ void read_dem_file(char *fnam, void * ptrs[3], int debug){
   while(!feof(f));
 
   if(debug &1)
-    printf("# read DEM: r=%d k=%d n=%d\n",r,k,n);
-
+    printf("# read DEM %s: rows_H=%d rows_L=%d cols=%d; nz_H=%d nz_L=%d\n",fnam,r,k,n,iD,iL);
+  if((r<=0)||(k<=0)||(n<=0))
+    ERROR("invalid DEM file %s at line=%zu: rows_H=%d rows_L=%d cols=%d; nz_H=%d nz_L=%d\n",
+	  fnam,lineno,r,k,n,iD,iL);
   ptrs[0] = csr_from_pairs(ptrs[0], iD, inH, r, n);
   ptrs[1] = csr_from_pairs(ptrs[1], iL, inL, k, n);
   ptrs[2] = inP;
