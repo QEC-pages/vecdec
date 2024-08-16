@@ -23,7 +23,8 @@ extern "C"{
 #include "qllr.h"
 #include "vec.h"
 
-typedef enum EXTR_T { TOTAL,
+typedef enum EXTR_T {
+  TOTAL,        //! total decoding attempts 
   CONV_TRIVIAL, //! zero-syndrome
   SUCC_TRIVIAL, //! zero error vector guess
   CONV_LOWW,     //! LOW-Weight error (list decoding from hash)
@@ -165,7 +166,7 @@ typedef struct UFL_T {
     long long int maxU; /** max number of syndrome vectors in `U` hash */
     //    qllr_t uE; /** max energy of an error vector in `U` hash*/
     //    double uEdbl; /** max energy of an error vector in `U` hash*/
-    int uW; /** max weight of an error vector in `U` hash*/
+    int uW; /** max weight of an error vector in `U` hash (default: `1`) */
     two_vec_t *hashU_error; /** `U` hash location by error vector */
     two_vec_t *hashU_syndr; /** `U` hash location by syndrome */
     int *permHe; /** permutation vector for syndrome bits when hashU is used */
@@ -353,8 +354,9 @@ typedef struct UFL_T {
   "\t outC=[string]\t: output file name for errors in `nzlist` format\n" \
   "\t\t\t (if same as finU, the file will be updated)\n"		\
   "\t maxU=[long long integer]\t: max number of syndrome vectors in hash\n" \
-  "\t\t (if '0', no limit; default: -1, do not use the syndrome hash)\n" \
-  "\t uW=[integer]\t: max weight of an error vector in hash (0, no limit)\n" \
+  "\t\t for pre-decoding (default: '0', no limit)\n"			\
+  "\t uW=[integer]\t: max weight of an error cluster in hash (1, only weight-1 errors)\n" \
+  "\t\t ('0': no hash but skip zero-weight syndrome vectors; '-1': do not skip)\n" \
   "\t epsilon=[double]\t: small probability cutoff (default: 1e-8)\n"	\
   "\t useP=[double]\t: fixed probability value (override values in DEM file)\n"	\
   "\t\t for a quantum code specify 'fdem' OR 'finH' and ( 'finL' OR 'finG' );\n" \
@@ -439,9 +441,9 @@ typedef struct UFL_T {
 #define HELPU /** common help for decoding `mode=0` and `mode=1` */	\
   "\t With 'uW' non-negative, use hash storage to store likely syndrome\n" \
   "\t\t vectors to speed up the decoding ('maxU>0' sets the limit on the\n" \
-  "\t\t number of syndrome vectors in the hash; no limit if '0'). \n"	\
-  "\t\t 'finU' / 'outU' names of likely error vectors file (not implemented)\n" \
-  "\t\t\t(the file will be overwritten if names are the same). \n"
+  "\t\t number of syndrome vectors in the hash; no limit if '0'). \n"	
+  //  "\t\t 'finU' / 'outU' names of likely error vectors file (not implemented)\n" 
+  //  "\t\t\t(the file will be overwritten if names are the same). \n"
 
 
 #define HELP0 /** help for `mode=0` */  \

@@ -34,26 +34,26 @@
  */
 void cnt_out(int print_banner, const params_t * const p){
   if(print_banner){
-    printf("# P_FAIL FAIL N_TOT   C_TRIVIAL S_TRIVIAL  ");
+    printf("# P_FAIL N_TOT FAIL S_TOT : C_TRIVIAL S_TRIVIAL  ");
     if(p->uW)
       printf(" C_LOW S_LOW  C_CLUS S_CLUS ");
     if(p->mode==0)
-      printf(": FAIL_RIS N_RIS S_RIS S_TOT\n");
+      printf(": FAIL_RIS N_RIS S_RIS\n");
     else
-      printf(": FAIL_BP N_BP   C_BP C_BP_AVG C_BP_TOT   S_BP S_OSD S_TOT\n");    
+      printf(": FAIL_BP N_BP   C_BP C_BP_AVG C_BP_TOT   S_BP S_OSD\n");    
   }
-  printf(" %10g %lld %lld \t %lld %lld \t",
+  printf(" %10g %lld %lld %lld : %lld %lld \t",
 	 (double ) (cnt[TOTAL]-cnt[SUCC_TOT])/cnt[TOTAL],
-	 cnt[TOTAL]-cnt[SUCC_TOT], cnt[TOTAL], cnt[CONV_TRIVIAL], cnt[SUCC_TRIVIAL]);
+	 cnt[TOTAL], cnt[TOTAL]-cnt[SUCC_TOT], cnt[SUCC_TOT], cnt[CONV_TRIVIAL], cnt[SUCC_TRIVIAL]);
   if(p->uW) // use cluster-based pre-decoding
     printf(" %lld %lld \t %lld %lld ",
 	   cnt[CONV_LOWW], cnt[SUCC_LOWW], cnt[CONV_CLUS], cnt[SUCC_CLUS]);
   if(p->mode==0)
     printf(": %lld %lld %lld \n",cnt[CONV_RIS]-cnt[SUCC_RIS], cnt[CONV_RIS],cnt[SUCC_RIS]);
   else{ 
-    printf(": %lld %lld \t %lld %lld %lld \t %lld  %lld %lld\n",
+    printf(": %lld %lld \t %lld %lld %lld \t %lld  %lld\n",
 	   cnt[NUMB_BP]-cnt[SUCC_BP]-cnt[SUCC_OSD], cnt[NUMB_BP], cnt[CONV_BP], cnt[CONV_BP_AVG], cnt[CONV_BP_TOT],
-	   cnt[SUCC_BP],cnt[SUCC_OSD], cnt[SUCC_TOT]);
+	   cnt[SUCC_BP],cnt[SUCC_OSD]);
   }
 }
 

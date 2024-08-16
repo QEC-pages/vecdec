@@ -398,51 +398,6 @@ int dec_ufl_lookup(ufl_t * const u, const params_t * const p){
   return 0; /** some clusters remain undecoded */
 }
 
-
-/** functions to define:
-- [ ] grow clusters
-- [ ] RIS decoding:
- - form local_HT (set of rows in the cluster)
- - add local syndrome vector
- - see if these are linearly independent
- - if not, transpose the matrices and do the decoding.
-- [ ] items TODO:
-  - make sure the `U` hash has near-ML vectors;
-  - also, use connected clusters to increase `uW`
-  - read/write the constructed clusters into / from nz list
-    (non-trivial if ML)
-  - if the resulting clusters are sufficiently small, verify
-    decodability and use `RIS` decoding
-
-
-- [ ] implementation
-  - [x] non-zero `uW` or `maxU` triggers `pre` (also, `do_clusters()`
-        and `kill_clusters()` at the end.)
-  - [x] add LLR calculation to clusters and comparison
-  - [ ] adjust counters (add counters for `pre`)
-  - [ ] Read (or generate) `e` or `He` by rows (each row = syndrome vector)
-  - [ ] pointer vector `poivec` of size `nvec` to store rows positions to be
-        processed by BP or RIS
-  - [ ] each vector, try with `pre`, if success, write `e` to
-        `out-matrix`; otherwise add row number to `poivec` and increment
-        the counter
-  - [ ] allocate small `HeT` matrix; go over remaining rows (in
-        `poivec`) and assign its elements
-  - [ ] copy `output` to proper rows of `out-matrix`
-  - [ ] if internally comparing `obs`, come up with the protocol to
-        update success counters.
-
-## Additional notes:
-
-The small parameter is roughtly `x= z_r z_c p` where `z_r` and `z_c` are row
-and column weights.  This parameter is expected to remain more or less
-the same for phenomenological error model and for the corresponding
-circuit error model.  With clusters of size up to `m`, the
-residual error rate should scale as `n*p*x^m /m!`.
-
-*/
-
-
 csr_t * do_vv_graph(const csr_t * const mH, const csr_t * const mHT, const params_t *const p){
   int max_buf=10, nz=0;
   //! WARNING: cannot reuse this matrix!!!!
@@ -724,8 +679,8 @@ int dec_ufl_one(const mzd_t * const srow, params_t * const p){
   svec->wei = w;
 
 #ifndef NDEBUG
-  if(p->debug&2){
-    printf("# decoding w_s=%d\n",err->wei);
+  if(p->debug&32){
+    printf("# decoding w_s=%d\n",svec->wei);
     if(p->debug&64)
       vec_print(svec);
   }

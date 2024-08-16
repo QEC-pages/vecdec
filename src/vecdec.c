@@ -32,8 +32,8 @@ params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50, .pads=0,
   .lerr=-1, .maxosd=100, .swait=0, .maxC=0,
   .dW=0, .minW=INT_MAX, .maxW=0, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
   .bpalpha=1, .bpbeta=1, .bpgamma=0.5, .bpretry=1, 
-  .uW=0, //.uEdbl=-1, .uE=-1,
-  .numU=0, .numE=0, .maxU=-1,
+  .uW=1, //.uEdbl=-1, .uE=-1,
+  .numU=0, .numE=0, .maxU=0,
   .hashU_error=NULL, .hashU_syndr=NULL, .permHe=NULL,
   .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8, .useP=0, .dmin=0,
   .debug=1, .fdem=NULL, .fout="tmp",
@@ -64,8 +64,8 @@ params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50, .pads=0,
 params_t prm_default={  .steps=50, .pads=0, 
   .lerr=-1, .maxosd=100, .bpgamma=0.5, .bpretry=1, .swait=0, .maxC=0,
   .dW=0, .minW=INT_MAX, .maxW=0, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
-  .uW=0, //.uEdbl=-1, .uE=-1,
-  .maxU=-1, .bpalpha=1, .bpbeta=1,
+  .uW=1, //.uEdbl=-1, .uE=-1,
+  .maxU=0, .bpalpha=1, .bpbeta=1,
   .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8, .useP=0, .dmin=0,
   .debug=1, .fout="tmp", .ferr=NULL,
   .mode=-1, .submode=0, .use_stdout=0, 
@@ -746,7 +746,8 @@ void init_Ht(params_t *p){
       printf("# generating errors of weight up to %d\n",p->uW);
     p->v0 = vec_init(p->nchk);
     p->v1 = vec_init(p->nchk);
-    do_clusters(p);
+    if(p->uW >=0)
+      do_clusters(p);
   }
     if(p->debug&1)
   printf("# initialize matrices\n");
@@ -973,9 +974,11 @@ int var_init(int argc, char **argv, params_t *p){
       if (p->debug&4){
 	printf("# read %s, uW=%d\n",argv[i],p-> uW);
 	if (p->uW < 0)
-	  printf("# no limit on error/codeword weight to store\n");
+	  printf("# will not attempt pre-decoding\n");
+	else if (p->uW == 0)
+	  printf("# will only skip zero syndrome vectors\n");
 	else
-	  printf("# setting upper limit 'minW+%d' on error/codeword weight to store\n",p->uW);
+	  printf("# will pre-compute syndromes for clusters of weight up to %d\n",p->uW);
       }	
       if(p->mode>=2)
 	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
@@ -1577,7 +1580,6 @@ int var_init(int argc, char **argv, params_t *p){
     //      printf(" P[%d]=%g \n",i,p->vP[i]);
   }
   
-  
   if(p->fdet){/** expect both `fdet` and `fobs` to be defined */
     p->internal=0;
     p->file_det=fopen(p->fdet, "r");
@@ -1653,7 +1655,10 @@ int var_init(int argc, char **argv, params_t *p){
       ERROR("mode=%d not defined\n",p->mode);
     }
   }
-
+  /** reset the counters */
+  for (int i=0; i < EXTR_MAX; i++)
+    cnt[i]=0;
+  
   return 0;
 };
 
@@ -1778,69 +1783,80 @@ int main(int argc, char **argv){
   long long int ierr_tot=0, rounds=(long long int )ceil((double) p->ntot / (double) p->nvec);
   if(((p->mode == 0) || (p->mode == 1)) && (p->debug & 2))
     printf("# ntot=%lld nvec=%d will do calculation in %lld rounds\n",p->ntot,p->nvec,rounds);
+  mzd_t *mE0=NULL;
 
   switch(p->mode){
-    long long int synd_tot, synd_fail; /** case 0 */
+    long long int synd_fail; 
+    int *status;                   
+    mzd_t *srow;                  /** case 0, case 1 */
     qllr_t *ans;                  /** case 1 */
     size_t size;                  /** case 3 */
     char * comment;
   case 0: /** `mode=0` internal `vecdec` decoder */
     /** at least one round always */
-    synd_tot=0, synd_fail=0;
+    synd_fail=0;
+    srow=mzd_init(1,p->nchk);
+
     for(long long int iround=1; iround <= rounds; iround++){
       if(p->debug &1){
-	printf("# starting round %lld of %lld",
-	       iround, rounds);
-	if(synd_tot>0)
-	  printf(" pfail=%g fail=%lld out of total=%lld\n", (double) synd_fail/synd_tot , synd_fail,synd_tot);
+	printf("# starting round %lld of %lld",   iround, rounds);
+	if(cnt[TOTAL])
+	  printf(" pfail=%g fail=%lld out of total=%lld\n",
+		 (double) (cnt[TOTAL]-cnt[SUCC_TOT])/cnt[TOTAL],  cnt[TOTAL]-cnt[SUCC_TOT], cnt[TOTAL]);
 	else
 	  printf("\n");
-	fflush(stdout);
       }
     
       if( !(ierr_tot = do_err_vecs(p)))
 	break; /** no more rounds */
-#if 0 /* TRY pre-decoding */
-      int *status = calloc(ierr_tot,sizeof(int)); /** non-zero value = success pre_dec */
-      p->mHeT = mzd_transpose(p->mHeT,p->mHe);
-      mzd_t *mE0=mzd_init(p->nvec,p->nvar);
-      long long int cnt_pre = 0;
-      for(long long int ierr = 0; ierr < ierr_tot; ierr++){ /** cycle over errors */
-	mzd_copy_row(srow,0,p->mHeT,ierr); /** syndrome row in question */
-	int res_pre = dec_ufl_one(srow,p);
-	if(res_pre){ /** pre-decoder success */
-	  mzd_row_from_vec(mE0,ierr,ufl->error);
-	  status[ierr] = res_pre;
-	  cnt_pre++;
-	}
-      }
-      if(cnt_pre < ierr_tot){ /** some decoder failures */
-	long long int num = ierr_tot - cnt_pre;
-	mzd_t *mST = mzd_init(p->nchk,num);
-	for(long long int ierr =0, cnt=0 ; ierr < ierr_tot; ierr++){
-	  if(!status[ierr])
-	    mzd_copy_row(mST, cnt++, mHeT,ierr);
-	}
-	mzd_t * mS = mzd_transpose(NULL,mST);
-	mzd_t * mE2=do_decode(mS, p); /** each row a decoded error vector */
-	for(long long int ierr =0, cnt=0 ; ierr < ierr_tot; ierr++){
-	  if(!status[ierr]){
-	    mzd_copy_row(mE0, ierr, mE2,cnt++);
-	    status[ierr]=4;
+      if(p->uW >= 0){ /** pre-decoding enabled */
+	status = calloc(ierr_tot,sizeof(int)); /** non-zero value = success pre_dec */
+	if(!status) ERROR("memory allocation");
+	p->mHeT = mzd_transpose(p->mHeT,p->mHe);
+	mE0=mzd_init(p->nvec,p->nvar);
+	long long int cnt_pre = 0;
+	for(long long int ierr = 0; ierr < ierr_tot; ierr++){ /** cycle over errors */
+	  mzd_copy_row(srow,0,p->mHeT,ierr); /** syndrome row in question */       
+	  int res_pre = dec_ufl_one(srow,p);
+	  if(res_pre){ /** pre-decoder success */
+	    mzd_row_add_vec(mE0,ierr,p->ufl->error,1);
+	    status[ierr] = res_pre;
+	    cnt_pre++;
 	  }
-	}	
+	}
+	if(cnt_pre < ierr_tot){ /** some pre-decoder failures */
+	  long long int num = ierr_tot - cnt_pre;
+	  mzd_t *mST = mzd_init(num,p->nchk);
+	  for(long long int ierr =0, row=0 ; ierr < ierr_tot; ierr++){
+	    if(!status[ierr])
+	      mzd_copy_row(mST, row++,p->mHeT,ierr);
+	  }
+	  mzd_t * mS = mzd_transpose(NULL,mST);
+	  mzd_t * mE2=do_decode(mS, p); /** each row a decoded error vector */
+	  for(long long int ierr =0, row=0 ; ierr < ierr_tot; ierr++){
+	    if(!status[ierr]){
+	      mzd_copy_row(mE0, ierr, mE2, row++);
+	      status[ierr]=4;
+	      cnt[CONV_RIS]++;
+	    }
+	  }
+	  mzd_free(mE2);
+	  mzd_free(mS);
+	  mzd_free(mST);
+	}
       }
-#endif /* TRY pre-decoding */      
-
-      // actually decode and generate error vectors
-      mzd_t *mE0=NULL;
+      else{ /* no pre-decoding */      
+	status=NULL;
+	// actually decode and generate error vectors
 #ifndef NDEBUG  /** need `mHe` later */
-      mzd_t *mS=mzd_copy(NULL,p->mHe);
-      mE0=do_decode(mS, p); /** each row a decoded error vector */
-      mzd_free(mS); mS=NULL;
+	mzd_t *mS=mzd_copy(NULL,p->mHe);
+	mE0=do_decode(mS, p); /** each row a decoded error vector */
+	mzd_free(mS); mS=NULL;
 #else
-      mE0=do_decode(p->mHe, p); /** each row a decoded error vector */
+	mE0=do_decode(p->mHe, p); /** each row a decoded error vector */
 #endif /* NDEBUG */
+	cnt[CONV_RIS] += ierr_tot;
+      }  
       mzd_t *mE0t = mzd_transpose(NULL, mE0);
       mzd_free(mE0); mE0=NULL;
         
@@ -1875,29 +1891,62 @@ int main(int argc, char **argv){
 	mzd_write_01(p->file_pobs, prodLe, 1,p->pobs, p->debug);
 
       mzd_add(prodLe, prodLe, p->mLe);
-
       int fails=0;
-      for(rci_t ic=0; ic< ierr_tot; ic++){
-	rci_t ir=0;
-	if(mzd_find_pivot(prodLe, ir, ic, &ir, &ic)){
-	  fails++;
+      if(p->uW >=0){ /** pre-decoding enabled */
+	assert(status);
+	rci_t j=0;
+	for(rci_t ic=0; ic < ierr_tot; ic++){
+	  rci_t ir=0;
+	  if(mzd_find_pivot(prodLe, ir, ic, &ir, &ic)){
+	    //	    printf("# j=%d pivot at %d\n",j, ic);
+	    cnt[SUCC_TOT] += ic - j;
+	    while(j<ic){ /** success */
+	      switch(status[j++]){
+	      case 1 : cnt[SUCC_TRIVIAL]++; break;
+	      case 2 : cnt[SUCC_LOWW]++; break;
+	      case 3 : cnt[SUCC_CLUS]++; break;
+	      case 4 : cnt[SUCC_RIS]++;  break;
+	      default: ERROR("unexpected");
+	      }
+	    }
+	    j++;
+	    fails++;
+	  }
+	  else /** no more pivots */
+	    break;            
 	}
-	else /** no more pivots */
-	  break;
+	cnt[SUCC_TOT] += ierr_tot - j;      
+	while(j<ierr_tot){ /** success */
+	  switch(status[j++]){
+	  case 1 : cnt[SUCC_TRIVIAL]++; break;
+	  case 2 : cnt[SUCC_LOWW]++; break;
+	  case 3 : cnt[SUCC_CLUS]++; break;
+	  case 4 : cnt[SUCC_RIS]++;  break;
+	  default: ERROR("unexpected");
+	  }
+	}
+      }
+      else{ /** no pre-decoding */
+	for(rci_t ic=0; ic < ierr_tot; ic++){
+	  rci_t ir=0;
+	  if(mzd_find_pivot(prodLe, ir, ic, &ir, &ic))
+	    fails++;	
+	  else /** no more pivots */
+	    break;
+	}      
+	cnt[SUCC_RIS] += ierr_tot - fails;
       }
       /** update the global counts */
-      synd_tot  += ierr_tot; /** was: prodLe->ncols */
       synd_fail += fails;
+      cnt[TOTAL] += ierr_tot;
       mzd_free(prodLe); prodLe=NULL;
+      if (status){ free(status); status=NULL; }
       if((p->nfail > 0) && (synd_fail >= p->nfail))
 	break;
     }
     if (!((p->fdet)&&(p->fobs==NULL)&&(p->perr))){ /** except in the case of partial decoding */
       if(p->steps > 0){  /** otherwise results are invalid as we assume syndromes to match */
-	if(p->debug&1)
-	  printf("# fail_fraction total_cnt fail_cnt succes_cnt\n");
-	printf(" %g %lld %lld %lld # %s\n",(double) synd_fail/synd_tot, synd_tot, synd_fail, synd_tot-synd_fail,
-	       p->fdem ? p->fdem : p->finH );
+	cnt_out(p->debug&1,p);
       }   
     }
     else if(p->debug&1)
@@ -1911,7 +1960,7 @@ int main(int argc, char **argv){
 
     const int do_file_output = (p->perr) || (p->pdet) || (p->pobs);
     mzd_t *pErr=NULL, *pHerr=NULL, *pLerr=NULL;
-    mzd_t *srow=mzd_init(1,p->nchk);
+    srow=mzd_init(1,p->nchk);
     if(do_file_output){
       pErr=mzd_init(1,p->nvar);
       if(p->pdet)
@@ -1947,7 +1996,9 @@ int main(int argc, char **argv){
 	//	mzd_t * const srow = mzd_init_window(p->mHeT, ierr,0, ierr+1,p->nchk); /* syndrome row */
 	//! TODO: why does the above fail? 
 	mzd_copy_row(srow,0,p->mHeT,ierr); /** syndrome row in question */
-	int res_pre = dec_ufl_one(srow,p);
+	int res_pre=0;
+	if(p->uW >=0)
+	  res_pre = dec_ufl_one(srow,p);
 	if(res_pre){ /** pre-decoder success */
 	  if(p->perr) 
 	    write_01_vec(p->file_perr, p->ufl->error, p->mH->cols, p->perr); /** error prediction */
