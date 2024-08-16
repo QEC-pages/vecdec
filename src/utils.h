@@ -169,7 +169,7 @@ static inline int by_syndrome(void *a, void *b){
   void print_one_vec(const one_vec_t * const pvec);
 
   /** @brief compare two `one_vec_t` structures by energy */
-static inline int by_energy(void *a, void *b){
+  static inline int by_energy(void *a, void *b){
   const one_vec_t *pa = (one_vec_t *) a;
   const one_vec_t *pb = (one_vec_t *) b;
   if (pa->energ < pb->energ)

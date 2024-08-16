@@ -166,7 +166,8 @@ typedef struct UFL_T {
     long long int maxU; /** max number of syndrome vectors in `U` hash */
     //    qllr_t uE; /** max energy of an error vector in `U` hash*/
     //    double uEdbl; /** max energy of an error vector in `U` hash*/
-    int uW; /** max weight of an error vector in `U` hash (default: `1`) */
+    int uW; /** max weight of an error vector in `U` hash (default: `2`) */
+    int uR; /** max distance between v-v neighbors for errors in syndrome hash (default: `4`) */
     two_vec_t *hashU_error; /** `U` hash location by error vector */
     two_vec_t *hashU_syndr; /** `U` hash location by syndrome */
     int *permHe; /** permutation vector for syndrome bits when hashU is used */
@@ -353,10 +354,12 @@ typedef struct UFL_T {
   "\t finU=[string]\t: input file name for errors in `nzlist` format\n" \
   "\t outC=[string]\t: output file name for errors in `nzlist` format\n" \
   "\t\t\t (if same as finU, the file will be updated)\n"		\
+  "\t uW=[integer]\t: max weight of an error cluster in hash (default: 2)\n" \
+  "\t\t ('0': no hash but skip zero-weight syndrome vectors; '-1': do not skip)\n" \
+  "\t uR=[integer]\t: max range of v-v neighbors for errors in syndrome hash\n" \
+  "\t\t (use '0' for no limit; default: 4)\n"				\
   "\t maxU=[long long integer]\t: max number of syndrome vectors in hash\n" \
   "\t\t for pre-decoding (default: '0', no limit)\n"			\
-  "\t uW=[integer]\t: max weight of an error cluster in hash (1, only weight-1 errors)\n" \
-  "\t\t ('0': no hash but skip zero-weight syndrome vectors; '-1': do not skip)\n" \
   "\t epsilon=[double]\t: small probability cutoff (default: 1e-8)\n"	\
   "\t useP=[double]\t: fixed probability value (override values in DEM file)\n"	\
   "\t\t for a quantum code specify 'fdem' OR 'finH' and ( 'finL' OR 'finG' );\n" \

@@ -520,53 +520,136 @@ int next_vec(const int w, int arr[], const int max){
   return 1;
 }
 
+void hash_add_maybe(vec_t *vec, params_t * const p){
+  two_vec_t *pvec, *entry;
+  vec_t * sorted = vec_copy(vec);
+  qsort(sorted->vec, sorted->wei, sizeof(rci_t), cmp_rci_t);
+  entry = two_vec_init(sorted,p);
+  const size_t keylen = entry->w_e * sizeof(rci_t);
+  HASH_FIND(hh, p->hashU_error, entry->err, keylen, pvec);
+  if(!pvec){ /** vector not found, inserting */
+    HASH_ADD(hh, p->hashU_error, err, keylen, entry); /** store in the `hash` */
+  }
+  else
+    ERROR("unexpected");
+  free(sorted);
+}
+
 void do_clusters(params_t * const p){
-  int wmax=p->uW;
+  const int wmax=p->uW;
   vec_t *err = vec_init(wmax);
   two_vec_t *entry, *pvec;
-  int max = p->mHt->rows;
+  const int max = p->mHt->rows;
 
   long long int cnt_err=0, cnt_synd=0;
-  for(int w=1; w<=wmax; w++){
-    //        printf("w=%d max=%d \n",w,max);
-    int cnt=0;
-    for(int j=0; j<w; j++) // initial invalid vector
-      err->vec[j]=j;
-    err->vec[w-1]=w-2;/** this is a kludge to ensure all vectors show up below */
-    err->wei=w;
+  if(p->uR == 0){
+    for(int w=1; w<=wmax; w++){
+      //        printf("w=%d max=%d \n",w,max);
+      for(int j=0; j<w; j++) // initial invalid vector
+	err->vec[j]=j;
+      err->vec[w-1]=w-2;/** this is a kludge to ensure all vectors show up below */
+      err->wei=w;
 
-    while(next_vec(w,err->vec,max)){
-      cnt++;
-      entry = two_vec_init(err,p);
-      //            two_vec_print(entry);
-      const size_t keylen = entry->w_e * sizeof(rci_t);
-      HASH_FIND(hh, p->hashU_error, entry->err, keylen, pvec);
-      if(!pvec){ /** vector not found, inserting */
-	HASH_ADD(hh, p->hashU_error, err, keylen, entry); /** store in the `hash` */
-	if((p->maxU > 0) && (cnt_err + cnt >= p->maxU)){
-	  if(p->debug&1)
-	    printf("# reached limit of maxU=%lld errors\n",p->maxU);
-	  break;
+      while(next_vec(w,err->vec,max)){
+	cnt_err++;
+	hash_add_maybe(err,p);
+	if((p->maxU > 0) && (cnt_err >= p->maxU))
+	  goto stop_label;
+      }           
+    }
+  }
+  else{/** the actual cluster code */
+    if(wmax > 4)
+      ERROR("uR-local error clusters of weight %d are currently not supported, max=4",wmax);
+    /** code for w=1 */
+    err->wei=1; 
+    for(int j=0; j<max; j++){ // initial invalid vector
+      cnt_err++;
+      err->vec[0]=j;
+      hash_add_maybe(err,p);
+      if((p->maxU > 0) && (cnt_err >= p->maxU))
+	goto stop_label;
+    }
+    
+    if(wmax>1){
+      /** construct uR-local adjacency matrix for vv graph */      
+      csr_t *G1 = do_vv_graph(p->mH,p->mHt, p);
+      csr_t *GG=G1, *G2;
+      for(int jj=1; jj<= p->uR; jj++){
+	for(int j=0; j<max; j++){ // initial invalid vector
+	  err->vec[0]=j;
+	  for(int i1=GG->p[j]; i1 < GG->p[j+1]; i1++){
+	    int idx1=GG->i[i1];
+	    if(idx1>j){
+	      cnt_err++;
+	      err->wei=2; 
+	      err->vec[1]=idx1;
+	      hash_add_maybe(err,p);
+	      if((p->maxU > 0) && (cnt_err >= p->maxU))
+		goto stop_label;	  
+	      if(wmax>2){
+		for(int i2=GG->p[idx1]; i2 < GG->p[idx1+1]; i2++){
+		  int idx2=GG->i[i2];
+		  if((idx2>j)&&(idx2!=idx1)){
+		    cnt_err++;
+		    err->wei=3; 
+		    err->vec[2]=idx2;
+		    hash_add_maybe(err,p);
+		    if((p->maxU > 0) && (cnt_err >= p->maxU))
+		      goto stop_label;			    
+		    if(wmax>3){
+		      err->wei=4; 
+		      for(int i3=GG->p[idx2]; i3 < GG->p[idx2+1]; i3++){
+			int idx3=GG->i[i3];
+			if((idx3>j)&&(idx3!=idx2)&& (idx3!=idx1)){
+			  cnt_err++;
+			  err->vec[3]=idx3;
+			  hash_add_maybe(err,p);
+			  if((p->maxU > 0) && (cnt_err >= p->maxU))
+			    goto stop_label;
+			}
+		      }
+		    }
+		  }
+		}
+	      }
+	    }
+	  }
+	}
+	if(jj < p->uR){
+	  G2 = do_vv_graph(G1,GG, p);
+	  if(G1!=GG)
+	    csr_free(GG);	
+	  GG = G2;
 	}
       }
-      else
-	ERROR("unexpected");
+      csr_free(G1);
+      csr_free(GG);
     }
-#if 0 /** generate stats */
-    int num=1, den=1; /** expected {max \choose w} */
-    for(int i=0; i<w; i++){
-      num *= (max-i);
-      den *= (i+1);
-    }
-    if(p->debug&2)
-      printf("w=%d max=%d cnt=%d expected=%d=%d/%d\n\n",w,max,cnt,num/den,num,den);
-#endif
-    cnt_err += cnt;
   }
+
+ stop_label:
+  if((p->maxU > 0) && (cnt_err >= p->maxU))
+    if(p->debug&1)
+      printf("# reached limit of maxU=%lld errors in hash\n",p->maxU);
+  
   /** TODO: use hash by syndrome (`det`) with secondary hash by `obs`
    *  to enable near-ML decoding for these low-weight clusters
    */
   HASH_SORT(p->hashU_error, by_syndrome);
+
+  //#ifndef NDEBUG
+  if(p->debug&64){
+    int cnt=0;
+    printf("############################# error vectors in hash:\n");
+    HASH_ITER(hh, p->hashU_error, entry, pvec) {
+      cnt++;
+      two_vec_print(entry);
+    }
+    printf("############################# total of %d\n\n",cnt);
+  }
+  //#endif
+  
 
   //  printf("move entries syndrome ordering:\n");
   two_vec_t *tmp=NULL, *good=NULL;
@@ -674,7 +757,9 @@ int dec_ufl_one(const mzd_t * const srow, params_t * const p){
   int idx=0, w=0;
   const word * const rawrow = srow->rows[0];
   while(((idx=nextelement(rawrow,srow->width,idx))!=-1)&&(idx<srow->ncols)){
-    svec->vec[w++]=idx++;
+    svec->vec[w++]=idx;
+    if(++idx == srow->ncols)
+      break;
   }
   svec->wei = w;
 

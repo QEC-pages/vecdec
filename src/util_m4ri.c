@@ -541,6 +541,8 @@ csr_t * csr_from_mzd(csr_t *mat, const mzd_t * const orig){
     const word * const rawrow = orig->rows[i];
     while(((idx=nextelement(rawrow,orig->width,idx))!=-1)&&(idx<orig->ncols)){
       mat->i[j++]=idx++;
+      if(idx >= orig->ncols)
+	break;
     }
 #else /** naive version */
     for(int idx=0; idx< orig->ncols; idx++)

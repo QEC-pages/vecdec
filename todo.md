@@ -546,9 +546,9 @@ observable or soft-out row), and rows not-yet decoded.
 
 ### Actual to-do list 2014/08/15
 
-- [ ] Implement `pre`-decoder for `mode=0`.
+- [x] Implement `pre`-decoder for `mode=0`.
 - [x] Make sure it works for classical codes 
-- [ ] Debug `pre`-decoder and update documentation.
+- [x] Debug `pre`-decoder and update documentation.
 - [ ] Replace global errors with cluster generation algorithm based on
       a connectivity graph (use v-v graph or its powers).
 - [x] Generate statistics on rejected clusters (c- and v-node weights)

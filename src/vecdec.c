@@ -32,7 +32,7 @@ params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50, .pads=0,
   .lerr=-1, .maxosd=100, .swait=0, .maxC=0,
   .dW=0, .minW=INT_MAX, .maxW=0, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
   .bpalpha=1, .bpbeta=1, .bpgamma=0.5, .bpretry=1, 
-  .uW=1, //.uEdbl=-1, .uE=-1,
+  .uW=2, .uR=4, //.uEdbl=-1, .uE=-1,
   .numU=0, .numE=0, .maxU=0,
   .hashU_error=NULL, .hashU_syndr=NULL, .permHe=NULL,
   .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8, .useP=0, .dmin=0,
@@ -64,7 +64,7 @@ params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50, .pads=0,
 params_t prm_default={  .steps=50, .pads=0, 
   .lerr=-1, .maxosd=100, .bpgamma=0.5, .bpretry=1, .swait=0, .maxC=0,
   .dW=0, .minW=INT_MAX, .maxW=0, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
-  .uW=1, //.uEdbl=-1, .uE=-1,
+  .uW=2, .uR=4, //.uEdbl=-1, .uE=-1,
   .maxU=0, .bpalpha=1, .bpbeta=1,
   .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8, .useP=0, .dmin=0,
   .debug=1, .fout="tmp", .ferr=NULL,
@@ -741,9 +741,13 @@ void init_Ht(params_t *p){
   p->mHt = csr_transpose(p->mHt, p->mH);
   //! construct v-v graph 
   //  csr_t *vv_gr = do_vv_graph(p->mH, p->mHt, p);
-  if(p->uW){
-    if(p->debug&1)
-      printf("# generating errors of weight up to %d\n",p->uW);
+  if(p->uW>0){
+    if(p->debug&1){
+      if(p->uR==0)
+	printf("# generating errors of weight up to %d for syndrome hash\n",p->uW);
+      else 
+	printf("# generating error clusters of w <= %d and radius <= %d for syndrome hash\n",p->uW, p->uR);
+    }
     p->v0 = vec_init(p->nchk);
     p->v1 = vec_init(p->nchk);
     if(p->uW >=0)
@@ -979,6 +983,20 @@ int var_init(int argc, char **argv, params_t *p){
 	  printf("# will only skip zero syndrome vectors\n");
 	else
 	  printf("# will pre-compute syndromes for clusters of weight up to %d\n",p->uW);
+      }	
+      if(p->mode>=2)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
+    }
+    else if (sscanf(argv[i],"uR=%d",&dbg)==1){ /** `uR` */
+      p -> uR = dbg;
+      if (p->debug&4){
+	printf("# read %s, uR=%d\n",argv[i],p-> uR);
+	if (p->uR < 0)
+	  ERROR("invalid uR value");
+	else if (p->uR == 0)
+	  printf("# will use any errors of weight up to uW=%d for syndrome hash\n",p->uW);
+	else
+	  printf("# will use r-local v-v error clusters for syndrome hash, r<=uR\n");
       }	
       if(p->mode>=2)
 	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
@@ -1935,6 +1953,7 @@ int main(int argc, char **argv){
 	    break;
 	}      
 	cnt[SUCC_RIS] += ierr_tot - fails;
+	cnt[SUCC_TOT] += ierr_tot - fails;
       }
       /** update the global counts */
       synd_fail += fails;
