@@ -2542,7 +2542,7 @@ int main(int argc, char **argv){
     qllr_t *ans;                  /** case 1 */
     size_t size;                  /** case 3 */
     char * comment;
-  case 0: /** `mode=0` internal `vecdec` decoder */
+  case 0:{ /** `mode=0` internal `vecdec` decoder */
     /** at least one round always */
     synd_fail=0;
     srow=mzd_init(1,p->nchk);
@@ -2562,7 +2562,7 @@ int main(int argc, char **argv){
 
       // actually decode and generate error vectors
       mzd_t *mE0=NULL;
-
+    
 
 if (p->submode & 1) { /** submode 1 */
             // In submode1, we use Maximum Likelihood decoder
@@ -3077,8 +3077,7 @@ if (p->submode & 1) { /** submode 1 */
   default:
     ERROR("mode=%d not supported\n",p->mode);
     break;
-  }
-
+}
   var_kill(p);
   return 0;
 }
