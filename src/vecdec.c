@@ -890,6 +890,15 @@ void csr_add_row_to_row(csr_t *A, int i, const csr_t *B, int j) {
         }
         A->i = new_i;
         A->nzmax = new_nzmax;
+    }else {
+    int *new_i = realloc(A->i, new_nzmax * sizeof(int));
+    if (new_i == NULL) {
+        free(toggle_columns);
+        ERROR("Memory reallocation failed in csr_add_row_to_row.\n");
+        return;
+    }
+    A->i = new_i;
+    A->nzmax = new_nzmax;
     }
 
     if (nz_required != old_nz) {
@@ -1232,6 +1241,10 @@ void BAR_MCMC(csr_t *mEt0_csr, csr_t *mEt_csr, params_t const * const p, int i) 
 
     for (int k = 0; k < K; k++) {
         error_vectors[k] = csr_copy(mEt0_csr);
+        if (error_vectors[k] == NULL) {
+    ERROR("Memory allocation failed for error_vectors[%d].\n", k);
+    return;
+        }
         for (int row = 0; row < mK_rows; row++) {
             if (k & (1 << row)) {
                 csr_add_row_to_row(error_vectors[k], i, p->mK, row);
@@ -1244,7 +1257,15 @@ void BAR_MCMC(csr_t *mEt0_csr, csr_t *mEt_csr, params_t const * const p, int i) 
     int **N = malloc(K * sizeof(int *));
     for (int k = 0; k < K; k++) {
         U[k] = malloc(K * sizeof(double *));
+        if (U[k] == NULL) {
+    ERROR("Memory allocation failed for U[%d].\n", k);
+    return;
+    }
         N[k] = calloc(K, sizeof(int)); // Initialize N to 0
+      if (N[k] == NULL) {
+    ERROR("Memory allocation failed for N[%d].\n", k);
+    return;
+    }
         for (int j = 0; j < K; j++) {
             U[k][j] = malloc(max_iterations * sizeof(double));
             if (U[k][j] == NULL) {
@@ -1461,6 +1482,13 @@ mzd_t *do_decode_BAR(mzd_t *mS, params_t const * const p) {
     }
 
     mzd_t *mEt = mzd_from_csr(NULL, mEt_csr);
+    csr_free(mE_csr);
+    csr_free(mEt0_csr);
+    csr_free(mEt_csr);
+    mzd_free(mHx_dense);
+    mzd_free(mE_dense);
+    mzd_free(mEt_dense);
+
     return mEt;
 }
 
