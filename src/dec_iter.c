@@ -1,7 +1,7 @@
 /**
- *  @file iter_dec.c
+ *  @file dec_iter.c
  *
- * @brief iter_dec - iterative decoder for quantum and classical codes
+ * @brief dec_iter - iterative decoder for quantum and classical codes
  *
  * @author Leonid Pryadko (University of California, Riverside)
  *
@@ -25,15 +25,40 @@
 #include "qllr.h"
 #include "vecdec.h"
 
-
-void cnt_out(int print_banner){
-  if(print_banner)
-    printf("# FAIL_FRAC TOTAL  C_TRIVIAL S_TRIVIAL  C_BP C_BP_AVG C_BP_TOT S_BP   S_OSD S_TOT\n");
-  printf(" %10g %lld  %lld %lld      %lld %lld %lld %lld  %lld %lld\n",
-	 (double ) (cnt[TOTAL]-cnt[SUCC_TOT])/cnt[TOTAL],cnt[TOTAL],
-	 cnt[CONV_TRIVIAL], cnt[SUCC_TRIVIAL],
-	 cnt[CONV_BP], cnt[CONV_BP_AVG], cnt[CONV_BP_TOT], cnt[SUCC_BP],
-	 cnt[SUCC_OSD], cnt[SUCC_TOT]);
+/** 
+ * @brief print out various counters 
+ * @param print_banner meaning is clear
+ *  mode this is p->mode (should be 0 or 1)
+ *  osd whether BP+OSD was used `(p->lerr>=0)` (BP only)
+ *  use_pre whether pre-decoder was used.
+ */
+void cnt_out(int print_banner, const params_t * const p){
+  if(print_banner){
+    printf("# P_FAIL N_TOT FAIL S_TOT ");
+    if(p->uW>=0)
+      printf(": C_TRIVIAL S_TRIVIAL  ");
+    if(p->uW>0)
+      printf(" C_LOW S_LOW  C_CLUS S_CLUS ");
+    if(p->mode==0)
+      printf(": FAIL_RIS N_RIS S_RIS\n");
+    else
+      printf(": FAIL_BP N_BP   C_BP C_BP_AVG C_BP_TOT   S_BP S_OSD\n");    
+  }
+  printf(" %10g %lld %lld %lld ",
+	 (double ) (cnt[TOTAL]-cnt[SUCC_TOT])/cnt[TOTAL],
+	 cnt[TOTAL], cnt[TOTAL]-cnt[SUCC_TOT], cnt[SUCC_TOT]);
+  if(p->uW>=0)
+    printf(": %lld %lld \t", cnt[CONV_TRIVIAL], cnt[SUCC_TRIVIAL]);
+  if(p->uW>0) // use cluster-based pre-decoding
+    printf(" %lld %lld \t %lld %lld ",
+	   cnt[CONV_LOWW], cnt[SUCC_LOWW], cnt[CONV_CLUS], cnt[SUCC_CLUS]);
+  if(p->mode==0)
+    printf(": %lld %lld %lld \n",cnt[CONV_RIS]-cnt[SUCC_RIS], cnt[CONV_RIS],cnt[SUCC_RIS]);
+  else{ 
+    printf(": %lld %lld \t %lld %lld %lld \t %lld  %lld\n",
+	   cnt[NUMB_BP]-cnt[SUCC_BP]-cnt[SUCC_OSD], cnt[NUMB_BP], cnt[CONV_BP], cnt[CONV_BP_AVG], cnt[CONV_BP_TOT],
+	   cnt[SUCC_BP],cnt[SUCC_OSD]);
+  }
 }
 
 /** @brief print entire `one_vec_t` structure by pointer */
@@ -46,12 +71,12 @@ void print_one_vec(const one_vec_t * const pvec){
 void cnt_update(extr_t which, int istep){
   const long long int max = (LLONG_MAX >> 3);
   cnt[which]++;
-  if((which == CONV_BP) || (which == CONV_BP_AVG))
+  if((which == CONV_BP) || (which == CONV_BP_AVG) || (which == CONV_TRIVIAL))
     cnt[CONV_BP_TOT]++;
   iter1[which]+=abs(istep);
   iter2[which]+=istep*istep;
   if((cnt[which] > max) ||(iter1[which] > max) || (iter2[which]>max)){
-    cnt_out(1);
+    cnt_out(1,&prm);
     ERROR("too many steps\n"); 
   }
 }
@@ -280,7 +305,7 @@ int do_parallel_BP(qllr_t * outLLR, const mzd_t * const srow,
     
     if(submode&2) /** use average LLR */
       for(int iv = 0; iv< nvar; iv++)
-	aLLR[iv] = llr_from_dbl(p->bpalpha * dbl_from_llr(aLLR[iv]) +(1.0 - p->bpalpha) * dbl_from_llr(xLLR[iv])); 
+	aLLR[iv] = llr_from_dbl(p->bpgamma * dbl_from_llr(aLLR[iv]) +(1.0 - p->bpgamma) * dbl_from_llr(xLLR[iv])); 
 
 #ifndef NDEBUG    
     if(p->debug & 8){
@@ -396,7 +421,7 @@ int do_serialC_BP(qllr_t * outLLR, const mzd_t * const srow,
     
       if(submode&2) /** use average LLR */
 	for(int iv = 0; iv< nvar; iv++)
-	  aLLR[iv] = llr_from_dbl(p->bpalpha * dbl_from_llr(aLLR[iv]) +(1.0 - p->bpalpha) * dbl_from_llr(xLLR[iv])); 
+	  aLLR[iv] = llr_from_dbl(p->bpgamma * dbl_from_llr(aLLR[iv]) +(1.0 - p->bpgamma) * dbl_from_llr(xLLR[iv])); 
 
 #ifndef NDEBUG    
       if(p->debug & 8){
@@ -504,7 +529,7 @@ int do_serialV_BP(qllr_t * outLLR, const mzd_t * const srow,
     
       if(submode&2) /** use average LLR */
 	for(int iv = 0; iv< nvar; iv++)
-	  aLLR[iv] = llr_from_dbl(p->bpalpha * dbl_from_llr(aLLR[iv]) +(1.0 - p->bpalpha) * dbl_from_llr(xLLR[iv])); 
+	  aLLR[iv] = llr_from_dbl(p->bpgamma * dbl_from_llr(aLLR[iv]) +(1.0 - p->bpgamma) * dbl_from_llr(xLLR[iv])); 
 
 #ifndef NDEBUG    
       if(p->debug & 8){
@@ -705,4 +730,23 @@ int do_osd_start(qllr_t * LLR, const mzd_t * const srow,
   mzp_free(pivs);
   mzp_free(perm);
   return 1;
+}
+
+/** @brief unified wrapper for BP decoders */
+int do_dec_bp_one(qllr_t ans[], const mzd_t * const srow, params_t const * const p){
+  int conv_BP=0, conv_OSD = 0;
+  if(p->submode&4){ /** bit 2 is set, use serial schedule */
+    if(p->submode&8)
+      conv_BP = do_serialV_BP(ans, srow, p->mH, p->mHt, p->vLLR, p);
+    else
+      conv_BP = do_serialC_BP(ans, srow, p->mH, p->mHt, p->vLLR, p);
+  }
+  else{             /** bit 2 is not set, parallel schedule */
+    conv_BP = do_parallel_BP(ans, srow, p->mH, p->mHt, p->vLLR, p);	   
+  }
+  if((!conv_BP) && (p->lerr >=0)){
+    do_osd_start(ans,srow,p->mH,p);
+    conv_OSD=1;
+  }
+  return conv_OSD + 2* conv_BP;
 }

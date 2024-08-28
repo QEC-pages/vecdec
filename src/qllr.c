@@ -141,10 +141,10 @@ qllr_t mzd_row_energ(const qllr_t * const coeff, const mzd_t *A, const int i){
   //  mzd_print(A);
   //  for(rci_t j = 0; j < A->ncols; ++j)
   int j=-1;
-  while((j=nextelement(truerow,A->width,j+1)) != -1){
+  while((j=nextelement(truerow,A->width,j)) != -1){
+    ans += coeff[j++];
     if(j >= A->ncols)
       break;
-    ans += coeff[j];
   }
 #ifndef NDEBUG
 #  ifdef USE_QLLR

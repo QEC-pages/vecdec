@@ -64,22 +64,112 @@ static inline double rnd_exponential(void){
 
   /** hash storage helper functions *** use `uthash.h` *************************************/
 
+  /**< @brief structure to hold two sparse vectors (syndrome,error) in a hash */
+  typedef struct TWO_VEC_T {
+    UT_hash_handle hh;
+#ifdef USE_QLLR    
+    signed int energ; /**< sum of LLRs */
+#else /* not USE_QLLR */
+    double energ;
+#endif /* USE_QLLR */    
+    int *err; /** was `vec` set  to &arr[w_s] */
+    int cnt; /** how many times this vector was encountered */
+    int w_e; /**< weight of error (non-negative) */
+    int w_s; /**< weight of syndrome (non-negative) */
+    int w_tot; /** `= w_e+w_s` */
+    //  size_t len; /** `weight*sizeof(int)` (is this really needed?) */
+    int arr[0]; /** array of `w_tot` integers, the actual key  */
+  } two_vec_t;
+
+  static inline void two_vec_print(const two_vec_t * const it){
+    if(!it){
+      printf("two_vec_print(): null structure!\n");
+      return;
+    }
+    printf("# two_vec: cnt=%d w_e=%d e=[",it->cnt,it->w_e);
+    for(int i=0; i < it->w_e; i++)
+      printf(" %d",it->err[i]);
+    printf(" ]%s w_s=%d s=[",it->w_s>20?"\n#":" ",it->w_s);
+    for(int i=0; i < it->w_s; i++)
+      printf(" %d",it->arr[i]);
+    printf(" ]\n");
+  }
+
+  /** @brief compare two `two_vec_t` structures by syndrome */
+static inline int by_syndrome(void *a, void *b){
+  const two_vec_t * const pa = (two_vec_t *) a;
+  const two_vec_t * const pb = (two_vec_t *) b;
+  if (pa->w_s < pb->w_s)
+    return -1;
+  else if (pa->w_s > pb->w_s)
+    return +1;
+  else{ /** Wa == Wb */
+    for(int i=0; i < pa->w_s; i++){
+      if (pa->arr[i] < pb->arr[i])
+	return -1;
+      else if (pa->arr[i] > pb->arr[i])
+	return +1;
+    }
+  }
+  return 0;
+}
+
+  /** @brief compare two `two_vec_t` structures by error vectors */
+  static inline int by_error(void *a, void *b){
+    const two_vec_t * const pa = (two_vec_t *) a;
+    const two_vec_t * const pb = (two_vec_t *) b;
+    if (pa->w_e < pb->w_e)
+      return -1;
+    else if (pa->w_e > pb->w_e)
+      return +1;
+    else{ /** Wa == Wb */
+      for(int i=0; i < pa->w_e; i++){
+	if (pa->err[i] < pb->err[i])
+	  return -1;
+	else if (pa->err[i] > pb->err[i])
+	  return +1;
+      }
+    }
+    return 0;
+  }  
 
   /**< @brief structure to hold sparse vectors in a hash */
   typedef struct ONE_VEC_T {
     UT_hash_handle hh;
-    double energ; /**< sum of LLRs */
+#ifdef USE_QLLR    
+    signed int energ; /**< sum of LLRs */
+#else /* not USE_QLLR */
+    double energ;
+#endif /* USE_QLLR */    
     int weight; /**< number of integers in the list */
     int cnt; /** how many times this vector was encountered */
     //  size_t len; /** `weight*sizeof(int)` (is this really needed?) */
     int arr[0]; /** array of `weight` integers, the actual key  */
   } one_vec_t;
 
+  typedef struct OBS_VEC_T {
+    UT_hash_handle hh;
+    double prob; /** sum of probabilities */
+    int weight; /** weight of the vector */
+    int cnt; /** how many entries */
+    int arr[0];
+  } obs_vec_t;
+
+  /**< @brief structure to hold syndrome vectors in a hash */
+  typedef struct THREE_VEC_T {
+    UT_hash_handle hh;
+    int vec_hash_cnt; /** needed? */
+    int obs_hash_cnt; /** if `1`, easy ML decoding */
+    one_vec_t *min_vec; /** the minimum error vector */
+    obs_vec_t *by_obs; /** hash by observable */
+    one_vec_t *by_vec; /** hash by (all) vectors */
+  } three_vec_t;
+  
   /** @brief print entire `one_vec_t` structure by pointer */
   void print_one_vec(const one_vec_t * const pvec);
 
   /** @brief compare two `one_vec_t` structures by energy */
-static inline int by_energy(void *a, void *b){
+  static inline int by_energy(void *a, void *b){
   const one_vec_t *pa = (one_vec_t *) a;
   const one_vec_t *pb = (one_vec_t *) b;
   if (pa->energ < pb->energ)
