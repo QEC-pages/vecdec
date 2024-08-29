@@ -2570,169 +2570,206 @@ int main(int argc, char **argv){
     qllr_t *ans;                  /** case 1 */
     size_t size;                  /** case 3 */
     char * comment;
-  case 0:{ /** `mode=0` internal `vecdec` decoder */
-    /** at least one round always */
-    synd_fail=0;
-    srow=mzd_init(1,p->nchk);
+  case 0: // mode=0 internal vecdec decoder
+        // At least one round always
+        synd_fail = 0;
+        srow = mzd_init(1, p->nchk);
 
-    for(long long int iround=1; iround <= rounds; iround++){
-      if(p->debug &1){
-	printf("# starting round %lld of %lld",   iround, rounds);
-	if(cnt[TOTAL])
-	  printf(" pfail=%g fail=%lld out of total=%lld\n",
-		 (double) (cnt[TOTAL]-cnt[SUCC_TOT])/cnt[TOTAL],  cnt[TOTAL]-cnt[SUCC_TOT], cnt[TOTAL]);
-	else
-	  printf("\n");
-      }
-    
-      if( !(ierr_tot = do_err_vecs(p)))
-	break; /** no more rounds */
-
-      // actually decode and generate error vectors
-      mzd_t *mE0=NULL;
-    
-
-if (p->submode & 1) { /** submode 1 */
+        if (p->submode & 1) { // submode 1
             // In submode1, we use Maximum Likelihood decoder
             if (!p->mG || !p->mK) {
-              for (int i = 0; i < p->nchk; i++) {
-                  p->vP[i] = P_from_llr(p->vLLR[i]);
-              }
-              p->rankH = rank_csr(p->mH);
-              p->rankL = rank_csr(p->mL);
-              p->rankG = p->nvar - p->rankH - p->rankL;
-              if (p->debug & 1){
+                for (int i = 0; i < p->nchk; i++) {
+                    p->vP[i] = P_from_llr(p->vLLR[i]);
+                }
+                p->rankH = rank_csr(p->mH);
+                p->rankL = rank_csr(p->mL);
+                p->rankG = p->nvar - p->rankH - p->rankL;
+                if (p->debug & 1) {
                     printf("rankG=%d", p->rankG);
-              }
-              p->mG = do_G_matrix(p->mHt, p->mLt, p->vLLR, p->rankG, p->debug);
-              int rankG = rank_csr(p->mG);
-              if (p->debug & 1){
-                        printf("G matrix created with: rankG=%d \n", rankG);
-              }
-              p->mK = Lx_for_CSS_code(p->mG, p->mH);
-              int rankK = rank_csr(p->mK);
-              if (p->debug & 1){
-                        printf("K matrix created with: rankK=%d \n", rankK);
-              }
+                }
+                p->mG = do_G_matrix(p->mHt, p->mLt, p->vLLR, p->rankG, p->debug);
+                int rankG = rank_csr(p->mG);
+                if (p->debug & 1) {
+                    printf("G matrix created with: rankG=%d \n", rankG);
+                }
+                p->mK = Lx_for_CSS_code(p->mG, p->mH);
+                int rankK = rank_csr(p->mK);
+                if (p->debug & 1) {
+                    printf("K matrix created with: rankK=%d \n", rankK);
+                }
             }
-            #ifndef NDEBUG  /** need `mHe` later */
+            #ifndef NDEBUG  // need `mHe` later
             mzd_t *mS = mzd_copy(NULL, p->mHe);
-            mE0 = do_decode_BAR(mS, p); /** each row a decoded error vector */
+            mE0 = do_decode_BAR(mS, p); // each row a decoded error vector
             mzd_free(mS);
             mS = NULL;
             #else
-            mE0 = do_decode_BAR(p->mHe, p); /** each row a decoded error vector */
+            mE0 = do_decode_BAR(p->mHe, p); // each row a decoded error vector
             #endif /* NDEBUG */
-        }else{      
-#ifndef NDEBUG  /** need `mHe` later */
-	mzd_t *mS=mzd_copy(NULL,p->mHe);
-	mE0=do_decode(mS, p); /** each row a decoded error vector */
-	mzd_free(mS); mS=NULL;
-#else
-      mE0=do_decode(p->mHe, p); /** each row a decoded error vector */
-}
-#endif /* NDEBUG */
-	cnt[CONV_RIS] += ierr_tot;
-      }  
-      mzd_t *mE0t = mzd_transpose(NULL, mE0);
-      mzd_free(mE0); mE0=NULL;
+        } else {
+            // Original code for non-submode 1
+            for (long long int iround = 1; iround <= rounds; iround++) {
+                if (p->debug & 1) {
+                    printf("# starting round %lld of %lld", iround, rounds);
+                    if (cnt[TOTAL])
+                        printf(" pfail=%g fail=%lld out of total=%lld\n",
+                               (double)(cnt[TOTAL] - cnt[SUCC_TOT]) / cnt[TOTAL],
+                               cnt[TOTAL] - cnt[SUCC_TOT], cnt[TOTAL]);
+                    else
+                        printf("\n");
+                }
+            
+                if (!(ierr_tot = do_err_vecs(p)))
+                    break; // no more rounds
+                if (p->uW >= 0) { // pre-decoding enabled
+                    status = calloc(ierr_tot, sizeof(int)); // non-zero value = success pre_dec
+                    if (!status) ERROR("memory allocation");
+                    p->mHeT = mzd_transpose(p->mHeT, p->mHe);
+                    mE0 = mzd_init(p->nvec, p->nvar);
+                    long long int cnt_pre = 0;
+                    for (long long int ierr = 0; ierr < ierr_tot; ierr++) { // cycle over errors
+                        mzd_copy_row(srow, 0, p->mHeT, ierr); // syndrome row in question       
+                        int res_pre = dec_ufl_one(srow, p);
+                        if (res_pre) { // pre-decoder success
+                            mzd_row_add_vec(mE0, ierr, p->ufl->error, 1);
+                            status[ierr] = res_pre;
+                            cnt_pre++;
+                        }
+                    }
+                    if (cnt_pre < ierr_tot) { // some pre-decoder failures
+                        long long int num = ierr_tot - cnt_pre;
+                        mzd_t *mST = mzd_init(num, p->nchk);
+                        for (long long int ierr = 0, row = 0; ierr < ierr_tot; ierr++) {
+                            if (!status[ierr])
+                                mzd_copy_row(mST, row++, p->mHeT, ierr);
+                        }
+                        mzd_t *mS = mzd_transpose(NULL, mST);
+                        mzd_t *mE2 = do_decode(mS, p); // each row a decoded error vector
+                        for (long long int ierr = 0, row = 0; ierr < ierr_tot; ierr++) {
+                            if (!status[ierr]) {
+                                mzd_copy_row(mE0, ierr, mE2, row++);
+                                status[ierr] = 4;
+                                cnt[CONV_RIS]++;
+                            }
+                        }
+                        mzd_free(mE2);
+                        mzd_free(mS);
+                        mzd_free(mST);
+                    }
+                } else { // no pre-decoding      
+                    status = NULL;
+                    // Actually decode and generate error vectors
+                    #ifndef NDEBUG  // need `mHe` later
+                    mzd_t *mS = mzd_copy(NULL, p->mHe);
+                    mE0 = do_decode(mS, p); // each row a decoded error vector
+                    mzd_free(mS);
+                    mS = NULL;
+                    #else
+                    mE0 = do_decode(p->mHe, p); // each row a decoded error vector
+                    #endif /* NDEBUG */
+                    cnt[CONV_RIS] += ierr_tot;
+                }  
+                mzd_t *mE0t = mzd_transpose(NULL, mE0);
+                mzd_free(mE0);
+                mE0 = NULL;
+                
+                #ifndef NDEBUG
+                mzd_t *prodHe = csr_mzd_mul(NULL, p->mH, mE0t, 1);
+                if (p->pdet)
+                    mzd_write_01(p->file_pdet, prodHe, 1, p->pdet, p->debug);
+                
+                mzd_add(prodHe, prodHe, p->mHe);
+                if ((p->steps) && (!mzd_is_zero(prodHe))) {
+                    if ((p->debug & 512) || (p->nvec <= 64)) {
+                        printf("syndromes difference:\n");
+                        mzd_print(prodHe);
+                    }
+                    if (p->steps > 0) // otherwise we do not care
+                        ERROR("some syndromes are not matched!\n");
+                }
+                mzd_free(prodHe);
+                prodHe = NULL;
+                #else /* NDEBUG defined */
+                if (p->pdet) {
+                    mzd_t *prodHe = csr_mzd_mul(NULL, p->mH, mE0t, 1);
+                    mzd_write_01(p->file_pdet, prodHe, 1, p->pdet, p->debug);
+                    mzd_free(prodHe);
+                }
+                #endif
 
-        
-#ifndef NDEBUG
-      mzd_t *prodHe = csr_mzd_mul(NULL,p->mH,mE0t,1);
-      if(p->pdet)
-	mzd_write_01(p->file_pdet, prodHe, 1, p->pdet, p->debug);
-	
-      mzd_add(prodHe, prodHe, p->mHe);
-      if((p->steps)&&(!mzd_is_zero(prodHe))){
-	if((p->debug&512)||(p->nvec <=64)){
-	  printf("syndromes difference:\n");
-	  mzd_print(prodHe);
-	}
-	if(p->steps > 0) /** otherwise we do not care */
-	  ERROR("some syndromes are not matched!\n");
-      }
-      mzd_free(prodHe); prodHe = NULL;
-      //      mzd_free(p->mHe);    mHe    = NULL;
-#else /* NDEBUG defined */
-      if(p->pdet){
-	mzd_t *prodHe = csr_mzd_mul(NULL,p->mH,mE0t,1);
-	mzd_write_01(p->file_pdet, prodHe, 1, p->pdet, p->debug);
-	mzd_free(prodHe);
-      }
-#endif
+                if (p->perr)
+                    mzd_write_01(p->file_perr, mE0t, 1, p->perr, p->debug);
+                mzd_t *prodLe = csr_mzd_mul(NULL, p->mL, mE0t, 1);
+                if (p->pobs)
+                    mzd_write_01(p->file_pobs, prodLe, 1, p->pobs, p->debug);
 
-      if(p->perr)
-	mzd_write_01(p->file_perr, mE0t, 1,   p->perr, p->debug);
-      mzd_t *prodLe = csr_mzd_mul(NULL,p->mL,mE0t,1);
-      if(p->pobs)
-	mzd_write_01(p->file_pobs, prodLe, 1,p->pobs, p->debug);
+                mzd_add(prodLe, prodLe, p->mLe);
+                int fails = 0;
+                if (p->uW >= 0) { // pre-decoding enabled
+                    assert(status);
+                    rci_t j = 0;
+                    for (rci_t ic = 0; ic < ierr_tot; ic++) {
+                        rci_t ir = 0;
+                        if (mzd_find_pivot(prodLe, ir, ic, &ir, &ic)) {
+                            cnt[SUCC_TOT] += ic - j;
+                            while (j < ic) { // success
+                                switch (status[j++]) {
+                                    case 1: cnt[SUCC_TRIVIAL]++; break;
+                                    case 2: cnt[SUCC_LOWW]++; break;
+                                    case 3: cnt[SUCC_CLUS]++; break;
+                                    case 4: cnt[SUCC_RIS]++; break;
+                                    default: ERROR("unexpected");
+                                }
+                            }
+                            j++;
+                            fails++;
+                        } else // no more pivots
+                            break;            
+                    }
+                    cnt[SUCC_TOT] += ierr_tot - j;      
+                    while (j < ierr_tot) { // success
+                        switch (status[j++]) {
+                            case 1: cnt[SUCC_TRIVIAL]++; break;
+                            case 2: cnt[SUCC_LOWW]++; break;
+                            case 3: cnt[SUCC_CLUS]++; break;
+                            case 4: cnt[SUCC_RIS]++; break;
+                            default: ERROR("unexpected");
+                        }
+                    }
+                } else { // no pre-decoding
+                    for (rci_t ic = 0; ic < ierr_tot; ic++) {
+                        rci_t ir = 0;
+                        if (mzd_find_pivot(prodLe, ir, ic, &ir, &ic))
+                            fails++;    
+                        else // no more pivots
+                            break;
+                    }      
+                    cnt[SUCC_RIS] += ierr_tot - fails;
+                    cnt[SUCC_TOT] += ierr_tot - fails;
+                }
+                // Update the global counts
+                synd_fail += fails;
+                cnt[TOTAL] += ierr_tot;
+                mzd_free(prodLe);
+                prodLe = NULL;
+                if (status) {
+                    free(status);
+                    status = NULL;
+                }
+                if ((p->nfail > 0) && (synd_fail >= p->nfail))
+                    break;
+            }
+        }
 
-      mzd_add(prodLe, prodLe, p->mLe);
-      int fails=0;
-      if(p->uW >=0){ /** pre-decoding enabled */
-	assert(status);
-	rci_t j=0;
-	for(rci_t ic=0; ic < ierr_tot; ic++){
-	  rci_t ir=0;
-	  if(mzd_find_pivot(prodLe, ir, ic, &ir, &ic)){
-	    //	    printf("# j=%d pivot at %d\n",j, ic);
-	    cnt[SUCC_TOT] += ic - j;
-	    while(j<ic){ /** success */
-	      switch(status[j++]){
-	      case 1 : cnt[SUCC_TRIVIAL]++; break;
-	      case 2 : cnt[SUCC_LOWW]++; break;
-	      case 3 : cnt[SUCC_CLUS]++; break;
-	      case 4 : cnt[SUCC_RIS]++;  break;
-	      default: ERROR("unexpected");
-	      }
-	    }
-	    j++;
-	    fails++;
-	  }
-	  else /** no more pivots */
-	    break;            
-	}
-	cnt[SUCC_TOT] += ierr_tot - j;      
-	while(j<ierr_tot){ /** success */
-	  switch(status[j++]){
-	  case 1 : cnt[SUCC_TRIVIAL]++; break;
-	  case 2 : cnt[SUCC_LOWW]++; break;
-	  case 3 : cnt[SUCC_CLUS]++; break;
-	  case 4 : cnt[SUCC_RIS]++;  break;
-	  default: ERROR("unexpected");
-	  }
-	}
-      }
-      else{ /** no pre-decoding */
-	for(rci_t ic=0; ic < ierr_tot; ic++){
-	  rci_t ir=0;
-	  if(mzd_find_pivot(prodLe, ir, ic, &ir, &ic))
-	    fails++;	
-	  else /** no more pivots */
-	    break;
-	}      
-	cnt[SUCC_RIS] += ierr_tot - fails;
-	cnt[SUCC_TOT] += ierr_tot - fails;
-      }
-      /** update the global counts */
-      synd_fail += fails;
-      cnt[TOTAL] += ierr_tot;
-      mzd_free(prodLe); prodLe=NULL;
-      if (status){ free(status); status=NULL; }
-      if((p->nfail > 0) && (synd_fail >= p->nfail))
-	break;
-    }
-    if (!((p->fdet)&&(p->fobs==NULL)&&(p->perr))){ /** except in the case of partial decoding */
-      if(p->steps > 0){  /** otherwise results are invalid as we assume syndromes to match */
-	cnt_out(p->debug&1,p);
-      }   
-    }
-    else if(p->debug&1)
-      printf("# all finished\n");
+        if (!((p->fdet) && (p->fobs == NULL) && (p->perr))) { // except in the case of partial decoding
+            if (p->steps > 0) {  // otherwise results are invalid as we assume syndromes to match
+                cnt_out(p->debug & 1, p);
+            }   
+        } else if (p->debug & 1) {
+            printf("# all finished\n");
+        }
 
-    break;
-
+        break;
   case 1: /** `mode=1` various BP flavors */    
     ans = calloc(p->nvar, sizeof(qllr_t));
     if(!ans) ERROR("memory allocation failed!"); 
