@@ -158,6 +158,7 @@ csr_t * csr_transpose(csr_t *dst, const csr_t * const org){
   return dst;
 }
 
+
 /** 
  * @brief create a submatrix of a CSR matrix
  * return resulting matrix
@@ -527,7 +528,7 @@ csr_t * csr_from_pairs(csr_t *mat, const int nz, int_pair * const prs, const int
 }
 
 
-/**
+/** 
  * @brief convert `m4ri` dense matrix to `csr`
  * 
  * Optimized for sparse matrices.  
@@ -549,52 +550,19 @@ csr_t * csr_from_mzd(csr_t *mat, const mzd_t * const orig){
       if(idx >= orig->ncols)
 	break;
     }
-
-    int i, j = 0;
-    for (i = 0; i < mat->rows; i++) {
-        mat->p[i] = j;
-#if 1 /** optimized version */
-        int idx = 0;
-        const word * const rawrow = orig->rows[i];
-        while (((idx = nextelement(rawrow, orig->width, idx)) != -1) && (idx < orig->ncols)) {
-            if (j >= mat->nzmax) {
-                // Reallocate memory for mat->i
-                int new_nzmax = mat->nzmax * 2; // multiply by 2 to avoid frequent realloc
-                int *new_i = realloc(mat->i, new_nzmax * sizeof(int));
-                if (!new_i) {
-                    fprintf(stderr, "Failed to reallocate memory\n");
-                    return NULL;
-                }
-                mat->i = new_i;
-                mat->nzmax = new_nzmax;
-            }
-            mat->i[j++] = idx++;
-        }
 #else /** naive version */
-        for (int idx = 0; idx < orig->ncols; idx++)
-            if (mzd_read_bit(orig, i, idx)) {
-                if (j >= mat->nzmax) {
-                    // Reallocate memory for mat->i
-                    int new_nzmax = mat->nzmax * 2; // multiply by 2 to avoid frequent realloc
-                    int *new_i = realloc(mat->i, new_nzmax * sizeof(int));
-                    if (!new_i) {
-                        fprintf(stderr, "Failed to reallocate memory\n");
-                        return NULL;
-                    }
-                    mat->i = new_i;
-                    mat->nzmax = new_nzmax;
-                }
-                mat->i[j++] = idx;
-                // printf("i=%d j=%d idx=%d\n", i, j, idx);
-            }
-#endif /* 0 */
-    }
-    mat->p[i] = j; /* final value */
-    assert(j == nz);
-    mat->nz = -1; /* indicate compressed form */
-    return mat;
+    for(int idx=0; idx< orig->ncols; idx++)
+      if(mzd_read_bit(orig,i,idx)){
+	mat->i[j++]=idx;
+	//	printf("i=%d j=%d idx=%d\n",i,j,idx);
+      }
+#endif /* 0 */    
+  }      
+  mat->p[i]=j; /* final value */
+  assert(j==nz);
+  mat->nz=-1; /* indicate compressed form */
+  return mat;
 }
-
 
 /**
  * @brief Compute logical generator matrix Lx for a CSS code

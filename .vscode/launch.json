@@ -1,0 +1,26 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug vecdec",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/vecdec",
+            "args": ["mode=0.1", "finH=toricH_L=4.mtx", "finL=toricL_L=4.mtx", "finG=toricL=4G.mmx", "finK=toricL=4K.mmx", "useP=0.1"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/examples",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "build",
+            "miDebuggerPath": "/usr/bin/gdb"
+        }
+    ]
+}
