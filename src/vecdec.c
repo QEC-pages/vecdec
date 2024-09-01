@@ -1304,7 +1304,7 @@ void solve_pairwise_BAR_ratio(double ***U, int **N, int K, double **Q_ratios) {
 }
 
 #define MAX_K 32
-#define MAX_ITERATIONS 10000
+#define MAX_ITERATIONS 100000
 
 typedef struct {
     double ***data;

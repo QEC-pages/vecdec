@@ -446,37 +446,59 @@ csr_t *csr_free(csr_t *p){
 }
 
 /**
- * initialize a CSR matrix 
- * check existing size and (re)allocate if  needded 
+ * Initialize a CSR matrix 
+ * Check existing size and (re)allocate if needed 
  */
-csr_t *csr_init(csr_t *mat, int rows, int cols, int nzmax){
-  const int max = MAX(nzmax,(rows+1));
-  if((nzmax<0)||(rows<0)||(cols<0))
-    ERROR("invalid parameters rows=%d cols=%d nzmax=%d)\n",rows,cols,nzmax);
-  if ((mat!=NULL)&&((mat->nzmax < max)||(mat->nzmax < rows+1))){
-    /* allocated size was too small */
-    /** keep allocated `mat` */
-    mat->p = realloc(mat->p, max*sizeof(int));
-    mat->i = realloc(mat->i, nzmax*sizeof(int));
-    if ((mat->p==NULL) || (mat->i==NULL))
-      ERROR("csr_init: failed to reallocate CSR rows=%d cols=%d nzmax=%d",
-            rows,cols,nzmax);
-    mat->nzmax=nzmax;
-    mat->p[0]=0;
-  }
-  else if(mat==NULL){
-    mat=malloc(sizeof(csr_t));  
-    mat->p=calloc(max,sizeof(int));
-    mat->i=calloc(nzmax,sizeof(int)); 
-    if ((mat == NULL) || (mat->p==NULL) || (mat->i==NULL))
-      ERROR("csr_init: failed to allocate CSR rows=%d cols=%d nzmax=%d",
-            rows,cols,nzmax);
-    mat->nzmax=nzmax;
-  }
-  mat->rows=rows;
-  mat->cols=cols;
-  mat->nz=0; /* empty */
-  return mat;
+csr_t *csr_init(csr_t *mat, int rows, int cols, int nzmax) {
+    const int max = MAX(nzmax, (rows + 1));
+    if ((nzmax < 0) || (rows < 0) || (cols < 0)) {
+        ERROR("invalid parameters rows=%d cols=%d nzmax=%d)\n", rows, cols, nzmax);
+        return NULL;
+    }
+
+    if (mat != NULL) {
+        // Check if existing allocation is sufficient
+        if ((mat->nzmax < max) || (mat->nzmax < rows + 1)) {
+            int *new_p = realloc(mat->p, max * sizeof(int));
+            int *new_i = realloc(mat->i, nzmax * sizeof(int));
+
+            if (new_p == NULL || new_i == NULL) {
+                // If reallocation fails, free the original matrix and return NULL
+                free(new_p);
+                free(new_i);
+                csr_free(mat);
+                ERROR("csr_init: failed to reallocate CSR rows=%d cols=%d nzmax=%d", rows, cols, nzmax);
+                return NULL;
+            }
+
+            mat->p = new_p;
+            mat->i = new_i;
+            mat->nzmax = nzmax;
+        }
+    } else {
+        // Allocate memory for the new matrix
+        mat = malloc(sizeof(csr_t));
+        if (mat == NULL) {
+            ERROR("csr_init: failed to allocate memory for CSR structure");
+            return NULL;
+        }
+
+        mat->p = calloc(max, sizeof(int));
+        mat->i = calloc(nzmax, sizeof(int));
+
+        if (mat->p == NULL || mat->i == NULL) {
+            csr_free(mat);
+            ERROR("csr_init: failed to allocate CSR rows=%d cols=%d nzmax=%d", rows, cols, nzmax);
+            return NULL;
+        }
+
+        mat->nzmax = nzmax;
+    }
+
+    mat->rows = rows;
+    mat->cols = cols;
+    mat->nz = 0; // Initialize as empty
+    return mat;
 }
 
 /** 
