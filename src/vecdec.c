@@ -1849,6 +1849,8 @@ int main(int argc, char **argv){
 	    if(!status[ierr])
 	      mzd_copy_row(mST, row++,p->mHeT,ierr);
 	  }
+	  if(p->debug&2)
+	    printf("# running RIS decoder on remaining %lld syndrome vectors\n",num);
 	  mzd_t * mS = mzd_transpose(NULL,mST);
 	  mzd_t * mE2=do_decode(mS, p); /** each row a decoded error vector */
 	  for(long long int ierr =0, row=0 ; ierr < ierr_tot; ierr++){
