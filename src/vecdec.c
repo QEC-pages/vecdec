@@ -761,35 +761,6 @@ qllr_t calculate_energy_change(qllr_t *coeff, const mzd_t *A, const mzd_t *B, co
 }
 
 /**
- * Decompress a CSR matrix if it is in compressed form.
- * @param mat The CSR matrix to decompress.
- */
-void csr_decompress(csr_t *mat) {
-    if (mat == NULL || mat->nz != -1) {
-        return;  // Matrix is already decompressed or invalid
-    }
-
-    int nz = mat->p[mat->rows];
-    int *new_i = malloc(nz * sizeof(int));
-    if (new_i == NULL) {
-        ERROR("Memory allocation failed in csr_decompress.\n");
-        return;
-    }
-
-    int idx = 0;
-    for (int i = 0; i < mat->rows; i++) {
-        for (int j = mat->p[i]; j < mat->p[i + 1]; j++) {
-            new_i[idx++] = mat->i[j];
-        }
-    }
-
-    free(mat->i);
-    mat->i = new_i;
-    mat->nz = nz;
-}
-
-
-/**
  * @brief Copy a CSR matrix
  * @param src The source CSR matrix to copy from.
  * @return A new CSR matrix that is a copy of the source.
@@ -1069,7 +1040,20 @@ qllr_t csr_calculate_energy_change(qllr_t *coeff, const csr_t *A, const csr_t *B
 
 
 
+/* Decompress a CSR matrix that was previously compressed */
+void csr_decompress(csr_t *mat) {
+    if (mat->nz != -1) {
+        fprintf(stderr, "Error: Matrix is not in a compressed state.\n");
+        return;
+    }
 
+    int nz = 0;
+    for (int r = 0; r < mat->rows; r++) {
+        nz += mat->p[r + 1] - mat->p[r];
+    }
+
+    mat->nz = nz;
+}
 
 
 
@@ -1081,49 +1065,84 @@ qllr_t csr_calculate_energy_change(qllr_t *coeff, const csr_t *A, const csr_t *B
  * @param src The source CSR matrix.
  * @param i The row index to replace.
  */
-void csr_replace_row(csr_t *dest, const csr_t *src, int i) {
-    if (dest == NULL || src == NULL || i >= dest->rows || i >= src->rows) {
-        ERROR("Invalid input parameters in csr_replace_row.\n");
+void csr_replace_row(csr_t *dst, const csr_t *src, int row) {
+    // Check if the matrix is compressed, and decompress if necessary
+    if (dst->nz == -1) {
+        csr_decompress(dst);
+    }
+    if (src->nz == -1) {
+        csr_decompress((csr_t *)src); // src is const, so cast it temporarily
+    }
+
+    // Validate input matrices and row index
+    if (!dst || !src) {
+        fprintf(stderr, "Error: Null pointer passed to csr_replace_row.\n");
         return;
     }
 
-    // Ensure both matrices are in compressed form
-    if (dest->nz != -1) {
-        csr_compress(dest);
-    }
-    if (src->nz != -1) {
-        csr_compress((csr_t *)src);  // Cast away const for compression
+    if (row < 0 || row >= dst->rows || row >= src->rows) {
+        fprintf(stderr, "Error: Row index %d out of bounds. dst rows: %d, src rows: %d\n", row, dst->rows, src->rows);
+        return;
     }
 
-    int start_src = src->p[i];
-    int end_src = src->p[i + 1];
-    int start_dest = dest->p[i];
-    int end_dest = dest->p[i + 1];
-    int nz_src = end_src - start_src;
-    int nz_dest = end_dest - start_dest;
+    // Determine the start and end pointers for the row in both matrices
+    int dst_row_start = dst->p[row];
+    int dst_row_end = dst->p[row + 1];
+    int dst_row_nnz = dst_row_end - dst_row_start;
 
-    int new_nz = dest->p[dest->rows] - nz_dest + nz_src;
-    if (dest->nzmax < new_nz) {
-        dest->nzmax = new_nz * 2;  // Double the size for future growth
-        dest->i = realloc(dest->i, dest->nzmax * sizeof(int));
-        if (dest->i == NULL) {
-            ERROR("Memory reallocation failed in csr_replace_row.\n");
+    int src_row_start = src->p[row];
+    int src_row_end = src->p[row + 1];
+    int src_row_nnz = src_row_end - src_row_start;
+
+    // Ensure the source row is non-empty
+    if (src_row_nnz == 0) {
+        fprintf(stderr, "Warning: Source row %d is empty, no changes made.\n", row);
+        return;
+    }
+
+    int nnz_diff = src_row_nnz - dst_row_nnz;
+
+    // Calculate the new total non-zero entries required
+    int new_nz = dst->nz + nnz_diff;
+
+    // Check if reallocation is needed
+    if (new_nz > dst->nzmax) {
+        int new_nzmax = new_nz + 1024; // Add extra space to reduce frequent reallocations
+
+        // Reallocate column indices array
+        int *new_i = realloc(dst->i, new_nzmax * sizeof(int));
+        if (!new_i) {
+            fprintf(stderr, "Error: Failed to reallocate memory for column indices.\n");
             return;
         }
+        dst->i = new_i;
+
+        dst->nzmax = new_nzmax;
     }
 
-    if (nz_src != nz_dest) {
-        memmove(&dest->i[start_dest + nz_src], &dest->i[end_dest], (dest->p[dest->rows] - end_dest) * sizeof(int));
+    // Move data only if necessary
+    if (nnz_diff != 0) {
+        if (dst_row_end + nnz_diff < dst->nz && dst_row_end + nnz_diff >= 0) {
+            memmove(dst->i + dst_row_end + nnz_diff, dst->i + dst_row_end, (dst->nz - dst_row_end) * sizeof(int));
+        } else {
+            //fprintf(stderr, "Error: Invalid memory move operation detected.\n");
+            return;
+        }
+
+        for (int r = row + 1; r <= dst->rows; r++) {
+            dst->p[r] += nnz_diff;
+        }
+
+        dst->nz = new_nz;
     }
 
-    memcpy(&dest->i[start_dest], &src->i[start_src], nz_src * sizeof(int));
+    // Copy column indices from source to destination
+    memcpy(dst->i + dst->p[row], src->i + src->p[row], src_row_nnz * sizeof(int));
 
-    for (int j = i + 1; j <= dest->rows; j++) {
-        dest->p[j] += nz_src - nz_dest;
-    }
-
-    dest->nz = new_nz;
+    // printf("Replaced row %d: src nnz = %d, dst nnz = %d, nnz_diff = %d, new dst nz = %d\n",
+    //        row, src_row_nnz, dst_row_nnz, nnz_diff, dst->nz);
 }
+
 
 
 
@@ -1230,7 +1249,7 @@ double BAR_equation(double ***U, int **N, int i, int j, double Q_ratio) {
     
     // Check if sum_i and sum_j are valid
     if (sum_i == 0.0 || sum_j == 0.0 || !isfinite(sum_i) || !isfinite(sum_j)) {
-        fprintf(stderr, "Error: Invalid sum_i (%f) or sum_j (%f)\n", sum_i, sum_j);
+        //fprintf(stderr, "Error: Invalid sum_i (%f) or sum_j (%f)\n", sum_i, sum_j);
         return NAN;
     }
 
@@ -1245,8 +1264,6 @@ double BAR_equation(double ***U, int **N, int i, int j, double Q_ratio) {
 
     return result;
 }
-
-
 
 
 
@@ -1286,116 +1303,81 @@ void solve_pairwise_BAR_ratio(double ***U, int **N, int K, double **Q_ratios) {
     }
 }
 
+#define MAX_K 32
+#define MAX_ITERATIONS 10000
+
+typedef struct {
+    double ***data;
+    int **sizes;
+} EnergyDifferences;
+
+typedef struct {
+    double **data;
+} QRatios;
+
+typedef struct {
+    csr_t **vectors;
+} ErrorVectors;
+
+// Helper function to find the state with the largest partition function
+int find_max_partition_function(QRatios *Q_ratios, int K) {
+    int max_Q_index = 0;
+    double max_Q = -INFINITY;
+    for (int k = 0; k < K; k++) {
+        double Q_k = 0.0;
+        for (int j = 0; j < K; j++) {
+            if (j != k) {
+                Q_k += Q_ratios->data[k][j];
+            }
+        }
+        if (Q_k > max_Q) {
+            max_Q = Q_k;
+            max_Q_index = k;
+        }
+    }
+    return max_Q_index;
+}
+
 void BAR_MCMC(csr_t *mEt0_csr, csr_t *mEt_csr, params_t const * const p, int i) {
-    // Maximum number of Monte Carlo iterations
-    int max_iterations = 10000;
-    // Temperature for Metropolis criterion
-    double temperature = 10000;
-
-    // Number of rows in mK matrix
     int mK_rows = p->mK->rows;
-    // Number of ensembles, 2^k
-    int K = pow(2, mK_rows);
+    int K = 1 << mK_rows;  // 2^mK_rows
 
-    // Initialize dynamic arrays for energy differences
-    double ***U = malloc(K * sizeof(double **));
-    int **N = malloc(K * sizeof(int *));
-    if (!U || !N) {
-        fprintf(stderr, "Memory allocation failed for U or N\n");
+    if (K > MAX_K) {
+        fprintf(stderr, "Error: K exceeds MAX_K in BAR_MCMC\n");
         return;
     }
+
+    EnergyDifferences U = {0};
+    QRatios Q_ratios = {0};
+    ErrorVectors error_vectors = {0};
+
+    // Allocate memory
+    U.data = malloc(K * sizeof(double **));
+    U.sizes = malloc(K * sizeof(int *));
+    Q_ratios.data = malloc(K * sizeof(double *));
+    error_vectors.vectors = malloc(K * sizeof(csr_t *));
+
     for (int k = 0; k < K; k++) {
-        U[k] = malloc(K * sizeof(double *));
-        N[k] = calloc(K, sizeof(int));
-        if (!U[k] || !N[k]) {
-            fprintf(stderr, "Memory allocation failed for U[%d] or N[%d]\n", k, k);
-            // Clean up and return
-            for (int j = 0; j < k; j++) {
-                free(U[j]);
-                free(N[j]);
-            }
-            free(U);
-            free(N);
-            return;
-        }
+        U.data[k] = malloc(K * sizeof(double *));
+        U.sizes[k] = calloc(K, sizeof(int));
+        Q_ratios.data[k] = malloc(K * sizeof(double));
         for (int j = 0; j < K; j++) {
-            U[k][j] = NULL;  // Initialize to NULL
+            U.data[k][j] = NULL;
+            Q_ratios.data[k][j] = 1.0;
         }
     }
 
-    // Allocate and initialize Q_ratios
-    double **Q_ratios = malloc(K * sizeof(double *));
-    if (Q_ratios == NULL) {
-        fprintf(stderr, "Memory allocation failed for Q_ratios.\n");
-        // Clean up and return
-        for (int k = 0; k < K; k++) {
-            free(U[k]);
-            free(N[k]);
-        }
-        free(U);
-        free(N);
-        return;
-    }
+    // Initialize error_vectors
     for (int k = 0; k < K; k++) {
-        Q_ratios[k] = malloc(K * sizeof(double));
-        if (Q_ratios[k] == NULL) {
-            fprintf(stderr, "Memory allocation failed for Q_ratios[%d].\n", k);
-            // Clean up and return
-            for (int j = 0; j < k; j++) {
-                free(Q_ratios[j]);
-            }
-            free(Q_ratios);
-            for (int j = 0; j < K; j++) {
-                free(U[j]);
-                free(N[j]);
-            }
-            free(U);
-            free(N);
-            return;
-        }
-        for (int j = 0; j < K; j++) {
-            Q_ratios[k][j] = 1.0;  // Initialize all ratios to 1
-        }
-    }
-
-    // Allocate and initialize error_vectors
-    csr_t **error_vectors = malloc(K * sizeof(csr_t *));
-    if (!error_vectors) {
-        fprintf(stderr, "Memory allocation failed for error_vectors\n");
-        // Clean up and return
-        for (int k = 0; k < K; k++) {
-            free(U[k]);
-            free(N[k]);
-            free(Q_ratios[k]);
-        }
-        free(U);
-        free(N);
-        free(Q_ratios);
-        return;
-    }
-    for (int k = 0; k < K; k++) {
-        error_vectors[k] = csr_copy(mEt0_csr);
-        if (!error_vectors[k]) {
+        error_vectors.vectors[k] = csr_copy(mEt0_csr);
+        if (!error_vectors.vectors[k]) {
             fprintf(stderr, "Failed to copy error vector for k=%d\n", k);
-            // Clean up and return
-            for (int j = 0; j < k; j++) {
-                csr_free(error_vectors[j]);
-            }
-            for (int j = 0; j < K; j++) {
-                free(U[j]);
-                free(N[j]);
-                free(Q_ratios[j]);
-            }
-            free(U);
-            free(N);
-            free(Q_ratios);
-            free(error_vectors);
-            return;
+            goto cleanup;
         }
         // Apply mK transformations
         for (int row = 0; row < mK_rows; row++) {
             if (k & (1 << row)) {
-                csr_add_row_to_row(error_vectors[k], i, p->mK, row);
+                csr_add_row_to_row(error_vectors.vectors[k], i, p->mK, row);
             }
         }
     }
@@ -1403,134 +1385,18 @@ void BAR_MCMC(csr_t *mEt0_csr, csr_t *mEt_csr, params_t const * const p, int i) 
     // Monte Carlo sampling
     for (int k = 0; k < K; k++) {
         for (int j = k + 1; j < K; j++) {
-            csr_t *state_A = csr_copy(error_vectors[k]);
-            csr_t *state_B = csr_copy(error_vectors[j]);
+            csr_t *state_A = csr_copy(error_vectors.vectors[k]);
+            csr_t *state_B = csr_copy(error_vectors.vectors[j]);
             if (!state_A || !state_B) {
                 fprintf(stderr, "Failed to copy states for k=%d, j=%d\n", k, j);
-                // Clean up and return
                 csr_free(state_A);
                 csr_free(state_B);
-                for (int m = 0; m < K; m++) {
-                    csr_free(error_vectors[m]);
-                    for (int n = 0; n < K; n++) {
-                        free(U[m][n]);
-                    }
-                    free(U[m]);
-                    free(N[m]);
-                    free(Q_ratios[m]);
-                }
-                free(U);
-                free(N);
-                free(Q_ratios);
-                free(error_vectors);
-                return;
+                goto cleanup;
             }
 
-            int accepted_A = 0, accepted_B = 0;
-            int check_interval = 2000;
-            double min_acceptance_rate = 0.004;
-
-            // Sample state A
-            for (int iter = 0; iter < max_iterations; iter++) {
-                unsigned int seed = (unsigned int)time(NULL);
-                int row_to_add = rand_r(&seed) % (p->mG->rows-1);
-                
-                double delta_energy = csr_calculate_energy_change(p->vLLR, state_A, p->mG, i, row_to_add);
-                
-                if (delta_energy < 0 || exp(-delta_energy / temperature) > (double)rand_r(&seed) / RAND_MAX) {
-                    csr_add_row_to_row(state_A, i, p->mG, row_to_add);
-                    accepted_A++;
-                }
-                
-                double U_A = csr_row_energ(p->vLLR, state_A, i);
-                double U_B = csr_row_energ(p->vLLR, error_vectors[j], i);
-                double energy_diff = U_B - U_A;
-
-                // Increase array length and add new energy difference
-                N[k][j]++;
-                U[k][j] = realloc(U[k][j], N[k][j] * sizeof(double));
-                if (!U[k][j]) {
-                    fprintf(stderr, "Memory reallocation failed for U[%d][%d]\n", k, j);
-                    // Clean up and return
-                    csr_free(state_A);
-                    csr_free(state_B);
-                    for (int m = 0; m < K; m++) {
-                        csr_free(error_vectors[m]);
-                        for (int n = 0; n < K; n++) {
-                            free(U[m][n]);
-                        }
-                        free(U[m]);
-                        free(N[m]);
-                        free(Q_ratios[m]);
-                    }
-                    free(U);
-                    free(N);
-                    free(Q_ratios);
-                    free(error_vectors);
-                    return;
-                }
-                U[k][j][N[k][j] - 1] = energy_diff;
-
-                // Check acceptance rate and break if too low
-                if (iter % check_interval == check_interval - 1) {
-                    double acceptance_rate_A = (double)accepted_A / check_interval;
-                    if (acceptance_rate_A < min_acceptance_rate) {
-                        break;
-                    }
-                    accepted_A = 0;
-                }
-            }
-
-            // Sample state B
-            for (int iter = 0; iter < max_iterations; iter++) {
-                unsigned int seed = (unsigned int)time(NULL);
-                int row_to_add = rand_r(&seed) % (p->mG->rows-1);
-                
-                double delta_energy = csr_calculate_energy_change(p->vLLR, state_B, p->mG, i, row_to_add);
-                
-                if (delta_energy < 0 || exp(-delta_energy / temperature) > (double)rand_r(&seed) / RAND_MAX) {
-                    csr_add_row_to_row(state_B, i, p->mG, row_to_add);
-                    accepted_B++;
-                }
-                
-                double U_A = csr_row_energ(p->vLLR, error_vectors[k], i);
-                double U_B = csr_row_energ(p->vLLR, state_B, i);
-                double energy_diff = U_A - U_B;
-
-                // Increase array length and add new energy difference
-                N[j][k]++;
-                U[j][k] = realloc(U[j][k], N[j][k] * sizeof(double));
-                if (!U[j][k]) {
-                    fprintf(stderr, "Memory reallocation failed for U[%d][%d]\n", j, k);
-                    // Clean up and return
-                    csr_free(state_A);
-                    csr_free(state_B);
-                    for (int m = 0; m < K; m++) {
-                        csr_free(error_vectors[m]);
-                        for (int n = 0; n < K; n++) {
-                            free(U[m][n]);
-                        }
-                        free(U[m]);
-                        free(N[m]);
-                        free(Q_ratios[m]);
-                    }
-                    free(U);
-                    free(N);
-                    free(Q_ratios);
-                    free(error_vectors);
-                    return;
-                }
-                U[j][k][N[j][k] - 1] = energy_diff;
-
-                // Check acceptance rate and break if too low
-                if (iter % check_interval == check_interval - 1) {
-                    double acceptance_rate_B = (double)accepted_B / check_interval;
-                    if (acceptance_rate_B < min_acceptance_rate) {
-                        break;
-                    }
-                    accepted_B = 0;
-                }
-            }
+            // Sample state A and B
+            sample_state(state_A, k, j, &U, &error_vectors, p, i);
+            sample_state(state_B, j, k, &U, &error_vectors, p, i);
 
             csr_free(state_A);
             csr_free(state_B);
@@ -1538,43 +1404,71 @@ void BAR_MCMC(csr_t *mEt0_csr, csr_t *mEt_csr, params_t const * const p, int i) 
     }
 
     // Solve BAR equations
-    solve_pairwise_BAR_ratio(U, N, K, Q_ratios);
+    solve_pairwise_BAR_ratio(U.data, U.sizes, K, Q_ratios.data);
 
-    // Find the state with the largest partition function (smallest free energy)
-    int max_Q_index = 0;
-    double max_log_Q = -INFINITY;
-    for (int k = 0; k < K; k++) {
-        double log_Q_k = 0.0;
-        for (int j = 0; j < K; j++) {
-            if (j != k) {
-                log_Q_k += log(Q_ratios[k][j]);
-            }
-        }
-        if (log_Q_k > max_log_Q) {
-            max_log_Q = log_Q_k;
-            max_Q_index = k;
-        }
-    }
+    // Find the state with the largest partition function
+    int max_Q_index = find_max_partition_function(&Q_ratios, K);
 
     // Update mEt_csr with the chosen ensemble
-    csr_replace_row(mEt_csr, error_vectors[max_Q_index], i);
+    csr_replace_row(mEt_csr, error_vectors.vectors[max_Q_index], i);
 
+cleanup:
     // Clean up
     for (int k = 0; k < K; k++) {
         for (int j = 0; j < K; j++) {
-            free(U[k][j]);
+            free(U.data[k][j]);
         }
-        free(U[k]);
-        free(N[k]);
-        free(Q_ratios[k]);
-        csr_free(error_vectors[k]);
+        free(U.data[k]);
+        free(U.sizes[k]);
+        free(Q_ratios.data[k]);
+        csr_free(error_vectors.vectors[k]);
     }
-    free(U);
-    free(N);
-    free(Q_ratios);
-    free(error_vectors);
+    free(U.data);
+    free(U.sizes);
+    free(Q_ratios.data);
+    free(error_vectors.vectors);
 }
 
+// Helper function for sampling states
+void sample_state(csr_t *state, int k, int j, EnergyDifferences *U, ErrorVectors *error_vectors, params_t const * const p, int i) {
+    int accepted = 0;
+    int check_interval = 1000;
+    double min_acceptance_rate = 0.004;
+    double temperature = 1.0 * pow(10, 4);
+
+    for (int iter = 0; iter < MAX_ITERATIONS; iter++) {
+        unsigned int seed = (unsigned int)time(NULL) + iter;
+        int row_to_add = rand_r(&seed) % (p->mG->rows);
+        
+        double delta_energy = csr_calculate_energy_change(p->vLLR, state, p->mG, i, row_to_add);
+        
+        if (delta_energy < 0 || exp(-delta_energy / temperature) > (double)rand_r(&seed) / RAND_MAX) {
+            csr_add_row_to_row(state, i, p->mG, row_to_add);
+            accepted++;
+        }
+        
+        double U_state = csr_row_energ(p->vLLR, state, i);
+        double U_other = csr_row_energ(p->vLLR, error_vectors->vectors[j], i);
+        double energy_diff = U_other - U_state;
+
+        // Increase array length and add new energy difference
+        U->sizes[k][j]++;
+        U->data[k][j] = realloc(U->data[k][j], U->sizes[k][j] * sizeof(double));
+        if (!U->data[k][j]) {
+            fprintf(stderr, "Memory reallocation failed for U->data[%d][%d]\n", k, j);
+            return;
+        }
+        U->data[k][j][U->sizes[k][j] - 1] = energy_diff;
+
+        if (iter % check_interval == check_interval - 1) {
+            double acceptance_rate = (double)accepted / check_interval;
+            if (acceptance_rate < min_acceptance_rate) {
+                break;
+            }
+            accepted = 0;
+        }
+    }
+}
 
 /**
  * @brief Simulated Annealing-based syndrome decoding routine with improved stopping mechanism. (CSR form)
@@ -1584,80 +1478,113 @@ void BAR_MCMC(csr_t *mEt0_csr, csr_t *mEt_csr, params_t const * const p, int i) 
  */
 mzd_t *do_decode_BAR(mzd_t *mS, params_t const * const p) {
     mzd_t *mHx_dense = mzd_from_csr(NULL, p->mH);
+    if (!mHx_dense) {
+        fprintf(stderr, "Failed to create dense matrix from CSR\n");
+        return NULL;
+    }
+
     mzd_t *mE_dense = mzd_init(mHx_dense->ncols, mS->ncols);
+    if (!mE_dense) {
+        fprintf(stderr, "Failed to initialize mE_dense\n");
+        mzd_free(mHx_dense);
+        return NULL;
+    }
 
     mzp_t *perm = mzp_init(p->nvar);
     mzp_t *pivs = mzp_init(p->nvar);
+    if (!perm || !pivs) {
+        fprintf(stderr, "Failed to initialize permutations\n");
+        mzd_free(mHx_dense);
+        mzd_free(mE_dense);
+        mzp_free(perm);
+        mzp_free(pivs);
+        return NULL;
+    }
 
     perm = sort_by_llr(perm, p->vLLR, p);
     mzd_set_ui(mE_dense, 0);
 
     int rank = 0;
-    if (p->steps > 0){
-    perm = sort_by_llr(perm, p->vLLR, p);   /** order of decreasing `p` */
-    /** full row echelon form (gauss elimination) using the order of `p`,
-     * on the block matrix `[H|S]` (in fact, two matrices).
-     */
-    for(int i=0; i< p->nvar; i++){
-      int col=perm->values[i];
-      int ret=twomat_gauss_one(mHx_dense,mS, col, rank);
-      if(ret)
-	pivs->values[rank++]=col;
+    if (p->steps > 0) {
+        // Gaussian elimination
+        for (int i = 0; i < p->nvar; i++) {
+            int col = perm->values[i];
+            int ret = twomat_gauss_one(mHx_dense, mS, col, rank);
+            if (ret)
+                pivs->values[rank++] = col;
+        }
+
+        // Calculate error vector and energy for each syndrome
+        for (int i = 0; i < rank; i++)
+            mzd_copy_row(mE_dense, pivs->values[i], mS, i);
     }
-    if((p->debug &4)&&(p->debug &512)){ /** debug gauss */
-      printf("rank=%d\n",rank);
-      //    printf("perm: "); mzp_out(perm);
-      //    printf("pivs: "); mzp_out(pivs);
-      //    printf("mH:\n");
-      //    mzd_print(mH);
-      //    printf("mS:\n");
-      //    mzd_print(mS);
-    }
-    
-    // for each syndrome, calculate error vector and energy
-    for(int i=0;i< rank; i++)
-      mzd_copy_row(mE_dense,pivs->values[i],mS,i);
-  }
-    //mzd_t *mEt0 = mzd_transpose(NULL,mE_dense);
+
     mzp_free(perm);
     mzp_free(pivs);
 
-    csr_t *mE0_csr = csr_from_mzd(NULL,mE_dense);
-     if (mE0_csr == NULL) {
-        ERROR("Memory allocation failed for mEt0 CSR structure.\n");
-        return NULL;
-    }
-    csr_t *mEt0_csr=csr_init(NULL,mS->ncols,mHx_dense->ncols,mS->ncols*mHx_dense->ncols/4);
-    csr_transpose(mEt0_csr,mE0_csr);
-    //csr_t *mEt0_csr = csr_transpose(NULL, mE_csr);
-
-    mzd_t *mEt_dense = mzd_init(mS->ncols,mHx_dense->ncols);
-    mzd_set_ui(mEt_dense,0);
-    csr_t *mEt_csr=csr_from_mzd(NULL,mEt_dense);
-    mEt_csr->nzmax=mS->ncols*mHx_dense->ncols/4;
-
-    
-    if (mEt_csr == NULL) {
-        ERROR("Memory allocation failed for mEt CSR structure.\n");
+    csr_t *mE0_csr = csr_from_mzd(NULL, mE_dense);
+    if (!mE0_csr) {
+        fprintf(stderr, "Failed to create CSR matrix from dense matrix\n");
+        mzd_free(mHx_dense);
+        mzd_free(mE_dense);
         return NULL;
     }
 
+    csr_t *mEt0_csr = csr_init(NULL, mS->ncols, mHx_dense->ncols, mS->ncols * mHx_dense->ncols / 4);
+    if (!mEt0_csr) {
+        fprintf(stderr, "Failed to initialize mEt0_csr\n");
+        mzd_free(mHx_dense);
+        mzd_free(mE_dense);
+        csr_free(mE0_csr);
+        return NULL;
+    }
+    csr_transpose(mEt0_csr, mE0_csr);
+
+    mzd_t *mEt_dense = mzd_init(mS->ncols, mHx_dense->ncols);
+    if (!mEt_dense) {
+        fprintf(stderr, "Failed to initialize mEt_dense\n");
+        mzd_free(mHx_dense);
+        mzd_free(mE_dense);
+        csr_free(mE0_csr);
+        csr_free(mEt0_csr);
+        return NULL;
+    }
+    mzd_set_ui(mEt_dense, 0);
+
+    csr_t *mEt_csr = csr_from_mzd(NULL, mEt_dense);
+    if (!mEt_csr) {
+        fprintf(stderr, "Failed to create CSR matrix from mEt_dense\n");
+        mzd_free(mHx_dense);
+        mzd_free(mE_dense);
+        mzd_free(mEt_dense);
+        csr_free(mE0_csr);
+        csr_free(mEt0_csr);
+        return NULL;
+    }
+    mEt_csr->nzmax = mS->ncols * mHx_dense->ncols / 4;
+
+    // BAR_MCMC and simulated annealing
     for (int i = 0; i < mEt0_csr->rows; i++) {
-        BAR_MCMC(mEt0_csr,mEt_csr,p,i);
+        BAR_MCMC(mEt0_csr, mEt_csr, p, i);
     }
 
     csr_compress(mEt_csr);
     
     for (int i = 0; i < mEt0_csr->rows; i++) {
-        simulate_annealing_mcmc(mEt_csr,p,i);
+        simulate_annealing_mcmc(mEt_csr, p, i);
     }
 
     mzd_t *mEt = mzd_from_csr(NULL, mEt_csr);
-    csr_free(mEt0_csr);
-    csr_free(mEt_csr);
-    mzd_free(mHx_dense);
-    mzd_free(mE_dense);
-    mzd_free(mEt_dense);
+    if (!mEt) {
+        fprintf(stderr, "Failed to create dense matrix from final CSR matrix\n");
+        mzd_free(mHx_dense);
+        mzd_free(mE_dense);
+        mzd_free(mEt_dense);
+        csr_free(mE0_csr);
+        csr_free(mEt0_csr);
+        csr_free(mEt_csr);
+        return NULL;
+    }
 
     return mEt;
 }
