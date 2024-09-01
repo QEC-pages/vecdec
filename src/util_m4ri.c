@@ -559,7 +559,7 @@ csr_t * csr_from_pairs(csr_t *mat, const int nz, int_pair * const prs, const int
  *
  */
 csr_t * csr_from_mzd(csr_t *mat, const mzd_t * const orig){
-  int nz=mzd_weight(orig);
+  int nz=mzd_weight_naive(orig);
   mat = csr_init(mat, orig->nrows, orig->ncols, nz);/** will reallocate if needed */
   int i, j=0;
   for(i=0;i < mat->rows; i++){
@@ -567,10 +567,15 @@ csr_t * csr_from_mzd(csr_t *mat, const mzd_t * const orig){
 #if 1 /** optimized version */
     int idx=0;
     const word * const rawrow = orig->rows[i];
-    while(((idx=nextelement(rawrow,orig->width,idx))!=-1)&&(idx<orig->ncols)){
-      mat->i[j++]=idx++;
+    while(((idx=nextelement(rawrow,orig->width,idx))!=-1)&&
+	  (idx>=0)&&
+	  (idx<orig->ncols)){
+      if(j>=nz)
+	ERROR("j=%d nz=%d unexpected",j,nz);
+      if(idx>=0)
+	mat->i[j++]=idx++;
       if(idx >= orig->ncols)
-	break;
+	break;      
     }
 #else /** naive version */
     for(int idx=0; idx< orig->ncols; idx++)

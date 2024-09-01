@@ -2667,6 +2667,7 @@ int main(int argc, char **argv){
     qllr_t *ans;                  /** case 1 */
     size_t size;                  /** case 3 */
     char * comment;
+
   case 0: // mode=0 internal vecdec decoder
         // At least one round always
         synd_fail = 0;
@@ -3000,6 +3001,7 @@ int main(int argc, char **argv){
                     break;
             }
         }
+
 
         if (!((p->fdet) && (p->fobs == NULL) && (p->perr))) { // except in the case of partial decoding
             if (p->steps > 0) {  // otherwise results are invalid as we assume syndromes to match
