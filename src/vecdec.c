@@ -35,7 +35,7 @@ params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50, .pads=0,
   .uW=2, .uR=4, //.uEdbl=-1, .uE=-1,
   .numU=0, .numE=0, .maxU=0,
   .hashU_error=NULL, .hashU_syndr=NULL, .permHe=NULL,
-  .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8, .useP=0, .dmin=0,
+  .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8, .useP=0, .mulP=0, .dmin=0,
   .debug=1, .fdem=NULL, .fout="tmp",
   .fdet=NULL, .fobs=NULL,  .ferr=NULL,
   .gdet=NULL, .gobs=NULL, // .gerr=NULL,
@@ -66,7 +66,7 @@ params_t prm_default={  .steps=50, .pads=0,
   .dW=0, .minW=INT_MAX, .maxW=0, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
   .uW=2, .uR=4, //.uEdbl=-1, .uE=-1,
   .maxU=0, .bpalpha=1, .bpbeta=1,
-  .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8, .useP=0, .dmin=0,
+  .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8, .useP=0, .mulP=0, .dmin=0,
   .debug=1, .fout="tmp", .ferr=NULL,
   .mode=-1, .submode=0, .use_stdout=0, 
 };
@@ -1043,6 +1043,11 @@ int var_init(int argc, char **argv, params_t *p){
       if (p->debug&4)
 	printf("# read %s, useP=%g\n",argv[i],p-> useP);
     }
+    else if (sscanf(argv[i],"mulP=%lg",&val)==1){ /** `mulP` */
+      p->mulP = val;
+      if (p->debug&4)
+	printf("# read %s, mulP=%g\n",argv[i],p-> mulP);
+    }
     else if (sscanf(argv[i],"dE=%lg",&val)==1){ /** `dE` */
       p -> dEdbl = val;
       if (p->debug&4){
@@ -1440,6 +1445,12 @@ int var_init(int argc, char **argv, params_t *p){
   }
   if(!p->vP)
     ERROR("probabilities missing, specify 'fdem', 'finP', or 'useP'");
+
+  if(p->mulP > 0){/** scale probability values */
+    double *ptr=p->vP;
+    for(int i=0;i<p->nvar;i++, ptr++)
+      *ptr *= p->mulP;    
+  }
     
   LLR_table = init_LLR_tables(p->d1,p->d2,p->d3);
 
