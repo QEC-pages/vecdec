@@ -547,6 +547,9 @@ observable or soft-out row), and rows not-yet decoded.
 ### Actual to-do list 2014/08/15
 
 - [x] Implement `pre`-decoder for `mode=0`.
+  - [ ] fix adjacency graph construction
+  - [ ] add ML features (compare partial FE by L sector)
+  - [ ] pre-compute list of errors ???
 - [x] Make sure it works for classical codes 
 - [x] Debug `pre`-decoder and update documentation.
 - [x] Replace global errors with cluster generation algorithm based on
@@ -555,7 +558,7 @@ observable or soft-out row), and rows not-yet decoded.
 - [ ] Add ML properties for global errors list (`u`-hash).  To this
       end, add `obs` and an extra hash handle to `two_vec_t`
       structure.
-- [ ] Enable min-W operation with no `P` defined (`useP=none` with a DEM)
+- [ ] Enable min-W operation with no `P` defined (`useP=none` with a DEM, `null` pointer for `P` internally)
 - [ ] Come up with a protocol to check whether a cluster can be decoded 
 - [ ] Add BP / RIS decoders for individual clusters (hope that BP
       would converge better with many cycles cut); also, as an
