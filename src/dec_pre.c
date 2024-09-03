@@ -397,8 +397,10 @@ int dec_ufl_lookup(ufl_t * const u, const params_t * const p){
   /** TODO: insert some sort of residual decoding here.  Cluster growth? */
   return 0; /** some clusters remain undecoded */
 }
-
-csr_t * do_vv_graph(const csr_t * const mH, const csr_t * const mHT, const params_t *const p){
+/** @brief construct vv adjacency matrix `union(t)` mHT[`t`,`i`]*mH[`t`,`j`]
+ * @param join when non-zero, add mHT[`i`,`j`] to the union
+ */
+csr_t * do_vv_graph(const csr_t * const mH, const csr_t * const mHT, const params_t *const p, const int join){
   int max_buf=10, nz=0;
   //! WARNING: cannot reuse this matrix!!!!
   int *buf = malloc(max_buf*sizeof(int));
@@ -410,6 +412,16 @@ csr_t * do_vv_graph(const csr_t * const mH, const csr_t * const mHT, const param
     int cnt=0;
     for(int ic0 = mHT->p[v0]; ic0 < mHT->p[v0+1]; ic0++){
       const int c0=mHT->i[ic0];
+      if(join){ /** add original vertices to the union */
+	if(nz >= max_buf){
+	  max_buf*=2;
+	  buf=realloc(buf,max_buf*sizeof(buf[0]));
+	  if(!buf)
+	    ERROR("memory allocation");
+	}
+	buf[nz++] = c0;
+	cnt++;
+      }
       assert(c0 < mH->rows);
       for(int iv1=mH->p[c0]; iv1 < mH->p[c0+1]; iv1++){
 	const int v1=mH->i[iv1];
@@ -573,41 +585,48 @@ void do_clusters(params_t * const p){
     
     if(wmax>1){
       /** construct uR-local adjacency matrix for vv graph */      
-      csr_t *G1 = do_vv_graph(p->mH,p->mHt, p);
+      csr_t *G1 = do_vv_graph(p->mH,p->mHt, p, 0);
       csr_t *GG=G1, *G2;
-      for(int jj=1; jj<= p->uR; jj++){
-	for(int j=0; j<max; j++){ // initial invalid vector
-	  err->vec[0]=j;
-	  for(int i1=GG->p[j]; i1 < GG->p[j+1]; i1++){
-	    int idx1=GG->i[i1];
-	    if(idx1>j){
-	      cnt_err++;
-	      err->wei=2; 
-	      err->vec[1]=idx1;
-	      hash_add_maybe(err,p);
-	      if((p->maxU > 0) && (cnt_err >= p->maxU))
-		goto stop_label;	  
-	      if(wmax>2){
-		for(int i2=GG->p[idx1]; i2 < GG->p[idx1+1]; i2++){
-		  int idx2=GG->i[i2];
-		  if((idx2>j)&&(idx2!=idx1)){
-		    cnt_err++;
-		    err->wei=3; 
-		    err->vec[2]=idx2;
-		    hash_add_maybe(err,p);
-		    if((p->maxU > 0) && (cnt_err >= p->maxU))
-		      goto stop_label;			    
-		    if(wmax>3){
-		      err->wei=4; 
-		      for(int i3=GG->p[idx2]; i3 < GG->p[idx2+1]; i3++){
-			int idx3=GG->i[i3];
-			if((idx3>j)&&(idx3!=idx2)&& (idx3!=idx1)){
-			  cnt_err++;
-			  err->vec[3]=idx3;
-			  hash_add_maybe(err,p);
-			  if((p->maxU > 0) && (cnt_err >= p->maxU))
-			    goto stop_label;
-			}
+      for(int jj=2; jj <= p->uR; jj++){
+	G2 = do_vv_graph(G1,GG, p, 1);
+	if(G1!=GG)
+	  csr_free(GG);	
+	GG = G2;
+      }
+      if(p->uR > 1)
+	csr_free(G1);
+
+      for(int j=0; j<max; j++){ // initial invalid vector
+	err->vec[0]=j;
+	for(int i1=GG->p[j]; i1 < GG->p[j+1]; i1++){
+	  int idx1=GG->i[i1];
+	  if(idx1>j){
+	    cnt_err++;
+	    err->wei=2; 
+	    err->vec[1]=idx1;
+	    hash_add_maybe(err,p);
+	    if((p->maxU > 0) && (cnt_err >= p->maxU))
+	      goto stop_label;	  
+	    if(wmax>2){
+	      for(int i2=GG->p[idx1]; i2 < GG->p[idx1+1]; i2++){
+		int idx2=GG->i[i2];
+		if((idx2>j)&&(idx2!=idx1)){
+		  cnt_err++;
+		  err->wei=3; 
+		  err->vec[2]=idx2;
+		  hash_add_maybe(err,p);
+		  if((p->maxU > 0) && (cnt_err >= p->maxU))
+		    goto stop_label;			    
+		  if(wmax>3){
+		    err->wei=4; 
+		    for(int i3=GG->p[idx2]; i3 < GG->p[idx2+1]; i3++){
+		      int idx3=GG->i[i3];
+		      if((idx3>j)&&(idx3!=idx2)&& (idx3!=idx1)){
+			cnt_err++;
+			err->vec[3]=idx3;
+			hash_add_maybe(err,p);
+			if((p->maxU > 0) && (cnt_err >= p->maxU))
+			  goto stop_label;
 		      }
 		    }
 		  }
@@ -616,14 +635,7 @@ void do_clusters(params_t * const p){
 	    }
 	  }
 	}
-	if(jj < p->uR){
-	  G2 = do_vv_graph(G1,GG, p);
-	  if(G1!=GG)
-	    csr_free(GG);	
-	  GG = G2;
-	}
       }
-      csr_free(G1);
       csr_free(GG);
     }
   }
