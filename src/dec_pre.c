@@ -394,9 +394,12 @@ int dec_ufl_lookup(ufl_t * const u, const params_t * const p){
     ufl_print(u);
     ufl_cnt_print(p);
   }
-  /** TODO: insert some sort of residual decoding here.  Cluster growth? */
+  /** prepare for residual decoding. */
+  qsort(u->error->vec, u->error->wei, sizeof(rci_t), cmp_rci_t);
+  qsort(u->syndr->vec, u->syndr->wei, sizeof(rci_t), cmp_rci_t);
   return 0; /** some clusters remain undecoded */
 }
+
 /** @brief construct vv adjacency matrix `union(t)` mHT[`t`,`i`]*mH[`t`,`j`]
  * @param join when non-zero, add mHT[`i`,`j`] to the union
  */
@@ -809,13 +812,17 @@ int dec_ufl_one(const mzd_t * const srow, params_t * const p){
 	ans = 3; /** cluster lookup matched syndrome */
 	cnt[CONV_CLUS]++;
       }
+      else{
+	//! nothing to be done here 
+	//	ERROR("insert partial decoding here\n");
+      }
     }
   }
 
   if(p->debug&16){
     switch(ans){
     case 0:
-      printf("# pre-decoder match failed\n"); break;
+      printf("# pre-decoder match failed - try partial match\n"); break;
     case 1:
       printf("# trivial syndrome vector w_s=0\n"); break;
     case 2:

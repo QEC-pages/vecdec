@@ -1852,6 +1852,9 @@ int main(int argc, char **argv){
 	    status[ierr] = res_pre;
 	    cnt_pre++;
 	  }
+	  else{
+	    //! TODO: insert partial decoding logic here 
+	  }
 	}
 	if(cnt_pre < ierr_tot){ /** some pre-decoder failures */
 	  long long int num = ierr_tot - cnt_pre;
