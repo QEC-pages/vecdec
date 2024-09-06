@@ -175,6 +175,7 @@ typedef struct UFL_T {
     int internal; /** `1` to generate obs/det internally, `2` to generate from `err` file */
     long long int seed;  /** rng `seed`, set<=0 for automatic */
     double useP; /** global error probability `overriding` values in the `DEM` file (default: 0, no override) */
+    double mulP; /** scale error probability values in the `DEM` file (default: 0, no scaling) */
     double *vP; /** probability vector (total of `n`) */
     qllr_t *vLLR; /** vector of LLRs (total of `n`) */
     int minW; /** minimum weight of a codeword or error vector found */
@@ -316,7 +317,7 @@ typedef struct UFL_T {
 
   mzd_t *do_decode(mzd_t *mS, params_t const * const p);
 
-  csr_t * do_vv_graph(const csr_t * const mH, const csr_t * const mHT, const params_t *const p);
+  csr_t * do_vv_graph(const csr_t * const mH, const csr_t * const mHT, const params_t *const p, const int join);
   void do_clusters(params_t * const p); /** exercise */
   void kill_clusters(params_t * const p);
   //  void dec_ufl_exercise(params_t * const p);
@@ -351,9 +352,6 @@ typedef struct UFL_T {
   "\t outC=[string]\t: output file name for codewords in `nzlist` format\n" \
   "\t\t\t (if same as finC, the file will be updated)\n"		\
   "\t maxC=[long long int]\t: max number of codewords to read/write/store\n" \
-  "\t finU=[string]\t: input file name for errors in `nzlist` format\n" \
-  "\t outC=[string]\t: output file name for errors in `nzlist` format\n" \
-  "\t\t\t (if same as finU, the file will be updated)\n"		\
   "\t uW=[integer]\t: max weight of an error cluster in hash (default: 2)\n" \
   "\t\t ('0': no hash but skip zero-weight syndrome vectors; '-1': do not skip)\n" \
   "\t uR=[integer]\t: max range of v-v neighbors for errors in syndrome hash\n" \
@@ -362,6 +360,7 @@ typedef struct UFL_T {
   "\t\t for pre-decoding (default: '0', no limit)\n"			\
   "\t epsilon=[double]\t: small probability cutoff (default: 1e-8)\n"	\
   "\t useP=[double]\t: fixed probability value (override values in DEM file)\n"	\
+  "\t mulP=[double]\t: scale probability values from DEM file\n"	\
   "\t\t for a quantum code specify 'fdem' OR 'finH' and ( 'finL' OR 'finG' );\n" \
   "\t\t for classical just 'finH' (and optionally the dual matrix 'finL')\n" \
   "\t ferr=[string]\t: input file with error vectors (01 format)\n"	\
@@ -412,6 +411,13 @@ typedef struct UFL_T {
   "\t Multiple 'debug' parameters are XOR combined except for 0.\n"	\
   "\t Use debug=0 as the 1st argument to suppress all debug messages.\n"
 
+#if 0  
+#define XXX \
+  "\t finU=[string]\t: input file name for errors in `nzlist` format (not implemented)\n" \
+  "\t outU=[string]\t: output file name for errors in `nzlist` format (not implemented)\n" \
+  "\t\t\t (if same as finU, the file will be updated)\n"		
+#endif 
+  
 #define MORE_HELP							\
   "   Matrices used by %s:\n"						\
   "\t We have a CSS code with binary generator matrices Hx=H, Hz=G,\n" \
@@ -443,8 +449,10 @@ typedef struct UFL_T {
 
 #define HELPU /** common help for decoding `mode=0` and `mode=1` */	\
   "\t With 'uW' non-negative, use hash storage to store likely syndrome\n" \
-  "\t\t vectors to speed up the decoding ('maxU>0' sets the limit on the\n" \
-  "\t\t number of syndrome vectors in the hash; no limit if '0'). \n"	
+  "\t\t vectors to speed up the decoding.  Parameter 'maxU>0' sets the limit on the\n" \
+  "\t\t number of syndrome vectors in the hash; no limit if '0'.  \n"	\
+  "\t\t Parameter 'uR>0' sets the limit on the graph distance between non-zero positions\n" \
+  "\t\t in an error; no limit if '0'\n"	
   //  "\t\t 'finU' / 'outU' names of likely error vectors file (not implemented)\n" 
   //  "\t\t\t(the file will be overwritten if names are the same). \n"
 
@@ -460,6 +468,7 @@ typedef struct UFL_T {
   "\t Specify a single DEM file 'fdem', or 'finH', 'finL', and 'finP'\n"\
   "\t separately (either 'finL' or 'finG' is needed for a quantum code).\n" \
   "\t Use 'useP' to override error probability values in DEM file.   \n" \
+  "\t Use 'mulP' to scale error probability values from DEM file.   \n" \
   "\t Errors can be generated internally or read from 01 file 'ferr'.\n" \
   "\t Alternatively, files with detector events and observables \n"	\
   "\t can be specified via 'fdet' and 'fobs'. \n"			\
@@ -492,6 +501,7 @@ typedef struct UFL_T {
   "\t Specify a single DEM file 'fdem', or 'finH', 'finL', and 'finP'\n"\
   "\t separately (either 'finL' or 'finG' is needed for a quantum code).\n" \
   "\t Use 'useP' to override error probability values in DEM file.   \n" \
+  "\t Use 'mulP' to scale error probability values from DEM file.   \n" \
   "\t Errors can be generated internally or read from 01 file 'ferr'.\n" \
   "\t Alternatively, files with detector events and observables \n"	\
   "\t can be specified via 'fdet' and 'fobs'. \n"			\
@@ -519,6 +529,7 @@ typedef struct UFL_T {
   "\t Specify a single DEM file 'fdem', or 'finH', 'finL', and 'finP'\n" \
   "\t separately (either 'finL' or 'finG' is needed for a quantum code).\n" \
   "\t Use 'useP' to override error probability values in DEM file.   \n" \
+  "\t Use 'mulP' to scale error probability values from DEM file.   \n" \
   "\n"
 
 #define HELP3 /** help for `mode=3` */  \
