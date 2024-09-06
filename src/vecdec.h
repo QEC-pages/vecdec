@@ -167,6 +167,7 @@ typedef struct UFL_T {
     //    qllr_t uE; /** max energy of an error vector in `U` hash*/
     //    double uEdbl; /** max energy of an error vector in `U` hash*/
     int uW; /** max weight of an error vector in `U` hash (default: `2`) */
+    int uX; /** if non-zero, use partial pre-decoder cluster matches (default: `0`) */
     int uR; /** max distance between v-v neighbors for errors in syndrome hash (default: `4`) */
     two_vec_t *hashU_error; /** `U` hash location by error vector */
     two_vec_t *hashU_syndr; /** `U` hash location by syndrome */
@@ -356,6 +357,7 @@ typedef struct UFL_T {
   "\t\t ('0': no hash but skip zero-weight syndrome vectors; '-1': do not skip)\n" \
   "\t uR=[integer]\t: max range of v-v neighbors for errors in syndrome hash\n" \
   "\t\t (use '0' for no limit; default: 4)\n"				\
+  "\t uX=[integer]\t: when non-zero, use partial cluster matches (default: 0)\n" \
   "\t maxU=[long long integer]\t: max number of syndrome vectors in hash\n" \
   "\t\t for pre-decoding (default: '0', no limit)\n"			\
   "\t epsilon=[double]\t: small probability cutoff (default: 1e-8)\n"	\
@@ -450,9 +452,12 @@ typedef struct UFL_T {
 #define HELPU /** common help for decoding `mode=0` and `mode=1` */	\
   "\t With 'uW' non-negative, use hash storage to store likely syndrome\n" \
   "\t\t vectors to speed up the decoding.  Parameter 'maxU>0' sets the limit on the\n" \
-  "\t\t number of syndrome vectors in the hash; no limit if '0'.  \n"	\
+  "\t\t number of syndrome vectors in the hash; no limit if 'maxU=0'.  \n"	\
   "\t\t Parameter 'uR>0' sets the limit on the graph distance between non-zero positions\n" \
-  "\t\t in an error; no limit if '0'\n"	
+  "\t\t in an error vector stored in the hash; no limit if 'uR=0'\n"	\
+  "\t\t Parameter 'uX', when non-zero, allows the use of partially matched syndrome clusters,\n" \
+  "\t\t in which case only residual error is sent to the main decoder\n" \
+  "\t\t (default: 0, use only fully matched syndrome vectors)\n"	
   //  "\t\t 'finU' / 'outU' names of likely error vectors file (not implemented)\n" 
   //  "\t\t\t(the file will be overwritten if names are the same). \n"
 

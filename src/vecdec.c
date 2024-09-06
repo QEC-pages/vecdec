@@ -32,7 +32,7 @@ params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50, .pads=0,
   .lerr=-1, .maxosd=100, .swait=0, .maxC=0,
   .dW=0, .minW=INT_MAX, .maxW=0, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
   .bpalpha=1, .bpbeta=1, .bpgamma=0.5, .bpretry=1, 
-  .uW=2, .uR=4, //.uEdbl=-1, .uE=-1,
+  .uW=2, .uX=0, .uR=4, //.uEdbl=-1, .uE=-1,
   .numU=0, .numE=0, .maxU=0,
   .hashU_error=NULL, .hashU_syndr=NULL, .permHe=NULL,
   .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8, .useP=0, .mulP=0, .dmin=0,
@@ -64,7 +64,7 @@ params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50, .pads=0,
 params_t prm_default={  .steps=50, .pads=0, 
   .lerr=-1, .maxosd=100, .bpgamma=0.5, .bpretry=1, .swait=0, .maxC=0,
   .dW=0, .minW=INT_MAX, .maxW=0, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
-  .uW=2, .uR=4, //.uEdbl=-1, .uE=-1,
+  .uW=2, .uX=0, .uR=4, //.uEdbl=-1, .uE=-1,
   .maxU=0, .bpalpha=1, .bpbeta=1,
   .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8, .useP=0, .mulP=0, .dmin=0,
   .debug=1, .fout="tmp", .ferr=NULL,
@@ -741,7 +741,7 @@ void init_Ht(params_t *p){
   p->mHt = csr_transpose(p->mHt, p->mH);
   //! construct v-v graph 
   //  csr_t *vv_gr = do_vv_graph(p->mH, p->mHt, p);
-  if(p->uW>0){
+  if(p->uW > 0){
     if(p->debug&1){
       if(p->uR==0)
 	printf("# generating errors of weight up to %d for syndrome hash\n",p->uW);
@@ -983,6 +983,20 @@ int var_init(int argc, char **argv, params_t *p){
 	  printf("# will only skip zero syndrome vectors\n");
 	else
 	  printf("# will pre-compute syndromes for clusters of weight up to %d\n",p->uW);
+      }	
+      if(p->mode>=2)
+	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
+    }
+        else if (sscanf(argv[i],"uX=%d",&dbg)==1){ /** `uX` */
+      p->uX = dbg;
+      if (p->debug&4){
+	printf("# read %s, uX=%d\n",argv[i],p->uX);
+	if (p->uX < 0)
+	  ERROR("invalid uX value");
+	else if (p->uX == 0)
+	  printf("# will only use full clusters for predecoding \n");
+	else
+	  printf("# will use partial clusters for predecoding\n");
       }	
       if(p->mode>=2)
 	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
@@ -1815,7 +1829,7 @@ int main(int argc, char **argv){
   mzd_t *mE0=NULL;
 
   switch(p->mode){
-    long long int synd_fail; 
+    long long int synd_fail, pre_partial; 
     int *status;                   
     mzd_t *srow;                  /** case 0, case 1 */
     qllr_t *ans;                  /** case 1 */
@@ -1824,6 +1838,7 @@ int main(int argc, char **argv){
   case 0: /** `mode=0` internal `vecdec` decoder */
     /** at least one round always */
     synd_fail=0;
+    pre_partial=0;
     srow=mzd_init(1,p->nchk);
 
     for(long long int iround=1; iround <= rounds; iround++){
@@ -1852,8 +1867,14 @@ int main(int argc, char **argv){
 	    status[ierr] = res_pre;
 	    cnt_pre++;
 	  }
-	  else{
-	    //! TODO: insert partial decoding logic here 
+	  else{  /** pre-decoder failed */
+	    if(p->uX){
+	      if(p->ufl->error->wei){/** partial match */
+		pre_partial++;
+		mzd_row_add_vec(mE0,ierr,p->ufl->error,1);
+		mzd_row_add_vec(p->mHeT,ierr,p->ufl->syndr,0);
+	      }
+	    }
 	  }
 	}
 	if(cnt_pre < ierr_tot){ /** some pre-decoder failures */
@@ -1869,7 +1890,7 @@ int main(int argc, char **argv){
 	  mzd_t * mE2=do_decode(mS, p); /** each row a decoded error vector */
 	  for(long long int ierr =0, row=0 ; ierr < ierr_tot; ierr++){
 	    if(!status[ierr]){
-	      mzd_copy_row(mE0, ierr, mE2, row++);
+	      mzd_combine_even_in_place(mE0, ierr,0, mE2, row++,0);
 	      status[ierr]=4;
 	      cnt[CONV_RIS]++;
 	    }
@@ -2037,18 +2058,16 @@ int main(int argc, char **argv){
 	if(res_pre){ /** pre-decoder success */
 	  if(p->perr) 
 	    write_01_vec(p->file_perr, p->ufl->error, p->mH->cols, p->perr); /** error prediction */
-	  if(p->pdet){	      
-	    write_01_vec(p->file_pdet, p->ufl->syndr, p->mH->rows, p->pdet); /** syndrome prediction */
-	  }
+	  if(p->pdet)
+	    write_01_vec(p->file_pdet, p->ufl->syndr, p->mH->rows, p->pdet); /** syndrome prediction */	  
 	  if(!p->err)
 	    p->err=vec_init(p->nvar); /** temporary storage */
 	  if(!p->obs)
 	    p->obs=vec_init(p->mL->rows);
 	  assert(p->nvar >= p->mL->rows);
 	  vec_t *vobs = csr_vec_mul(p->err, p->obs, p->mLt, p->ufl->error, 1);
-	  if(p->pobs){
-	    write_01_vec(p->file_pobs, vobs, p->mL->rows, p->pobs); /** obs prediction */
-	  }
+	  if(p->pobs)
+	    write_01_vec(p->file_pobs, vobs, p->mL->rows, p->pobs); /** obs prediction */	  
 	  //	  cnt_update(CONV_TRIVIAL,0); /** trivial convergence after `0` steps */
 	  if(mzd_row_vec_match(p->mLeT,ierr,vobs)){
 	      cnt[SUCC_TOT]++;
@@ -2062,11 +2081,23 @@ int main(int argc, char **argv){
 	  }
 	}
 	else{ /** failed `pre`, do actual BP */
+	  if((p->uW > 0)&&(p->uX)&&(p->ufl->error->wei)){ /** `pre`-decoding and `partial cluster match` */
+	    mzd_row_add_vec(srow,0,p->ufl->syndr,0); /** modify syndrome vector / do `not` clear */
+	    pre_partial++;
+	  }
+	  mzd_row_clear_offset(pErr,0,0);
 	  cnt[NUMB_BP]++;
 	  int conv = do_dec_bp_one(ans,srow,p);
 	  int conv_BP = conv>>1, conv_OSD = conv%2;
+	  if((p->uW > 0)&&(p->uX)&&(p->ufl->error->wei)) /** `pre`-decoding and `partial cluster match` */
+	    for(int ic = 0; ic < p->ufl->error->wei; ic++){
+	      int i = p->ufl->error->vec[ic];
+	      assert((i >= 0)&&(i < p->nvar));
+	      ans[i] = - ans[i];  /** adjust BP result by cluster error */
+	      /** TODO: should we make sure that the original values are positive? */
+	    }
 	  if(do_file_output){ /** output predicted values */
-	    mzd_row_clear_offset(pErr,0,0);
+	    ERROR("make sure updated `srow` and `pErr` are used properly\n");
 	    for(int i=0; i < p->nvar; i++)
 	      if(ans[i]<0)
 		mzd_flip_bit(pErr,0,i);
@@ -2096,7 +2127,7 @@ int main(int argc, char **argv){
 	  }
 	}
 	//	mzd_free(srow);
-	if((p->nfail) && cnt[TOTAL]-cnt[SUCC_TOT] >= p->nfail)
+	if((p->nfail) && cnt[TOTAL]-cnt[SUCC_TOT] >= p->nfail)	  
 	  break;
       }
     }    
