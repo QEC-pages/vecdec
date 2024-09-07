@@ -775,12 +775,13 @@ BP schedule based on `average LLR`.
   are sorted by decreasing error probability (according to BP), and
   Gauss elimination is used to find valid error vectors.  With
   `lerr=0`, the unique solution corresponds to all-zero information
-  set (variable nodes corresponding to pivot columns), with `lerr=1`, in addition to all-zero information set,
-  information sets with a single non-zero bit are also checked, and
-  the minimum-weight vector is selected; with `lerr=2` up to two
-  non-zero bits are selected, etc.  When `maxosd` parameter is
-  non-zero, the search with *multiple* non-zero information bits is
-  restricted to this range of columns (default value `maxosd=100`).
+  set (variable nodes corresponding to pivot columns), with `lerr=1`,
+  in addition to the all-zero information set, information sets with a
+  single non-zero bit are also checked, and the minimum-weight vector
+  is selected; with `lerr=2` up to two non-zero bits are selected,
+  etc.  When `maxosd` parameter is non-zero, the search with
+  *multiple* non-zero information bits is restricted to this range of
+  columns (default value `maxosd=100`).
 
 ### Quantized LLR and `min-sum` vs. `sum-product` BP updates
 
@@ -798,24 +799,25 @@ in a table for LLR operations.  With `qllr2=0` (no table), the
 
 ## Pre-decoder
 
-To speed-up the RIS and BP decoder, especially when error rates are
-low, a fast predecoder based on syndrome cluster decomposition
-(similar to a single-step Union Find decoder) is now available.
-Namely, some error vectors and associated syndromes are stored in a
-hash.  The initial syndrome vector is decomposed into connected
-clusters based on syndrome connectivity graph; the look up decoding is
-attempted for each cluster separately.  
+To speed-up the RIS and BP decoders, especially at small error
+probabilities, a fast pre-decoder based on syndrome cluster
+decomposition (similar to a single-step Union Find decoder) is now
+available.  Namely, some error vectors and associated syndromes are
+stored in a hash.  The initial syndrome vector is decomposed into
+connected clusters based on syndrome connectivity graph; the look up
+decoding is attempted for each cluster separately.  
 
 The errors in hash are controlled by parameters `uW` (maximum error
-weight; use `0` to just skip zero-syndrome vectors and `-1` to attempt
-decoding every vector), `uR` (maximum graph distance between non-zero
-bits in stored error vectors), and `maxU` (maximum number of vectors
-in the hash; the default value is `0` for no limit).  In addition,
-with `uX=0` (the default value), no partial matching will be
-attempted.  With `uX=1`, when complete error vector cannot be matched,
-all matched clusters will be removed from the detector event vector
-before sending it to the main decoder.  This appears to help with BP
-(`mode=1`) decoder and cause failures with RIS (`mode=0`) decoder.
+weight; use `0` to just skip zero-syndrome vectors and `-1` to skip
+the pre-decoder altogether), `uR` (maximum graph distance between
+non-zero bits in stored error vectors; use `0` for no limit), and
+`maxU` (maximum number of vectors in the hash; the default value is
+`0` for no limit).  In addition, with `uX=0` (the default value), no
+partial matching will be attempted.  With `uX=1`, when complete error
+vector cannot be matched, all matched clusters will be removed from
+the detector event vector before sending it to the main decoder.  This
+appears to help with BP (`mode=1`) decoder and cause additional fails
+with RIS (`mode=0`) decoder.
 
 ## LER and code distance estimator
 
