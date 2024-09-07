@@ -18,6 +18,10 @@ In any mode, the program requires the parity check matrices and error
 probabilities, e.g., as given in a Detector Error Model (DEM) file,
 see the [Error model](#error-model) section.
 
+In addition to regular decoders, a fast cluster-based pre-decoder
+similar to a single-step Union Find decoder is available for both RIS
+and BP decoders.  See the [Pre-decoder](#pre-decoder) section.
+
 Some examples of using `vecdec` in various modes are given in the
 [Common tasks](#common-tasks) section.
 
@@ -40,9 +44,10 @@ For compilation *help*, change to the (vecdec/src/) directory and just run w/o
 arguments  
     `make`
 Since the program  is experimental, I recommend compiling with  
-    `make vecdec EXTRA=""` 
-This will enable additional integrity
-checks, and a lot of optional debugging information.
+    `make vecdec EXTRA=""`  
+This will enable additional integrity checks, and a lot of optional
+debugging information.  Some of the additional checks may be
+expensive; the program runs slower in this mode.
 
 ## Error model
 
@@ -770,12 +775,13 @@ BP schedule based on `average LLR`.
   are sorted by decreasing error probability (according to BP), and
   Gauss elimination is used to find valid error vectors.  With
   `lerr=0`, the unique solution corresponds to all-zero information
-  set (variable nodes corresponding to pivot columns), with `lerr=1`, in addition to all-zero information set,
-  information sets with a single non-zero bit are also checked, and
-  the minimum-weight vector is selected; with `lerr=2` up to two
-  non-zero bits are selected, etc.  When `maxosd` parameter is
-  non-zero, the search with *multiple* non-zero information bits is
-  restricted to this range of columns (default value `maxosd=100`).
+  set (variable nodes corresponding to pivot columns), with `lerr=1`,
+  in addition to the all-zero information set, information sets with a
+  single non-zero bit are also checked, and the minimum-weight vector
+  is selected; with `lerr=2` up to two non-zero bits are selected,
+  etc.  When `maxosd` parameter is non-zero, the search with
+  *multiple* non-zero information bits is restricted to this range of
+  columns (default value `maxosd=100`).
 
 ### Quantized LLR and `min-sum` vs. `sum-product` BP updates
 
@@ -790,6 +796,28 @@ The power `1<<qllr1` determines how integral LLRs relate to real LLRs
 in a table for LLR operations.  With `qllr2=0` (no table), the
 `Sum-Product` algorithm used in the program effectively reduces to a
 `Min-Sum` algorithm.
+
+## Pre-decoder
+
+To speed-up the RIS and BP decoders, especially at small error
+probabilities, a fast pre-decoder based on syndrome cluster
+decomposition (similar to a single-step Union Find decoder) is now
+available.  Namely, some error vectors and associated syndromes are
+stored in a hash.  The initial syndrome vector is decomposed into
+connected clusters based on syndrome connectivity graph; the look up
+decoding is attempted for each cluster separately.  
+
+The errors in hash are controlled by parameters `uW` (maximum error
+weight; use `0` to just skip zero-syndrome vectors and `-1` to skip
+the pre-decoder altogether), `uR` (maximum graph distance between
+non-zero bits in stored error vectors; use `0` for no limit), and
+`maxU` (maximum number of vectors in the hash; the default value is
+`0` for no limit).  In addition, with `uX=0` (the default value), no
+partial matching will be attempted.  With `uX=1`, when complete error
+vector cannot be matched, all matched clusters will be removed from
+the detector event vector before sending it to the main decoder.  This
+appears to help with BP (`mode=1`) decoder and cause additional fails
+with RIS (`mode=0`) decoder.
 
 ## LER and code distance estimator
 

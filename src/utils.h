@@ -34,7 +34,22 @@ extern "C"{
     exit(-1);								\
   }									\
   while(0)
-
+  
+#ifdef assert
+# undef assert
+#endif
+  
+#ifndef NDEBUG
+# define assert(EXPR)							\
+  do {									\
+    if (!(EXPR)) {							\
+      fprintf(stderr,"%s:%d: failed assertion " #EXPR " in %s()\n",__FILE__, __LINE__,__FUNCTION__); \
+      exit(-1);								\
+    }									\
+  } while (0)
+#else
+#define assert(EXPR) do { } while (0) 
+#endif
   
 /** pseudo-random number functions **********************************************/
   extern tinymt64_t tinymt;
