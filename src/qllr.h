@@ -22,7 +22,7 @@ extern "C"{
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
-#include <assert.h>
+  // #include <assert.h>
 #include <math.h>
 
 #ifdef USE_QLLR  

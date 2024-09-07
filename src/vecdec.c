@@ -744,9 +744,12 @@ void init_Ht(params_t *p){
   if(p->uW > 0){
     if(p->debug&1){
       if(p->uR==0)
-	printf("# generating errors of weight up to %d for syndrome hash\n",p->uW);
+	printf("# adding errors of weight up to %d to syndrome hash\n",p->uW);
       else 
-	printf("# generating error clusters of w <= %d and radius <= %d for syndrome hash\n",p->uW, p->uR);
+	printf("# adding error clusters of w <= %d and radius <= %d to syndrome hash\n",p->uW, p->uR);
+      if(p->maxU)
+	printf("# maximum number of error syndromes in hash maxU=%lld\n",p->maxU);
+      printf("# uX=%d, will %s use partially matched errors for pre-decoding\n",p->uX,p->uX==0? "not":"");
     }
     p->v0 = vec_init(p->nchk);
     p->v1 = vec_init(p->nchk);
@@ -1829,7 +1832,7 @@ int main(int argc, char **argv){
   mzd_t *mE0=NULL;
 
   switch(p->mode){
-    long long int synd_fail, pre_partial; 
+    long long int synd_fail; 
     int *status;                   
     mzd_t *srow;                  /** case 0, case 1 */
     qllr_t *ans;                  /** case 1 */
@@ -1838,7 +1841,6 @@ int main(int argc, char **argv){
   case 0: /** `mode=0` internal `vecdec` decoder */
     /** at least one round always */
     synd_fail=0;
-    pre_partial=0;
     srow=mzd_init(1,p->nchk);
 
     for(long long int iround=1; iround <= rounds; iround++){
@@ -1870,7 +1872,7 @@ int main(int argc, char **argv){
 	  else{  /** pre-decoder failed */
 	    if(p->uX){
 	      if(p->ufl->error->wei){/** partial match */
-		pre_partial++;
+		cnt[PART_CLUS]++;
 		mzd_row_add_vec(mE0,ierr,p->ufl->error,1);
 		mzd_row_add_vec(p->mHeT,ierr,p->ufl->syndr,0);
 	      }
@@ -2024,8 +2026,8 @@ int main(int argc, char **argv){
       if(p->pobs)
 	pLerr=mzd_init(1,p->mLt->cols);
     }
-    
     for(long long int iround=1; iround <= rounds; iround++){
+      assert(iround>0 && "memory allocation failed");
       if(p->debug&1){
 	printf("# starting round %lld of %lld pfail=%g fail=%lld total=%lld\n", iround, rounds,
 	       cnt[TOTAL] ? (double) (cnt[TOTAL]-cnt[SUCC_TOT])/cnt[TOTAL] : 0.5, cnt[TOTAL]-cnt[SUCC_TOT], cnt[TOTAL]);
@@ -2083,15 +2085,16 @@ int main(int argc, char **argv){
 	else{ /** failed `pre`, do actual BP */
 	  if((p->uW > 0)&&(p->uX)&&(p->ufl->error->wei)){ /** `pre`-decoding and `partial cluster match` */
 	    mzd_row_add_vec(srow,0,p->ufl->syndr,0); /** modify syndrome vector / do `not` clear */
-	    pre_partial++;
+	    cnt[PART_CLUS]++;
 	  }
-	  mzd_row_clear_offset(pErr,0,0);
+	  if(do_file_output)
+	    mzd_row_clear_offset(pErr,0,0);
 	  cnt[NUMB_BP]++;
 	  int conv = do_dec_bp_one(ans,srow,p);
 	  int conv_BP = conv>>1, conv_OSD = conv%2;
 	  if((p->uW > 0)&&(p->uX)&&(p->ufl->error->wei)) /** `pre`-decoding and `partial cluster match` */
 	    for(int ic = 0; ic < p->ufl->error->wei; ic++){
-	      int i = p->ufl->error->vec[ic];
+	      int i = p->ufl->error->vec[ic];	      
 	      assert((i >= 0)&&(i < p->nvar));
 	      ans[i] = - ans[i];  /** adjust BP result by cluster error */
 	      /** TODO: should we make sure that the original values are positive? */

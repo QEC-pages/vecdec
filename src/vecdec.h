@@ -30,6 +30,7 @@ typedef enum EXTR_T {
   CONV_LOWW,     //! LOW-Weight error (list decoding from hash)
   SUCC_LOWW,     //! success
   CONV_CLUS,    //! `pre-decoder` based on syndrome clusters
+  PART_CLUS,    //! `pre-decoder` partial clusters used
   SUCC_CLUS,    //! success
   CONV_RIS,     //! mode=0 `RIS decoder`, always converges (attempts)
   SUCC_RIS,
