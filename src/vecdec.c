@@ -1751,12 +1751,12 @@ int do_err_vecs(params_t * const p){
   /** prepare error vectors ************************************************************/
   switch(p->internal){
   case 0: /** read `det` and `obs` files (each line a column) */
-    il1=read_01(p->mHe,p->file_det, &p->line_det, p->fdet, 1, p->pads, p->debug);
+    il1=read_01(p->mHe,p->file_det, &p->line_det, p->fdet, p->pads, 1, p->debug);
     if(p->fobs){
-      il2=read_01(p->mLe,p->file_obs, &p->line_obs, p->fobs, 1, 0, p->debug);
+      il2=read_01(p->mLe,p->file_obs, &p->line_obs, p->fobs, 0, 1, p->debug);
       if(il1!=il2)
-	ERROR("mismatched DET %s (line %lld) and OBS %s (line %lld) files!",
-	      p->fdet,p->line_det,p->fobs,p->line_obs);
+	ERROR("mismatched DET %s (line %lld il=%d) and OBS %s (line %lld il=%d) files!",
+	      p->fdet,p->line_det, il1, p->fobs,p->line_obs, il2);
       if(p->debug&1)
 	printf("# read %d det/obs pairs\n",il1);
     }
