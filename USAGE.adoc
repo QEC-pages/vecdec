@@ -1,6 +1,6 @@
 = USAGE
 == Examples of `vecdec`use
 
-include:::examples/ex_01.sh[source,bash,indent=2]
+include::examples/ex_01.sh[indent=2]
 
 
