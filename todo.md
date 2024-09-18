@@ -566,3 +566,11 @@ observable or soft-out row), and rows not-yet decoded.
 - [ ] Try to figure out why BP is so slow (excessive memory allocation?)
 - [ ] Rewrite debug statements (reasonable debug bits)
 - [ ] All debugging output -> `stderr`
+
+### new items 2014/09/14
+ - [ ] make sure steps=0 and uW=0 generates no fail stats when writing `det` and `obs` files
+ - [ ] Come up with `cli` file to generate nice html documentation
+       from `adoc` (with properly included files)
+ - [ ] Come up with a script to verify the results statistics from the `ex_**.sh` files
+ - [ ] Make more examples with internal error generation for classical and quantum codes 
+ - [ ] 
