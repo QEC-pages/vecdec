@@ -1471,8 +1471,9 @@ int var_init(int argc, char **argv, params_t *p){
   
   switch(p->mode){
   case 1: /** both `mode=1` (BP) and `mode=0` */
+    if(p->debug&2)
+            out_LLR_params(LLR_table);
     if(p->debug&1){
-      out_LLR_params(LLR_table);
       printf("# submode=%d, %s BP using %s LLR\n",
 	     p->submode,
 	     p->submode & 4 ? (p->submode & 8 ? "serial-V" : "serial-C") : "parallel",

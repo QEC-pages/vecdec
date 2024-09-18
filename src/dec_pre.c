@@ -728,7 +728,7 @@ void do_clusters(params_t * const p){
   assert(p->hashU_error == NULL);
   free(err);
   if(p->debug&1)
-    printf("# generated %lld errors / %lld distinct syndrome vectors\n",cnt_err, cnt_synd);
+    printf("# stored %lld errors / %lld distinct syndrome vectors in hash\n",cnt_err, cnt_synd);
 #ifndef NDEBUG
   if(p->debug&64){
     int cnt=0;

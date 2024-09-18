@@ -1,4 +1,4 @@
 
-./src/vecdec steps=5000 lerr=1 \
+./src/vecdec seed=7 steps=5000 \
 	     finH= ./examples/96.3.963.alist useP=0.05 \
-	     ntot=10240 nvec=1024 nfail=100 
+	     ntot=1000 nvec=1000

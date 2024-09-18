@@ -19,53 +19,67 @@ from David MacKay collection
 
 ===== Use the default decoder 
 
-The RIS decoder `mode=0` is the default option, along with the
-pre-decoder parameter `uW=1`.  The latter specifies that only errors
-of weight up to `uW=1` will be added to the syndrome hash.
+The RIS decoder `mode=0 lerr=1` is the default option (here using
+`steps=5000` information sets).  Also default is the pre-decoder
+parameter `uW=1`.  The latter specifies that only errors of weight up
+to `uW=1` will be added to the syndrome hash used for cluster-based
+matching.
 
 [source,sh]
 include::examples/ex_A1.sh[]
 
-This example generates up to `ntot=10240` random error vectors in
-bunches of size `nvec=1024` each (for best performance, make sure that
-`nvec` be divisible by `64` and is not smaller than `1024`).  Uniform
-error probability `P=0.05` is chosen for each variable node.  The run
-will stop after encountering `nfail=100` decoding errors.  Linear
-algebra part of Random Information Set decoding is also done in
-bunches; total of `steps=5000` random information sets are taken.  For
-each of these, vectors with information sets of weight up to `lerr=1`
-are examined.
+This generates the output
 
-In a particular run the block error rate (BER) `0.0249023` (`102` out
-of `4096`) was achieved.  Increasing the number of RIS decoding steps
-by a factor of 10 **increased** BER to `0.029541` (`121` out of
-`4096`).  While looks like a bug, notice that the difference in the
-number of failed decoding changed by `21`, which is within the
-statistical range; this can be a result of a different set of errors.  
+[source,sh]
+include::examples/ex_A1_sh.out[]
+
+Only the last line of the output contains the actual results; the
+remaining rows contain auxiliary information which can be suppressed
+by setting `debug=0`.
+
+In this particular example, the decoding fail probability was
+`P_FAIL=0.033` (decoding failed `FAIL=33` times out of `NTOT=1000`
+syndrome vectors, with `S_TOT=967` total successfully decoded syndrome
+vectors.)  The number of successfully decoded syndrome vectors is a
+sum of `S_TRIVIAL=8` cases of trivial (all zero) syndrome vectors,
+`S_LOW=44` low-weight (single-cluster) syndrome vector, `S_CLUS=16`
+syndrome vectors formed by several clusters, and `S_RIS=899`
+successful (out of `C_RIS=932` attempted) RIS decoding events.
 
 To guarantee the same error vectors, specify the same `seed`
 parameter, and also use the same values for `ntot` and `nvec`
-parameters (or just read detector events / observables from
-files).  The following double loop
-```
-vecdec=./src/vecdec
-for lerr in 0 1 ; do 
-  for steps in 500 2000 8000 ; do 
-    echo lerr=$lerr steps=$steps \
-  	    `$vecdec debug=0 seed=113 mode=0 finH= ./examples/96.3.963.alist \
-	             ntot=10000 nvec=10000 steps=$steps useP=0.05 lerr=$lerr` 
-  done 
-done
-```
-gives more predictable results.  In a particular run: 
-```
-lerr=0 steps=500 0.0819 10000 9181 # ./examples/96.3.963.alist
-lerr=0 steps=2000 0.0387 10000 9613 # ./examples/96.3.963.alist
-lerr=0 steps=8000 0.0314 10000 9686 # ./examples/96.3.963.alist
-lerr=1 steps=500 0.0314 10000 9686 # ./examples/96.3.963.alist
-lerr=1 steps=2000 0.0307 10000 9693 # ./examples/96.3.963.alist
-lerr=1 steps=8000 0.0307 10000 9693 # ./examples/96.3.963.alist
-```
+parameters (or just read detector events / observables from files).
+This example demonstrates the effect of varying the decoder parameters
+`steps` and `lerr`:
+
+[source,sh]
+include::examples/ex_A2.sh[]
+
+[source,sh]
+include::examples/ex_A2_sh.out[]
+
+Similarly, increasing the pre-decoder parameter `uW` can dramatically
+speed up the decoding without reducing the accuracy:
+
+[source,sh]
+include::examples/ex_A3.sh[]
+
+[source,sh]
+include::examples/ex_A3_sh.out[]
+
+Here, with `uW=4`, the pre-decoder took care of about half of the
+syndrome vectors.  With longer codes, the syndrome vector list may be
+too long; use non-zero values of `uR` to restrict the graph distance
+between set bits in stored error clusters:
+
+[source,sh]
+include::examples/ex_A4.sh[]
+
+[source,sh]
+include::examples/ex_A4_sh.out[]
+
+Here `uR=0` corresponds to infinite distance, i.e., with `uW=2`, all
+weight-two errors are stored in the hash.
 
 - **Use Belief Propagation (BP) disorder with optional OSD.** Same
   code, using up to `steps=50` BP iterations with parallel update
@@ -73,11 +87,12 @@ lerr=1 steps=8000 0.0307 10000 9693 # ./examples/96.3.963.alist
   converges first), followed by OSD1 (`lerr=1`) using up to
   `maxosd=50` columns:
   
-```
-vecdec=./src/vecdec
-$vecdec debug=1 mode=1 maxosd=50 steps=50 lerr=2 \
-    finH= ./examples/96.3.963.alist ntot=102400 nvec=102400 useP=0.05 seed=5
-```
+[source,sh]
+include::examples/ex_B1.sh[]
+
+[source,sh]
+include::examples/ex_B1_sh.out[]
+
 Here equal `ntot` and `nvec` are used to ensure that the 
 random error sample remains the same (for reproducibility with the `seed` set).
 This particular example using OSD2 gives BER of `0.0325` (`3328`
