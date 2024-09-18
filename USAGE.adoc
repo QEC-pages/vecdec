@@ -19,12 +19,12 @@ from David MacKay collection
 
 ===== Use the default decoder 
 
-  
-```
-vecdec=./src/vecdec
-$vecdec debug=1 mode=0 finH= ./examples/96.3.963.alist \
-  ntot=10240 nvec=1024 steps=5000 lerr=1 useP=0.05 nfail=100
-```
+The RIS decoder `mode=0` is the default option, along with the
+pre-decoder parameter `uW=1`.  The latter specifies that only errors
+of weight up to `uW=1` will be added to the syndrome hash.
+
+[source,sh]
+include::examples/ex_A1.sh[]
 
 This example generates up to `ntot=10240` random error vectors in
 bunches of size `nvec=1024` each (for best performance, make sure that

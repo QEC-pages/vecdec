@@ -573,4 +573,10 @@ observable or soft-out row), and rows not-yet decoded.
        from `adoc` (with properly included files)
  - [ ] Come up with a script to verify the results statistics from the `ex_**.sh` files
  - [ ] Make more examples with internal error generation for classical and quantum codes 
- - [ ] 
+ - [ ] here `lerr=1` seems to be detrimental:
+ ```
+ ./src/vecdec  seed=7 steps=5000 lerr=0             finH= ./examples/96.3.963.alist useP=0.05       ntot=10 nvec=10 uW=-1
+ ./src/vecdec  seed=7 steps=5000 lerr=1             finH= ./examples/96.3.963.alist useP=0.05       ntot=10 nvec=10 uW=-1
+ ```
+ the first line gives 1 fail, the second 2 fails
+ 

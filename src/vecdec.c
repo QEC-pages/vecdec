@@ -32,7 +32,7 @@ params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50,
   .lerr=-1, .maxosd=100, .swait=0, .maxC=0,
   .dW=0, .minW=INT_MAX, .maxW=0, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
   .bpalpha=1, .bpbeta=1, .bpgamma=0.5, .bpretry=1, 
-  .uW=2, .uX=0, .uR=4, //.uEdbl=-1, .uE=-1,
+  .uW=1, .uX=0, .uR=0, //.uEdbl=-1, .uE=-1,
   .numU=0, .numE=0, .maxU=0,
   .hashU_error=NULL, .hashU_syndr=NULL, .permHe=NULL,
   .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8, .useP=0, .mulP=0, .dmin=0,
@@ -64,7 +64,7 @@ params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50,
 params_t prm_default={  .steps=50, 
   .lerr=-1, .maxosd=100, .bpgamma=0.5, .bpretry=1, .swait=0, .maxC=0,
   .dW=0, .minW=INT_MAX, .maxW=0, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
-  .uW=2, .uX=0, .uR=4, //.uEdbl=-1, .uE=-1,
+  .uW=1, .uX=0, .uR=0, //.uEdbl=-1, .uE=-1,
   .maxU=0, .bpalpha=1, .bpbeta=1,
   .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8, .useP=0, .mulP=0, .dmin=0,
   .debug=1, .fout="tmp", .ferr=NULL,
@@ -741,23 +741,25 @@ void init_Ht(params_t *p){
   p->mHt = csr_transpose(p->mHt, p->mH);
   //! construct v-v graph 
   //  csr_t *vv_gr = do_vv_graph(p->mH, p->mHt, p);
-  if(p->uW > 0){
+  if(p->mode < 2){
     if(p->debug&1){
-      if(p->uR==0)
-	printf("# adding errors of weight up to %d to syndrome hash\n",p->uW);
-      else 
-	printf("# adding error clusters of w <= %d and radius <= %d to syndrome hash\n",p->uW, p->uR);
-      if(p->maxU)
-	printf("# maximum number of error syndromes in hash maxU=%lld\n",p->maxU);
-      printf("# uX=%d, will %s use partially matched errors for pre-decoding\n",p->uX,p->uX==0? "not":"");
+      if(p->uW < 0)
+	printf("# uW=%d, will not use cluster-based pre-decoder\n",p->uW);
+      else{
+	if(p->uR==0)
+	  printf("# uW=%d, adding errors of weight up to %d to syndrome hash\n",p->uW, p->uW);
+	else 
+	  printf("# uW=%d, adding error clusters of w <= %d and radius <= uR=%d to syndrome hash\n",p->uW, p->uW, p->uR);
+	if(p->maxU)
+	  printf("# maximum number of error syndromes in hash maxU=%lld\n",p->maxU);
+	printf("# uX=%d, will %s use partially matched errors for pre-decoding\n",p->uX,p->uX==0? "not":"");
+      }
     }
     p->v0 = vec_init(p->nchk);
     p->v1 = vec_init(p->nchk);
     if(p->uW >=0)
       do_clusters(p);
   }
-    if(p->debug&1)
-  printf("# initialize matrices\n");
   if(p->mL)
     p->mLt = csr_transpose(p->mLt,p->mL);
   /** todo: fix reallocation logic to be able to reuse the pointers model */
@@ -917,7 +919,7 @@ int var_init(int argc, char **argv, params_t *p){
       p -> swait = dbg;
       if (p->debug&4)
 	printf("# read %s, swait=%d\n",argv[i],p-> swait);
-      if((p->mode >0)|| (p->mode!=2))
+      if((p->mode >0) && (p->mode!=2))
 	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
     }
     else if (sscanf(argv[i],"lerr=%d",&dbg)==1){ /** `lerr` */
@@ -1660,16 +1662,21 @@ int var_init(int argc, char **argv, params_t *p){
 
   }
   if(p->debug &1){
-    printf("# using variables: mode=%d submode=%d\n",p->mode, p->submode);
     switch(p->mode){
-    case 1:
-      printf("# BP decoder parameters: bpgamma=%g bpretry=%d OSD level lerr=%d maxosd=%d\n",
-	     p->bpgamma, p->bpretry, p->lerr,p->maxosd);
-      /* fall through */      
     case 0:
-      if(p->mode==0)
-	printf("# RIS decoder parameters: swait=%d\n",p->swait);
-      printf("# ntot=%lld nvec=%d steps=%d nfail=%lld lerr=%d\n",p->ntot,p->nvec,p->steps,p->nfail,p->lerr);
+      printf("# mode=%d submode=%d: use RIS decoder\n",p->mode, p->submode);
+      printf("# RIS decoder parameters: steps=%d swait=%d lerr=%d\n",p->steps, p->swait, p->lerr);
+      printf("# ntot=%lld nvec=%d nfail=%lld\n",p->ntot,p->nvec, p->nfail);
+      break;
+    case 1:
+      printf("# mode=%d submode=%d: use BP decoder\n",p->mode, p->submode);
+      printf("# BP decoder parameters: steps=%d bpgamma=%g bpalpha=%g bpbeta=%g bpretry=%d\n",
+	     p->steps, p->bpgamma, p->bpalpha, p->bpbeta, p->bpretry);
+      if(p->lerr >= 0)	
+	printf("#  OSD level lerr=%d maxosd=%d\n", p->lerr,p->maxosd);
+      else 
+	printf("# lerr=%d, no OSD\n", p->lerr);
+      printf("# ntot=%lld nvec=%d nfail=%lld \n",p->ntot,p->nvec,p->nfail);
       break;
     case 2:
       printf("# Analyze small-weight codewords in %d RIS steps; swait=%d\n",p->steps,p->swait);
@@ -1815,9 +1822,6 @@ int main(int argc, char **argv){
   /** initialize variables, read in the DEM file, initialize sparse matrices */
   var_init(argc,argv,  p);
   init_Ht(p);
-
-  if(p->debug & 1)
-    printf("# mode=%d submode=%d debug=%d\n",p->mode,p->submode,p->debug);
 
   long long int ierr_tot=0, rounds=(long long int )ceil((double) p->ntot / (double) p->nvec);
   if(((p->mode == 0) || (p->mode == 1)) && (p->debug & 2))
@@ -2243,6 +2247,10 @@ int main(int argc, char **argv){
       csr_mm_write(p->fout,"H.mmx",p->mH,comment);
     }
     if(!(p->submode & 31) || (p->submode & 8)){
+      if((p->mL==0) && (p->classical)){
+	p->mL=do_L_classical(p->mH, p);
+	p->ncws = p->mL->rows;
+      }
       if(p->mL){
 	if(p->debug&1)
 	  printf("# writing L=Lx matrix [ %d x %d ] to \t%s%s\n",
@@ -2250,10 +2258,8 @@ int main(int argc, char **argv){
 	comment[0]='L';
 	csr_mm_write(p->fout,"L.mmx",p->mL,comment);
       }
-      else {
-	if(p->debug&1)
-	  printf("# skippling L=Lx matrix for a classical code\n");	
-      }
+      else
+	ERROR("this should not happen");
     }
 
     if(!(p->submode & 31) || (p->submode & 16)){      
