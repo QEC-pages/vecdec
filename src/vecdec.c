@@ -27,7 +27,7 @@
 #include "vecdec.h"
 #include "qllr.h"
 
-params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50, .pads=0,
+params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50,
   .rankH=0, .rankG=-1, .rankL=-1, 
   .lerr=-1, .maxosd=100, .swait=0, .maxC=0,
   .dW=0, .minW=INT_MAX, .maxW=0, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
@@ -61,7 +61,7 @@ params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50, .pads=0,
   .ufl=NULL
 };
 
-params_t prm_default={  .steps=50, .pads=0, 
+params_t prm_default={  .steps=50, 
   .lerr=-1, .maxosd=100, .bpgamma=0.5, .bpretry=1, .swait=0, .maxC=0,
   .dW=0, .minW=INT_MAX, .maxW=0, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
   .uW=2, .uX=0, .uR=4, //.uEdbl=-1, .uE=-1,
@@ -894,13 +894,6 @@ int var_init(int argc, char **argv, params_t *p){
       p -> nvec = dbg;
       if (p->debug&4)
 	printf("# read %s, nvec=%d\n",argv[i],p-> nvec);
-      if(p->mode>1)
-	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
-    }
-    else if (sscanf(argv[i],"pads=%d",&dbg)==1){ /** `pads` */
-      p -> pads = dbg;
-      if (p->debug&4)
-	printf("# read %s, pads=%d\n",argv[i],p-> pads);
       if(p->mode>1)
 	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
     }
@@ -1751,9 +1744,9 @@ int do_err_vecs(params_t * const p){
   /** prepare error vectors ************************************************************/
   switch(p->internal){
   case 0: /** read `det` and `obs` files (each line a column) */
-    il1=read_01(p->mHe,p->file_det, &p->line_det, p->fdet, p->pads, 1, p->debug);
+    il1=read_01(p->mHe,p->file_det, &p->line_det, p->fdet, 1, p->debug);
     if(p->fobs){
-      il2=read_01(p->mLe,p->file_obs, &p->line_obs, p->fobs, 0, 1, p->debug);
+      il2=read_01(p->mLe,p->file_obs, &p->line_obs, p->fobs, 1, p->debug);
       if(il1!=il2)
 	ERROR("mismatched DET %s (line %lld il=%d) and OBS %s (line %lld il=%d) files!",
 	      p->fdet,p->line_det, il1, p->fobs,p->line_obs, il2);
@@ -1764,7 +1757,7 @@ int do_err_vecs(params_t * const p){
       if(p->debug&1)
 	printf("# read %d det events\n",il1);
     if(p->fer0){
-      il2=read_01(p->mE0,p->file_er0, &p->line_er0, p->fer0, 1, 0, p->debug);
+      il2=read_01(p->mE0,p->file_er0, &p->line_er0, p->fer0, 1, p->debug);
       if(il1!=il2)
 	ERROR("mismatched DET %s (line %lld) and ER0 %s (line %lld) files!",
 	      p->fdet,p->line_det,p->fer0,p->line_er0);
@@ -1786,14 +1779,14 @@ int do_err_vecs(params_t * const p){
 
     break;
   case 2: /** read errors from file and generate corresponding `obs` and `det` matrices */
-    il1=read_01(p->mE,p->file_err, &p->line_err, p->ferr, 1, 0, p->debug);
+    il1=read_01(p->mE,p->file_err, &p->line_err, p->ferr, 1, p->debug);
     if(p->debug&1)
       printf("# read %d errors from file %s\n",il1,p->ferr);
     csr_mzd_mul(p->mHe,p->mH,p->mE,1);
     if(p->mL)
       csr_mzd_mul(p->mLe,p->mL,p->mE,1);
     if(p->fer0){
-      il2=read_01(p->mE0,p->file_er0, &p->line_er0, p->fer0, 1, 0, p->debug);
+      il2=read_01(p->mE0,p->file_er0, &p->line_er0, p->fer0, 1, p->debug);
       if(il1!=il2)
 	ERROR("mismatched ERR %s (line %lld) and ER0 %s (line %lld) files!",
 	      p->ferr,p->line_err,p->fer0,p->line_er0);

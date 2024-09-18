@@ -897,14 +897,13 @@ int all_space(const char * str) {
  * @param fin file with 01 data open for reading
  * @param[input,output] lineno current line number in the file.
  * @param fnam file name (for debugging purposes)
- * @param pads if non-zero, pad input lines with `0`
  * @param by_col read the file into columns of the matrix 
  * @param debug if `(debug&8 !=0)` print some additonal information.
  * @return the number of rows actually read.
  *
  */
 int read_01(mzd_t *M, FILE *fin, long long int *lineno, const char* fnam,
-	    const int pads, const int by_col, const int debug){
+	    const int by_col, const int debug){
   if(!M)
     ERROR("expected initialized matrix 'M'!\n");
   else
@@ -927,9 +926,9 @@ int read_01(mzd_t *M, FILE *fin, long long int *lineno, const char* fnam,
     (*lineno)++;
     switch(buf[0]){
     case '0': case '1':
-      if((linelen<=m)&&(pads==0))
-	ERROR("line is too short, expected %d 01 characters or set 'pads=1'\n"
-	      "%s:%lld:1: '%s'\n", m,fnam,*lineno,buf);
+      if(linelen != m+1)
+	ERROR("incorrect line length=%zu, expected %d 01 characters\n"
+	      "%s:%lld:1: '%s'\n", linelen, m,fnam,*lineno,buf);
       else{
 	int len = linelen-1 < m ? linelen-1 : m;
 	if(by_col){
