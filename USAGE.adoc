@@ -82,7 +82,7 @@ Here `uR=0` corresponds to infinite distance, i.e., with `uW=2`, all
 weight-two errors are stored in the hash.
 
 - **Use Belief Propagation (BP) disorder with optional OSD.** Same
-  code, using up to `steps=50` BP iterations with parallel update
+  code, using up to `steps=10` BP iterations with parallel update
   schedule, using both average and instantaneous LLR (whichever
   converges first), followed by OSD1 (`lerr=1`) using up to
   `maxosd=50` columns:
@@ -92,6 +92,11 @@ include::examples/ex_B1.sh[]
 
 [source,sh]
 include::examples/ex_B1_sh.out[]
+
+Notice that the success rate is `0.036`, lower than that of RIS
+decoder.  This can be improved a bit by increasing the OSD level.
+Interestingly, larger number of steps can actually decrease the
+performance of parallel BP decoder: 
 
 Here equal `ntot` and `nvec` are used to ensure that the 
 random error sample remains the same (for reproducibility with the `seed` set).

@@ -2098,7 +2098,7 @@ int main(int argc, char **argv){
 	      /** TODO: should we make sure that the original values are positive? */
 	    }
 	  if(do_file_output){ /** output predicted values */
-	    ERROR("make sure updated `srow` and `pErr` are used properly\n");
+	    //	    ERROR("make sure updated `srow` and `pErr` are used properly\n");
 	    for(int i=0; i < p->nvar; i++)
 	      if(ans[i]<0)
 		mzd_flip_bit(pErr,0,i);
