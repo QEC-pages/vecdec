@@ -273,7 +273,7 @@ long long int nzlist_read(const char fnam[], params_t *p){
   p->num_cws += count; 
   fclose(f);
   if(p->debug&1)
-    printf("read %lld codewords from %s, total %lld\n",count, fnam, p->num_cws);
+    printf("# read %lld codewords from %s, total %lld\n",count, fnam, p->num_cws);
   return count; 
 }
 
@@ -661,7 +661,7 @@ int do_LLR_dist(params_t  * const p, const int classical){
 	    ichanged++; 
 	    if (ptr->energ < p->minE){  /** legacy code */
 	      if(p->debug&1)
-		printf("nz=%d cnt=%d energ=%g\n",nz,cnt,dbl_from_llr(ptr->energ));
+		printf("# nz=%d cnt=%d energ=%g\n",nz,cnt,dbl_from_llr(ptr->energ));
 	      p->minE=ptr->energ;
 	    }
 	    if (p->minW<0)
@@ -2283,7 +2283,7 @@ int main(int argc, char **argv){
 	if(p->ncws != p->rankL)
 	  ERROR("code parameters mismatch: rkH=%d rkL=%d Num(codewords)=%d\n",p->rankH, p->rankL, p->ncws);
 	if(p->debug &1)
-	  printf("quantum code parameters: n=%d k=%d rkH=%d rkG=%d\n",p->nvar,p->ncws,p->rankH, p->rankG);
+	  printf("# quantum code parameters: n=%d k=%d rkH=%d rkG=%d\n",p->nvar,p->ncws,p->rankH, p->rankG);
       }
       else{
 	p->rankL=p->nvar - p->rankH;
