@@ -79,13 +79,15 @@ include::examples/ex_A4.sh[]
 include::examples/ex_A4_sh.out[]
 
 Here `uR=0` corresponds to infinite distance, i.e., with `uW=2`, all
-weight-two errors are stored in the hash.
+error vectors of weight `0`, `1`, and `2` are stored in the hash.
 
-- **Use Belief Propagation (BP) disorder with optional OSD.** Same
-  code, using up to `steps=10` BP iterations with parallel update
-  schedule, using both average and instantaneous LLR (whichever
-  converges first), followed by OSD1 (`lerr=1`) using up to
-  `maxosd=50` columns:
+
+===== Use Belief Propagation (BP) decoder with optional OSD.
+
+Same classical code, using up to `steps=10` BP iterations with
+parallel update schedule, using both average and instantaneous LLR
+(whichever converges first), followed by OSD1 (`lerr=1`) using up to
+`maxosd=50` columns for OSD decoding:
   
 [source,sh]
 include::examples/ex_B1.sh[]
@@ -94,102 +96,140 @@ include::examples/ex_B1.sh[]
 include::examples/ex_B1_sh.out[]
 
 Notice that the success rate is `0.036`, lower than that of RIS
-decoder.  This can be improved a bit by increasing the OSD level.
+decoder.  The statistics given includes the total count of converged
+BP cases `C_BP_TOT=824`, which includes convergence with instantaneous
+LLR values `C_BP=507` and those with average LLR values
+`C_BP_AVG=317`.  When BP failed to converge, OSD is used (it converges
+always).  The last two columns give separate success counts for BP
+alone (`S_BP=823` out of converged `C_BP=824`) and OSD (`S_OSD=100`).
+
+The success rate can be improved by increasing the OSD level.
 Interestingly, larger number of steps can actually decrease the
-performance of parallel BP decoder: 
+performance of the parallel BP decoder:
 
-Here equal `ntot` and `nvec` are used to ensure that the 
-random error sample remains the same (for reproducibility with the `seed` set).
-This particular example using OSD2 gives BER of `0.0325` (`3328`
-failed out of `102400`); using a lower OSD1 gives a BER of
-`0.0397754`.
+[source,sh]
+include::examples/ex_B2.sh[]
 
-To use BP with serial-`C` or serial-`V` update schedules, use
-`mode=1.4` (bit `2` set in the `submode`) and `mode=1.12` (both bit
-`2` and bit `3` are set) respectively.  Bits `0` and bits `1` are used
-to specify just instantaneous or just average LLR values, e.g.,
-`mode=1.1` for parallel update schedule with instantaneous LLR,
+[source,sh]
+include::examples/ex_B2_sh.out[]
+
+To use BP with serial-`C` or serial-`V` update schedules,
+respectively, use `mode=1.4` (bit `2` set in the `submode`) and
+`mode=1.12` (both bit `2` and bit `3` are set).  Bits `0` and bits `1`
+are used to specify just instantaneous or just average LLR values,
+e.g., `mode=1.1` for parallel update schedule with instantaneous LLR,
 `mode=1.14` for serial-`V` update schedule with average LLR.  For this
-particular code and set of errors, `mode=1.14` gives the best
-performance, with BER of `0.0390918` (`4003` out of `102400`).
+particular code, mode=1.6 (serial-`C` with average LLR) gives best
+results (notice a much larger sample):
 
-- **Find the distance of a classical code and estimate the LER.** The
-  program in `mode=2` uses RIS algorithm to enumerate small-weight
-  codewords and estimate the LER based on the codewords available.
-  The list of codewords can be exported to and imported from a file
-  and therefore reused with a different error model.
+[source,sh]
+include::examples/ex_B3.sh[]
+
+[source,sh]
+include::examples/ex_B3_sh.out[]
+
+==== Simulate the performance of a quantum code
+
+The only difference is that one additional matrix is needed.  One can
+specify, e.g., the CSS generator matrices `H=Hx` and `G=Hz`.  The
+following example uses `{5,5}` hyperbolic code with parameters `[[40,10,4]]`
+and uniform `2%` error probability:
+
+[source,sh]
+include::examples/ex_C1.sh[]
+
+[source,sh]
+include::examples/ex_C1_sh.out[]
+
+Alternatively, one can use a DEM (detector error model) file output by
+`stim`, which specifies matrices `H=Hx` and `L=Lx` and the probability
+vector.  The probabilities can be scaled using `mulP` parameter.  This
+example uses distance-5 rotated surface code with the "standard"
+circuit error model (4 error types) and the uniform error probability
+`p=0.3%` (the `stim` commands for decoding are commented out).
+
+[source,sh]
+include::examples/ex_C2.sh[]
+
+[source,sh]
+include::examples/ex_C2_sh.out[]
+
+Notice that this error probability is about a third of the threshold
+value, and the pre-decoder (using `uW=2`) is able to match about `87%` of the
+syndrome vectors with a very good success rate.  
+
+=== Find the distance of a classical or quantum code and estimate the LER.
+
+The program in `mode=2` uses RIS algorithm to enumerate small-weight
+codewords and estimate the LER based on the codewords available.  The
+list of codewords can be exported to and imported from a file and
+therefore reused with a different set of error probabilities.
   
-  The following example uses `100,000` RIS steps to enumerate
-  codewords of up to `dW=10` above the minimum weight found (for this
-  particular code the code distance `minW=6`) and write them to a file
-  `tmp.nz`.
-```
-vecdec=./src/vecdec
-$vecdec mode=2.1 steps=100000 finH= ./examples/96.3.963.alist useP=0.05 outC=tmp.nz dW=10
-```
-In a particular run, `195769` codewords have been generated; more
-  codewords can be found by repeating the runs using the command line
-```
-$vecdec mode=2.1 steps=100000 finH= ./examples/96.3.963.alist useP=0.05 \
-  finC=tmp.nz outC=tmp.nz dW=10
-```
-In a particular set of three subsequent runs, `210822`, `212203`, and
-`212314` codewords were written to the file.  The computed codewords
+The following example uses `100,000` RIS steps to enumerate codewords
+of weight up to `dW=10` above the minimum weight found (for this particular
+code the code distance `minW=6`) and write them to a file `tmp.nz`.
+
+[source,sh]
+include::examples/ex_D1.sh[]
+
+[source,sh]
+include::examples/ex_D1_sh.out[]
+
+Notice that the minimum weight `min_weight=6` of a codeword found is
+the third number in the output line; only `N_min=3` codewords of such
+weight have been found.  Overall, in this particular run, `195690`
+codewords have been generated; more codewords can be found by
+repeatedly running the same command line (with a different seed, or by
+setting `seed=0`) after reading the codewords.
+
+[source,sh]
+include::examples/ex_D2.sh[]
+
+[source,sh]
+include::examples/ex_D2_sh.out[]
+
+In a particular run, `210918` codewords were written to the file.  The computed codewords
 can be used to estimate the BER, e.g, by running a `bash` script 
-```
-for ((w=6; w<=16; w++)) ; do 
-  echo $w `$vecdec debug=0 mode=2.1 steps=0 \
-  finH= ./examples/96.3.963.alist useP=0.05 finC=tmp.nz maxW=$w` 
-done
-```
-which gives the output
-```
-6 0.020577 0.006859 6 3
-7 0.020577 0.006859 6 3
-8 0.051854 0.006859 6 27
-9 0.051854 0.006859 6 27
-10 0.100138 0.006859 6 222
-11 0.100138 0.006859 6 222
-12 0.190795 0.006859 6 2149
-13 0.190795 0.006859 6 2149
-14 0.361757 0.006859 6 21275
-15 0.361757 0.006859 6 21275
-16 0.68621 0.006859 6 212314
-```
+
+[source,sh]
+include::examples/ex_D3.sh[]
+
+[source,sh]
+include::examples/ex_D3_sh.out[]
+
 The second column is a greedy estimate for the LER (sum over
 contributions for each codeword), the third is the single maximum term
-in the sum, the fourth is the minimum weight of a codeword, and the last
-column is the total number of codewords used in the estimate.
-Clearly, the error probability `0.05` is too high for good convergence.  With
-a smaller error probability `useP=0.01`, a much better convergence is
+in the sum, the fourth is the minimum weight of a codeword, and the
+last column is the total number of codewords used in the estimate.
+Clearly, the error probability `0.05` is too high for good convergence
+(in fact, this value is close to the threshold for this code).  With a
+smaller error probability `useP=0.01`, a much better convergence is
 achieved:
-```
-6 0.000186297 6.20991e-05 6 3
-7 0.000186297 6.20991e-05 6 3
-8 0.000245316 6.20991e-05 6 27
-9 0.000245316 6.20991e-05 6 27
-10 0.000264306 6.20991e-05 6 222
-11 0.000264306 6.20991e-05 6 222
-12 0.000271737 6.20991e-05 6 2149
-13 0.000271737 6.20991e-05 6 2149
-14 0.000274658 6.20991e-05 6 21275
-15 0.000274658 6.20991e-05 6 21275
-16 0.000275813 6.20991e-05 6 212314
-```
-A much longer run over a million error samples in `mode=0` and
-`steps=1000` (definitely not sufficient for optimal minimum-weight
-decoding of this code) 
-```
-$vecdec debug=1 mode=0 steps=1000 lerr=1 finH= ./examples/96.3.963.alist useP=0.01 nvec=100000 ntot=1000000
-```
-gives the BER of `3.1e-5` (`31` out of `1000000`), which is an order of
-magnitude below the greedy estimate and even factor of two below the estimate based
-on a single codeword.  This is the result of a very rough prefactor
-value used in the estimate.  (**FIXME:** Come up with a more accurate
-prefactor calculation.)
+
+[source,sh]
+include::examples/ex_D4.sh[]
+
+[source,sh]
+include::examples/ex_D4_sh.out[]
+
+In the second set, `mode=2.2` is used, instructing `vecdec` to use
+`exact` prefactor for each error vector found.
+
+A much longer run over a million error samples in `mode=0` with parameters
+`steps=1000 lerr=1` (which gives nearly optimal minimum-weight
+decoding of this code) gives
 
 
-Use 
+[source,sh]
+include::examples/ex_D5.sh[]
+
+[source,sh]
+include::examples/ex_D5_sh.out[]
+
+gives the BER of `5.9e-5` (`59` failed out of `1000000`), which
+compares well with the `mode=2.2` greedy estimate of `4.1e-5` based on an
+incomplete set of codewords.  
+
 === Use externally generated error vectors, detector events, or observables
 
 In addition to internal sampler, externally generated error vectors,
