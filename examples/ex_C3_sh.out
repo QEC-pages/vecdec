@@ -1,0 +1,14 @@
+uW=2 dist=5 p1=0.003
+# opening DEM file examples/surf_d5.dem
+# read DEM examples/surf_d5.dem: rows_H=120 rows_L=1 cols=1679; nz_H=5008 nz_L=140
+# mode=0, running vecdec RIS decoder : generating errors internally
+# mode=0 submode=0: use RIS decoder
+# RIS decoder parameters: steps=5000 swait=0 lerr=1
+# ntot=1000 nvec=1000 nfail=0
+# uW=2, adding errors of weight up to 2 to syndrome hash
+# uX=0, will not use partially matched errors for pre-decoding
+# stored 1410360 errors / 1316533 distinct syndrome vectors in hash
+# starting round 1 of 1
+# generated 1000 det/obs pairs
+# P_FAIL N_TOT FAIL S_TOT : C_TRIVIAL S_TRIVIAL   C_LOW S_LOW  C_CLUS S_CLUS : FAIL_RIS N_RIS S_RIS
+      0.003 1000 3 997 : 83 83 	 445 445 	 340 339 : 2 132 130 

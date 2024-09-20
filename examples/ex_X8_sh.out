@@ -1,0 +1,13 @@
+# matrix dimensions 120 by 1679
+# row range [0 .. 11], first and last non-zero columns:
+0 147
+# row range [12 .. 35], first and last non-zero columns:
+1 585
+# row range [36 .. 59], first and last non-zero columns:
+150 993
+# row range [60 .. 83], first and last non-zero columns:
+588 1401
+# row range [84 .. 107], first and last non-zero columns:
+996 1657
+# row range [108 .. 119], first and last non-zero columns:
+1404 1678

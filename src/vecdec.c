@@ -1450,8 +1450,8 @@ int var_init(int argc, char **argv, params_t *p){
   else if (p->finP){/** read probabilities */
     int rows, cols, siz;
     p->vP = dbl_mm_read(p->finP, &rows, &cols, &siz, NULL);
-    assert(rows == 1);
-    assert(cols == p->nvar);
+    if ((rows != 1) || (cols != p->nvar))
+      ERROR("expected rows=%d cols=%d have %d %d",1,p->nvar, rows,cols);
     if(p->debug&1)
       printf("# read %d probability values from %s\n", cols, p->finP);
   }
@@ -1544,7 +1544,7 @@ int var_init(int argc, char **argv, params_t *p){
     if(p->fer0){
       p->file_er0=fopen(p->fer0, "r");
       if(p->file_er0==NULL)
-	ERROR("can't open the (er0) file %s for reading\n",p->fdet);
+	ERROR("can't open the (er0) file %s for reading\n",p->fer0);
     }
     if(p->fdet){/** expect both `fdet` and `fobs` to be defined */
       p->file_det=fopen(p->fdet, "r");
@@ -1651,7 +1651,7 @@ int var_init(int argc, char **argv, params_t *p){
 	break;
       }
       if(p->fer0)
-	printf("modifying DET events +A*e0 with A %s and e0 %s files\n",p->finA, p->fer0);
+	printf("# modifying DET events +A*e0 with A %s and e0 %s files\n",p->finA, p->fer0);
     }
 
     /** initialize the counters */
@@ -1771,7 +1771,7 @@ int do_err_vecs(params_t * const p){
 	      p->fdet,p->line_det,p->fer0,p->line_er0);
       csr_mzd_mul(p->mHe,p->mA,p->mE0,0);
       if(p->debug&1)
-	printf("updated %d det += A*e0 events\n",il1);
+	printf("# updated %d det += A*e0 events\n",il1);
     }
     break;
   case 1: /** generate errors internally */
@@ -2040,7 +2040,7 @@ int main(int argc, char **argv){
 	cnt[TOTAL]++;
 #ifndef NDEBUG	  
 	if((p->debug&8)&&(p->nvar <= 256)&&(p->debug&512)){
-	  printf("non-trivial error %lld of %lld:\n",ierr+1,ierr_tot);
+	  printf("############# non-trivial error %lld of %lld:\n",ierr+1,ierr_tot);
 	  if(p->mE) /** print column as row */	      
 	    for(int i=0; i<p->nvar; i++)
 	      printf("%s%d%s",i==0?"[":" ",mzd_read_bit(p->mE,i,ierr),i+1<p->nvar?"":"]\n");
@@ -2048,7 +2048,7 @@ int main(int argc, char **argv){
 	  mzd_print_row(p->mLeT,ierr);
 	  out_llr("i",p->nvar,p->vLLR);
 	}
-#endif 	  
+#endif /* NDEBUG */	  
 	//	mzd_t * const srow = mzd_init_window(p->mHeT, ierr,0, ierr+1,p->nchk); /* syndrome row */
 	//! TODO: why does the above fail? 
 	mzd_copy_row(srow,0,p->mHeT,ierr); /** syndrome row in question */
@@ -2070,17 +2070,42 @@ int main(int argc, char **argv){
 	    write_01_vec(p->file_pobs, vobs, p->mL->rows, p->pobs); /** obs prediction */	  
 	  //	  cnt_update(CONV_TRIVIAL,0); /** trivial convergence after `0` steps */
 	  if(mzd_row_vec_match(p->mLeT,ierr,vobs)){
-	      cnt[SUCC_TOT]++;
-	      switch(res_pre){
-	      case 1: cnt[SUCC_TRIVIAL]++; break;
-	      case 2: cnt[SUCC_LOWW]++; break;
-	      case 3: cnt[SUCC_CLUS]++; break;
-	      default: ERROR("unexpected"); break;
-	      }
+#ifndef NDEBUG	  
+	    if((p->debug&8)&&(p->nvar <= 256)&&(p->debug&512)){
+	      printf("# pre-decoder success ans=%d\n",res_pre);
+	      mzd_print_row(p->mLeT,ierr);
+	      vec_print(vobs);
+	      vec_print(p->ufl->error);
+	      //	      csr_out(p->mLt);
+	      //	      mzd_print_row
+	    }
+#endif /* NDEBUG */	    
+	    cnt[SUCC_TOT]++;
+	    switch(res_pre){
+	    case 1: cnt[SUCC_TRIVIAL]++; break;
+	    case 2: cnt[SUCC_LOWW]++; break;
+	    case 3: cnt[SUCC_CLUS]++; break;
+	    default: ERROR("unexpected"); break;
+	    }
 	    continue ; /** next error / syndrome vector pair */     	    
 	  }
+#ifndef NDEBUG	    
+	  else{	    
+	    if((p->debug&8)&&(p->nvar <= 256)&&(p->debug&512)){
+	      printf("# pre-decoder failed ans=%d\n",res_pre);
+	      mzd_print_row(p->mLeT,ierr);
+	      vec_print(vobs);
+	      vec_print(p->ufl->error);
+	      //	      csr_out(p->mLt);
+	    }	    
+	  }
+#endif /* NDEBUG */	  
 	}
 	else{ /** failed `pre`, do actual BP */
+#ifndef NDEBUG	  
+	  if((p->debug&8)&&(p->nvar <= 256)&&(p->debug&512))
+	    printf("# pre-decoder failed, try BP\n");
+#endif /* NDEBUG */
 	  if((p->uW > 0)&&(p->uX)&&(p->ufl->error->wei)){ /** `pre`-decoding and `partial cluster match` */
 	    mzd_row_add_vec(srow,0,p->ufl->syndr,0); /** modify syndrome vector / do `not` clear */
 	    cnt[PART_CLUS]++;
@@ -2096,6 +2121,7 @@ int main(int argc, char **argv){
 	      assert((i >= 0)&&(i < p->nvar));
 	      ans[i] = - ans[i];  /** adjust BP result by cluster error */
 	      /** TODO: should we make sure that the original values are positive? */
+	      /** TODO: verify that this works (add example) */
 	    }
 	  if(do_file_output){ /** output predicted values */
 	    //	    ERROR("make sure updated `srow` and `pErr` are used properly\n");

@@ -1,0 +1,13 @@
+# initializing seed=38001768132 from time(NULL)+1000000ul*getpid()+0
+# Analyze small-weight codewords in 10000 RIS steps; swait=0
+# maxC=0 dE=-1 dW=0 maxW=0
+# calculating minimum weight
+# mode=2, estimating fail probability in 10000 steps
+# nz=1 cnt=4 energ=18.3809
+# nz=1 cnt=3 energ=13.7856
+# try to remove reducible codewords dx=1 ...
+# scanned for reducible codewords, found none of 862
+# done
+# min_weight N_min N_use N_tot
+3 854 862 862
+# wrote 862 computed codewords to file tmp.nz

@@ -12,13 +12,13 @@
 A classical (binary linear) code must be specified with a parity-check
 matrix using Matrix Market coordinate (`MTX`) or David MacKay's
 `alist` format; errors in this mode can only be generated internally.
-  
+
 For the examples in this section, we use the LDPC code `[96,48,6]`
 from David MacKay collection
 (https://www.inference.org.uk/mackay/codes/data.html) in the file
 `./examples/96.3.963.alist`
 
-===== Use the default decoder 
+===== Use the default decoder
 
 The RIS decoder `mode=0 lerr=1` is the default option (here using
 `steps=5000` information sets).  Also default is the pre-decoder
@@ -57,8 +57,7 @@ This example demonstrates the effect of varying the decoder parameters
 .example A2
 [source,sh]
 include::examples/ex_A2.sh[]
-
-[source,sh]
+---
 include::examples/ex_A2_sh.out[]
 
 Similarly, increasing the pre-decoder parameter `uW` can dramatically
@@ -67,8 +66,7 @@ speed up the decoding without reducing the accuracy:
 .example A3
 [source,sh]
 include::examples/ex_A3.sh[]
-
-[source,sh]
+---
 include::examples/ex_A3_sh.out[]
 
 Here, with `uW=4`, the pre-decoder took care of about half of the
@@ -79,8 +77,7 @@ between set bits in stored error clusters:
 .example A4
 [source,sh]
 include::examples/ex_A4.sh[]
-
-[source,sh]
+---
 include::examples/ex_A4_sh.out[]
 
 Here `uR=0` corresponds to infinite distance, i.e., with `uW=2`, all
@@ -93,12 +90,11 @@ Same classical code, using up to `steps=10` BP iterations with
 parallel update schedule, using both average and instantaneous LLR
 (whichever converges first), followed by OSD1 (`lerr=1`) using up to
 `maxosd=50` columns for OSD decoding (only last two lines of the output are included):
-  
+
 .example B1
 [source,sh]
 include::examples/ex_B1.sh[]
-
-[source,sh]
+---
 include::examples/ex_B1_sh.out[lines="17..-1"]
 
 Notice that the success rate is `0.036`, lower than that of RIS
@@ -136,7 +132,7 @@ include::examples/ex_B3.sh[]
 [source,sh]
 include::examples/ex_B3_sh.out[]
 
-==== Simulate the performance of a quantum code
+==== Simulate the performance of a quantum CSS code
 
 The only difference is that one additional matrix is needed.  One can
 specify, e.g., the CSS generator matrices `H=Hx` and `G=Hz`.  The
@@ -148,7 +144,17 @@ and uniform `2%` error probability:
 include::examples/ex_C1.sh[]
 
 [source,sh]
-include::examples/ex_C1_sh.out[lines="11..-1"]
+include::examples/ex_C1_sh.out[lines="10..-1"]
+
+We can also use the BP decoder, e.g., with serial-`V` schedule based on average LLR
+
+.example C2
+[source,sh]
+include::examples/ex_C2.sh[]
+
+[source,sh]
+include::examples/ex_C2_sh.out[lines="10..-1"]
+
 
 Alternatively, one can use a DEM (detector error model) file output by
 `stim`, which specifies matrices `H=Hx` and `L=Lx` and the probability
@@ -157,16 +163,16 @@ example uses distance-5 rotated surface code with the "standard"
 circuit error model (4 error types) and the uniform error probability
 `p=0.3%` (the `stim` commands for decoding are commented out).
 
-.example C2
+.example C3
 [source,sh]
-include::examples/ex_C2.sh[]
+include::examples/ex_C3.sh[]
 
 [source,sh]
-include::examples/ex_C2_sh.out[]
+include::examples/ex_C3_sh.out[]
 
 Notice that this error probability is about a third of the threshold
 value, and the pre-decoder (using `uW=2`) is able to match about `87%` of the
-syndrome vectors with a very good success rate.  
+syndrome vectors with a very good success rate.
 
 === Find the distance of a classical or quantum code and estimate the LER.
 
@@ -174,7 +180,7 @@ The program in `mode=2` uses RIS algorithm to enumerate small-weight
 codewords and estimate the LER based on the codewords available.  The
 list of codewords can be exported to and imported from a file and
 therefore reused with a different set of error probabilities.
-  
+
 The following example uses `100,000` RIS steps to enumerate codewords
 of weight up to `dW=10` above the minimum weight found (for this particular
 code the code distance `minW=6`) and write them to a file `tmp.nz`.
@@ -248,9 +254,9 @@ compares well with the `mode=2.2` greedy estimate of `4.1e-5` based on an
 incomplete set of codewords.
 
 
-=== Export code matrices to Matrix Market (`MMX`) or `DEM` files 
+=== Export code matrices to Matrix Market (`MMX`) or `DEM` files
 
-Use `mode=3`.  Create all five matrices (`H=Hx`, `G=Hz`, `L=Lx`, `K=Lz`) 
+Use `mode=3`.  Create all five matrices (`H=Hx`, `G=Hz`, `L=Lx`, `K=Lz`)
 and the probability vector `P` from the DEM file
 `./examples/surf_d3.dem`:
 
@@ -275,7 +281,7 @@ include::examples/ex_E2_sh.out[]
 
 Here `dW=0` limits the codewords to the minimum weight found, in this
 case `minW=3`, which gives `862` distinct vectors (you may need to
-increase `dW` if program fails to create `G` matrix in the next step).  
+increase `dW` if program fails to create `G` matrix in the next step).
 
 Second, generate the corresponding `G` matrix.  Notice that this will
 generally create a matrix with redundant rows using all available
@@ -303,7 +309,7 @@ include::examples/ex_E4_sh.out[]
 which creates both `G` and `K` matrices.  Of course, to create a
 `K=Lz` matrix, *quantum* codewords created directly from the `DEM` file can also be used.
 
-To create a DEM file (e.g., from `H` and `L` matrices and `P` vector), use `mode=3.64`.
+To create a DEM file (e.g., from `H` and `L` matrices and a `P` vector), use `mode=3.64`.
 Bit `6` must be the only bit set in the `submode` bitmap (otherwise an error will result).
 
 .example E5
@@ -313,14 +319,16 @@ include::examples/ex_E5.sh[]
 [source,sh]
 include::examples/ex_E5_sh.out[]
 
-This will create a DEM file `tryD.dem` with the probability values
-scaled by a factor `mulP=2`.  The file can be used, e.g., as an input to
-`Stim`, to generate errors/det/obs files externally.
+This created a DEM file `tryD.dem` with the error probability values
+scaled by a factor `mulP=2`.  The file can be used, e.g., as an input
+to `Stim`, to generate errors/det/obs files externally.
 
-=== Use externally generated error vectors, detector events, or observables
+=== Use externally generated vectors
+
+==== Simple examples
 
 In addition to internal sampler, externally generated error vectors,
-detector events, or observables can be used.  This can be done, e.g.,
+detector events, or observables can be used.  These can be generated, e.g.,
 with the help of `Stim`:
 
 .example X1
@@ -364,153 +372,154 @@ include::examples/ex_X3.sh[]
 [source,sh]
 include::examples/ex_X3_sh.out[]
 
-In a particular run, the last three lines of the output are 
+The last line in the output indicates that all detector events are
+recovered correctly (as expected), but there are some logical errors,
+in agreement with the `fail_fraction` and `success_cnt` reported by
+the program.
+
+A similar run with `mode=1.12 lerr=-1` (serial-V BP without OSD) gave
+output with the last three lines
+
+.example X4
+[source,sh]
+include::examples/ex_X4.sh[]
 
 [source,sh]
-===
-# fail_fraction total_cnt succes_cnt
- 0.0024 5000 4988 # ./examples/surf_d3.dem
-mismatch detector: 0 obs: 12 
-===
+include::examples/ex_X4_sh.out[lines="19..-1"]
 
-That is, all detector events are recovered correctly (as expected),
-but there are `12` logical errors, in agreement with the
-`fail_fraction` and `success_cnt` reported by the program.
+The `mismatched det` value in the last line is in agreement with the
+difference `N_BP - C_BP_TOT`.  However, the number of times the
+observable was incorrect does not match the number of `FAIL`s reported by `vecdec`.  To
+reproduce the total number of logical errors, both the `det` and `obs`
+have to be compared at once, e.g., by running
 
-A similar run with `mode=1.12 lerr=-1` (serial-V BP without OSD) gives
-output with the last three lines 
+.example X5
+[source,sh]
+include::examples/ex_X5.sh[]
 
 [source,sh]
-===
-# FAIL_FRAC TOTAL  C_TRIVIAL S_TRIVIAL  C_BP C_BP_AVG C_BP_TOT S_BP   S_OSD S_TOT
-     0.0106 5000  3530 3530      1337 86 1423 1417  0 4947
-mismatch detector: 47 obs: 21
-===
+include::examples/ex_X5_sh.out[lines="20..-1"]
 
-That is, the decoder failed to converge `47` times (in agreement with
-`C_TRIVIAL`+`C_BP_TOT`), and `21` times the observable was incorrect.
-To reproduce the total number of logical errors, the files must be
-compared column-by-column, e.g., by running 
-
-[source,sh]
-===
-paste -d: tmp_det.01 tmp_obs.01 > tmp1.01
-paste -d: tmp_D.01 tmp_L.01 > tmp2.01
-paste tmp1.01 tmp2.01 -d" "| grep -E -c -v '([01]+:[01]+) \1'
-===
-
-which returns `53`, in agreement with the `FAIL_FRAC` or `S_TOT`
+which returns the number of failed decoding in agreement with `FAIL`
 reported by `vecdec`.
 
-=== Syndrome vector manipulation 
+==== Syndrome vector manipulation
 
 In some cases, we may need to modify the syndrome vectors read from a
 file.  Input parameters `fer0` and `finA` are used to this extent.
 Namely, the detector events `s` read from a file specified with the
 parameter `fdet` are modified according to `s -> s + A*e0`, where
 binary matrix `A` and `01` vectors `e0` are read from files specified
-as arguments of `finA=...` and `fer0=...`.  In particular, if we use
-BP w/o OSD for decoding, and save generated detector events and
-the predicted errors into files `dets.01` and `bperr.01` respectively:
+as arguments of `finA=...` and `fer0=...`.
+
+In particular, if we use BP w/o OSD for decoding, and save generated
+detector events and the predicted errors into files `dets.01` and
+`bperr.01` respectively, we can use this feature to verify the syndrome values:
+
+.example X6
+[source,sh]
+include::examples/ex_X6.sh[]
 
 [source,sh]
-===
-./vecdec mode=1.12 finH= ../examples/96.3.963.alist seed=13 \
-      ntot=1000 nvec=1000 steps=40 useP=0.05 gdet=dets.01 perr=bperr.01
-===
+include::examples/ex_X6_sh.out[]
 
-we can verify the syndrome values using
-
-[source,sh]
-===
-H=../examples/96.3.963.alist 
-./vecdec mode=0 finH= $H ntot=1000 nvec=1000 steps=0 useP=0.05 \
-         fdet=dets.01 fer0=bperr.01 finA=$H gdet=yyy.01 
-===
-
-where each line in the file `yyy.01` is the combination `s+A*e0`, with the 
+Here each line in the file `yyy.01` is the combination `s+A*e0`, with the
 lines `s` and `e0` read from the files `dets.01` and `bperr.01`,
-respectively.  In a particular example, the BP decoding gave 
-`C_BP_TOT=914`, i.e., `86` times convergence failure, which is also
-the number of non-zero syndrome vectors in the file `yyy.01` (use
-`grep -c 1 yyy.01` to count).
+respectively.  The convergence failures is in agreement with
+the number of non-zero syndrome vectors in the file `yyy.01`
 
-The input parameters `finA`, `fer0`, and `fdet` can be used for decoding 
-(in `mode=0` and `mode=1`); they must be specified at the same time.  
-The only effect of `fer0` and `finA` is that the syndrome vectors are modified; 
+The input parameters `finA`, `fer0`, and `fdet` can be used for decoding
+(in `mode=0` and `mode=1`); they must be specified at the same time.
+The only effect of `fer0` and `finA` is that the syndrome vectors are modified;
 otherwise, the decoding can proceed as usual.
 
-=== Simulate the performance of a quantum CSS code 
-
-- Use RIS decoder (`mode=0`) with a quantum CSS code specified by parity check matrices `Hx`
-  and `Hz`; generate errors internally.  In this particular example,
-  the generalized bicycle (GB) code `[[10,2,3]]` with row weight `6` specified by the MTX files
-  `./input/GB_10_w6_X.mtx` and `./input/GB_10_w6_Z.mtx` is used:
+In addition `01` files can be easily split using the `cut` command.
+For example, to select columns `3` to `5` (inclusive, numbers starting
+with `1`) of file `dets.01` created earlier, we can use (result is
+sent to `stdout`).
 
 [source,sh]
-===
-vecdec=./src/vecdec 
-$vecdec debug=1 mode=0 finH= ./input/GB_10_w6_X.mtx \
-                       finG= ./input/GB_10_w6_Z.mtx \
-					   useP=0.005 lerr=1 nvec=100000 ntot=1000000 steps=5000
-===
+cut -c 3-5 dets.01
 
-  which gives the BER of `0.000814` (`814` errors out of `1000000`).
+==== Just-in-time decoding
 
-- Use BP decoder with serial-`V` schedule based on average LLR
-
-[source,sh]
-===
- $vecdec debug=1 mode=1.14 finH= ./input/GB_10_w6_X.mtx \
-                           finG= ./input/GB_10_w6_Z.mtx \
-					   useP=0.005 lerr=2 nvec=10240 ntot=102400 steps=100
-===
-
-gives the BER of `0.00140625` (`144` out of `102400`). 
-
-- Estimate the BER by generating the list of codewords 
+To be useful in scalable quantum computation, quantum error correction
+would be run over millions of measurement rounds.  In such a case, we
+do not expect to be able to decode the entire syndrome vector,
+piecewise decoding would be necessary.  This example shows how to do
+it with `vecdec` and a small included program `mtx_sub` for splitting
+`mtx` matrices into pieces.  In this example, the `5`-round detector
+error model `surf_d5.dem` will be used.  The circuit generates `12`
+detector events in the 1st round, `24` in each of the 4 subsequent
+rounds, and `12` in the final round.  It was constructed with `Stim`
+using the following script :
 
 [source,sh]
-===
-$vecdec debug=1 mode=2.0 finH= ./input/GB_10_w6_X.mtx \
-                       finG= ./input/GB_10_w6_Z.mtx \
-				    useP=0.005 steps=1000000 finC=tmp.nz outC=tmp.nz dW=7
-===
+stim=../Stim/out/stim
+dist=5
+p1=0.003
+# construct `stim` file
+$stim gen --code surface_code --task rotated_memory_x \
+      --distance $dist --rounds $dist \
+      --after_clifford_depolarization $p1 \
+      --after_reset_flip_probability $p1 \
+      --before_round_data_depolarization $p1 \
+      --before_measure_flip_probability $p1 \
+      > examples/surf_d$dist.stim
+# generate the corresponding DEM file
+$stim analyze_errors --in examples/surf_d${dist}.stim > examples/surf_d${dist}.dem
 
-this generates a list of 32 codewords.  A subsequent cycle over the maximum weight:
+Namely, the same samples will be decoded firstly in two steps, using two
+overlapping blocks, and secondly all at once (for comparison).
+
+First, extract matrices and the error probability vector from the `DEM` file
+
+.example X7
+[source,sh]
+include::examples/ex_X7.sh[]
+---
+include::examples/ex_X7_sh.out[]
+
+Second, use `mtx_sub` to calculate the column boundaries in different row blocks of `H`
+
+.example X8
+[source,sh]
+include::examples/ex_X8.sh[]
+---
+include::examples/ex_X8_sh.out[]
+
+For this simple example, the first block will include rows from `0` to
+`83`, and columns from `0` to `a=1401`, and the second block rows from
+`[36..119]` and all columns, with error vector in columns `[0..585]`
+fixed.  This implies the matrix decomposition (using matlab notations,
+except starting with `0`)
+
+[literal]
+A1=H[  :83 ,    :1401]
+B2=H[36:119,    :585]
+A2=H[36:119, 586: ]
+
+This also requires the decomposition of the probability vector 
+
+[literal]
+P1=P[   :1401] # use with `A1`
+P2=H[586:    ] # use with `A2`
+
+Given the syndrome vector `s`, in the first step we solve the equation
+`A1*e1=s[0:83]`, and in the second step the equation `A2*e2 =
+s[36:119] + B2 * e1[0:585]`, with the output error vector a
+concatenation `(e1[0:585], e2)`.  This is implemented as the shell
+script
+
+.example X9
+[source,sh]
+include::examples/ex_X9.sh[]
 
 [source,sh]
-===
-for ((w=3; w<=6; w++)) ; do 
-  echo $w `$vecdec debug=0 mode=2.3 finH=./input/GB_10_w6_X.mtx \
-      finG=./input/GB_10_w6_Z.mtx useP=0.005 steps=0 finC=tmp.nz  maxW=$w` 
-done
-===
+include::examples/ex_X9_sh.out[]
 
-  which gives
+In this particular case, we have the same number of decoding failures.
 
-[source,sh]
-===
-3 0.0280724 0.00280724 0.00074625 7.4625e-05 3 10 10 10
-4 0.0320325 0.00280724 0.000751225 7.4625e-05 3 10 20 20
-5 0.0327029 0.00280724 0.000766113 7.4625e-05 3 10 32 32
-6 0.0327029 0.00280724 0.000766113 7.4625e-05 3 10 32 32
-===
-
-Here the column titles (except for the first one which is the maximum
-codeword weight used) can be generated using `debug=1` option; they
-are
-
-[source,sh]
-===
-# sumP(fail) maxP(fail) sumP_exact(fail) maxP_exact(fail) min_weight N_min N_use N_tot
-===
-
-Again, the estimated contribution from a single codeword is about
-twice the LER computed.  However, the `sumP_exact(fail)` appears to
-converge at `0.000766113`, which is numerically close to the
-fail probability computed using RIS decoder (not clear why the
-difference) and about a half of the fail probability given by the BP decoder.
 
 === Simulate quantum Clifford circuit (given a detector error model)
 
@@ -524,9 +533,9 @@ error model with the same probability `p=0.005` of four common error types:
 vecdec=./src/vecdec
 stim=../Stim/out/stim # location of `stim` command-line binary
 d=5                      # code distance (and number of rounds)
-p=0.005                  # error probability to use 
-fnam=sd5                 # base file name to use for `stim` files 
-# use `Stim` to create the actual circuit 
+p=0.005                  # error probability to use
+fnam=sd5                 # base file name to use for `stim` files
+# use `Stim` to create the actual circuit
 $stim gen --code surface_code --task rotated_memory_x \
           --distance $d --rounds $d \
           --after_clifford_depolarization $p \
@@ -534,11 +543,11 @@ $stim gen --code surface_code --task rotated_memory_x \
           --before_round_data_depolarization $p \
           --before_measure_flip_probability $p \
           > $fnam.stim
-# use `Stim` to create the DEM file 
+# use `Stim` to create the DEM file
 $stim analyze_errors --in $fnam.stim > $fnam.dem
 # use `vecdec` to generate errors internally and do the actual decoding
 $vecdec debug=1 mode=0 fdem=$fnam.dem steps=500 lerr=1 \
-          ntot=10240 nvec=1024 nfail=100 
+          ntot=10240 nvec=1024 nfail=100
 ===
 
 This gives BER of `0.0581055` (`119` out of  `2048`).  Note that the
@@ -554,9 +563,9 @@ error probability vector.  To generate these files from a DEM file,
 use `vecdec` with `mode=3`:
 
 [source,sh]
-=== 
-$vecdec mode=3.28 fdem=sd5.dem fout=tmp 
-=== 
+===
+$vecdec mode=3.28 fdem=sd5.dem fout=tmp
+===
 
 This creates the files `tmpH.mmx`, `tmpL.mmx`, and `tmpP.mmx` with
 matrices `H` and `L` and the probability vector `P` extracted from the
@@ -579,13 +588,13 @@ $vecdec mode=1.14 finH=tmpH.mmx finL=tmpL.mmx finP=tmpP.mmx steps=50 lerr=2 \
 ===
 
 It gives BER of `0.0103306` (`100` out of `9680`), substantially
-better than the RIS decoding.  
+better than the RIS decoding.
 
 - Use `vecdec` with detector and observable events generated by `Stim`:
 
 [source,sh]
 ===
-stim=../Stim/out/stim 
+stim=../Stim/out/stim
 fnam=sd5
 $stim sample_dem --shots 10240 --in $fnam.dem \
         --out $fnam.det --out_format 01 \
@@ -599,9 +608,9 @@ performance at small error probabilities, `mode=2` can be used:
 
 [source,sh]
 ===
-vecdec=./src/vecdec 
-$vecdec mode=2.0 fdem=sd5.dem steps=100000 dW=7 outC=tmp.nz 
-for ((w=5; w<=10; w++)) ; do 
+vecdec=./src/vecdec
+$vecdec mode=2.0 fdem=sd5.dem steps=100000 dW=7 outC=tmp.nz
+for ((w=5; w<=10; w++)) ; do
   echo $w `$vecdec debug=0 mode=2.2 fdem=sd5.dem steps=0 maxW=$w finC=tmp.nz`
 done
 ===
@@ -625,7 +634,7 @@ This the output (truncated at the top)
 Clearly, the expansion converges, and the greedy estimate is
 numerically close to the actual error rate.
 
-## Use matrix transformations to simplify the error model
+=== Use matrix transformations to simplify the error model
 
 The transformations [@Pryadko-2020] reduce the degeneracy of a quantum
 code while preserving the maximum-likelihood (ML) decoding
@@ -673,7 +682,7 @@ zeros.
 
 [source,sh]
 ===
-stim=../Stim/out/stim 
+stim=../Stim/out/stim
 fnam=try
 $stim sample_dem --shots 10240 --in ./examples/surf_d3.dem \
         --out $fnam.det --out_format 01 \
@@ -683,7 +692,7 @@ $vecdec debug=1 mode=1.14 fdem=./examples/surf_d3.dem \
            nvec=1024 ntot=10240
 $vecdec debug=1 mode=1.14 finH=tmpXH.mmx finL=tmpXL.mmx finP=tmpXP.mmx \
            fdet=$fnam.det fobs=$fnam.obs steps=50 lerr=2 \
-           nvec=1024 ntot=10240 pads=1 
+           nvec=1024 ntot=10240 pads=1
 ===
 
 Here the first `vecdec` run uses the original `DEM` file, while the
@@ -692,62 +701,3 @@ second run used the constructed matrices.
 **FIXME:** apparently there is a bug somewhere as modified matrices
 result in substantial degraded decoding (`BER` increases from
 `0.00371` up to `0.0230`)
-
-=== Calculate the distance of a code or a circuit
- 
-Just use `mode=2`.  For larger circuits this may require a large
-number of steps.  For example, for the DEM file
-`./examples/surf_d7.dem` (it was originally generated with the help of
-`Stim`) we run
-
-[source,sh]
-===
-$vecdec debug=1 mode=2 steps=10000 fdem= ./examples/surf_d7.dem
-===
-
-to get the output
-
-[source,sh]
-===
-# initializing seed=211030872039 from time(NULL)+1000000ul*getpid()+0
-# opening DEM file ./examples/surf_d7.dem
-# read DEM: r=336 k=1 n=5473
-# using variables: mode=2 submode=0
-# Analyze small-weight codewords in 10000 RIS steps; swait=0
-# maxC=0 dE=-1 dW=0 maxW=0
-# calculating minimum weight
-# mode=2 submode=0 debug=1
-# mode=2, estimating fail probability in 10000 steps
-nz=1 cnt=7 energ=36.8401
-nz=1 cnt=7 energ=36.7964
-# min_weight N_min N_use N_tot
-7 875 875 875
-===
-
-where the first number (`7`) is the minimum weight of a codeword
-found, and `875` is the number of codewords found.  Re-run with the
-additional parameter `maxW=7` to give the number of codewords of this
-weight found, e.g.
-
-[source,sh]
-===
-./src/vecdec debug=0 mode=2 steps=1000 fdem= ./examples/surf_d7.dem maxW=8 dW=2
-===
-
-which gives the output (fewer codewords are found after a fewer steps)
-
-[source,sh]
-===
-7 71 336 1053
-===
-
-Here `71` is the number of found codewords of the minimum weight `7`,
-`336` is the number of codewords of weight not exceeding `maxW=8`, and 
-`1321` is the total number of codewords found.
-
-// generate examples by running:
-// for f in examples/ex_X*.sh ; do
-//      bash $f > ${f/.sh/_sh.out};
-//      cat ${f/.sh/_sh.out};
-//      echo ;
-// done

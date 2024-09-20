@@ -1,0 +1,18 @@
+# Could not process Matrix Market banner; try 'alist' format
+# read alist file ./examples/96.3.963.alist (transposed): rows=48 cols=96 nz=288
+# Analyze small-weight codewords in 100000 RIS steps; swait=0
+# maxC=0 dE=-1 dW=10 maxW=0
+# calculating est fail prob, exact fail prob, minimum weight
+# mode=2, estimating fail probability in 100000 steps
+nz=1 cnt=32 energ=94.2188
+nz=1 cnt=24 energ=70.6641
+nz=1 cnt=12 energ=35.332
+nz=1 cnt=10 energ=29.4434
+nz=1 cnt=8 energ=23.5547
+nz=1 cnt=6 energ=17.666
+# try to remove reducible codewords dx=1 ...
+# scanned for reducible codewords, found none of 195690
+# done
+# sumP(fail) maxP(fail) min_weight N_min N_use N_tot
+0.657861 0.006859 6 3 195690 195690
+# wrote 195690 computed codewords to file tmp.nz

@@ -1,0 +1,31 @@
+# Could not process Matrix Market banner; try 'alist' format
+# read alist file ./examples/96.3.963.alist (transposed): rows=48 cols=96 nz=288
+# mode=0, running vecdec RIS decoder : generating errors internally
+# mode=0 submode=0: use RIS decoder
+# RIS decoder parameters: steps=1000 swait=0 lerr=1
+# ntot=1000000 nvec=100000 nfail=0
+# uW=2, adding errors of weight up to 2 to syndrome hash
+# uX=0, will not use partially matched errors for pre-decoding
+# stored 4656 errors / 4656 distinct syndrome vectors in hash
+# starting round 1 of 10
+# generated 100000 det/obs pairs
+# starting round 2 of 10 pfail=3e-05 fail=3 out of total=100000
+# generated 100000 det/obs pairs
+# starting round 3 of 10 pfail=5e-05 fail=10 out of total=200000
+# generated 100000 det/obs pairs
+# starting round 4 of 10 pfail=5.33333e-05 fail=16 out of total=300000
+# generated 100000 det/obs pairs
+# starting round 5 of 10 pfail=5.25e-05 fail=21 out of total=400000
+# generated 100000 det/obs pairs
+# starting round 6 of 10 pfail=5e-05 fail=25 out of total=500000
+# generated 100000 det/obs pairs
+# starting round 7 of 10 pfail=4.83333e-05 fail=29 out of total=600000
+# generated 100000 det/obs pairs
+# starting round 8 of 10 pfail=5e-05 fail=35 out of total=700000
+# generated 100000 det/obs pairs
+# starting round 9 of 10 pfail=5.125e-05 fail=41 out of total=800000
+# generated 100000 det/obs pairs
+# starting round 10 of 10 pfail=5.44444e-05 fail=49 out of total=900000
+# generated 100000 det/obs pairs
+# P_FAIL N_TOT FAIL S_TOT : C_TRIVIAL S_TRIVIAL   C_LOW S_LOW  C_CLUS S_CLUS : FAIL_RIS N_RIS S_RIS
+    5.9e-05 1000000 59 999941 : 380862 380862 	 547124 547124 	 2093 2093 : 59 69921 69862 
