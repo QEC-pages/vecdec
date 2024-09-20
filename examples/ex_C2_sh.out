@@ -1,0 +1,16 @@
+# submode=14, serial-V BP using average LLR
+# use average LLR: aLLR = 0.5 * aLLR + 0.5 * LLR
+# mode=1, running BP decoder : generating errors internally
+# mode=1 submode=14: use BP decoder
+# BP decoder parameters: steps=10 bpgamma=0.5 bpalpha=1 bpbeta=1 bpretry=1
+#  OSD level lerr=2 maxosd=100
+# ntot=1000 nvec=1000 nfail=0 
+# uW=1, adding errors of weight up to 1 to syndrome hash
+# uX=0, will not use partially matched errors for pre-decoding
+# stored 40 errors / 40 distinct syndrome vectors in hash
+# starting round 1 of 1 pfail=0.5 fail=0 total=0
+# generated 1000 det/obs pairs
+# orig clusters: NC=198 an=1.28283 sn=0.50333 	 ac=3.17323 sc=1.67471 	 av=13.4921 sv=13.41
+# remaining:     NX=186 an=1.20968 sn=0.407078 	 ac=3.32444 sc=1.72216 	 av=14.0711 sv=13.9327
+# P_FAIL N_TOT FAIL S_TOT : C_TRIVIAL S_TRIVIAL   C_LOW S_LOW  C_CLUS S_CLUS : FAIL_BP N_BP   C_BP C_BP_AVG C_BP_TOT   S_BP S_OSD
+      0.049 1000 49 951 : 446 446 	 356 356 	 12 12 : 49 186 	 0 156 156 	 129  8

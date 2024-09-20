@@ -99,16 +99,20 @@ static inline void write_01_vec(FILE *fout, const vec_t * const vec, const int c
 
   static inline int mzd_row_vec_match(const mzd_t * const mat, const int row, const vec_t * const vec){
     const word * const rawrow = mat->rows[row];
-    int idx=0;
+    int idx=-1;
+
     for(int i=0; i<vec->wei; i++){
       int idx_vec = vec->vec[i];
       if(((idx=nextelement(rawrow,mat->width,idx))!=-1)&&(idx < mat->ncols)){
 	if(idx++ != idx_vec)
 	  return 0; /** match failed */
       }
+      else /** not in range, unexpected */
+	return 0;
     }
-    if(((idx=nextelement(rawrow,mat->width,idx))!=-1)||(idx >= mat->ncols))
-      return 0;
+    if(idx < mat->ncols)
+      if(((idx=nextelement(rawrow,mat->width,idx))!=-1)&&(idx < mat->ncols))
+	return 0; /* extra non-zero bit found */
     return 1;
   }
 

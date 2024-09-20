@@ -289,9 +289,7 @@ static inline int add_v(const int v, const int cls, ufl_t * const u){
  *  given the syndrome vector `s`, construct its cluster decomposition
 */
 
-/** assume `u` has been initialized but may need cleaning */
-int dec_ufl_start(const vec_t * const s, ufl_t * const u, const params_t * const p){
-  /** clean up */
+void dec_ufl_clear(ufl_t * const u){
   vnode_t *nod, *tmp;
   HASH_ITER(hh, u->nodes, nod, tmp) {
     HASH_DEL(u->nodes,nod);
@@ -304,6 +302,10 @@ int dec_ufl_start(const vec_t * const s, ufl_t * const u, const params_t * const
   }
   u->num_v = u->num_c = u->num_clus = u->num_prop = 0;
   u->error->wei = u->syndr->wei = 0;
+}
+
+/** assume `u` has been initialized and cleared already */
+int dec_ufl_start(const vec_t * const s, ufl_t * const u, const params_t * const p){
   //  csr_out(p->mH);
   /** start a cluster for each position in `s` */
   for (int ic = 0; ic < s->wei; ic++){
@@ -767,6 +769,9 @@ int dec_ufl_one(const mzd_t * const srow, params_t * const p){
     svec = p->svec = vec_init(p->nchk);
   if(!v1)
     v1 = p->v1 = vec_init(p->nchk);
+
+  /** clean up */
+  dec_ufl_clear(ufl);
 
   /** convert mzd_t *srow -> vec_t *svec */
   int idx=0, w=0;

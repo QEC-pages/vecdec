@@ -1,0 +1,18 @@
+# Could not process Matrix Market banner; try 'alist' format
+# read alist file ./examples/96.3.963.alist (transposed): rows=48 cols=96 nz=288
+# submode=0, parallel BP using both regular and average LLR
+# use average LLR: aLLR = 0.5 * aLLR + 0.5 * LLR
+# mode=1, running BP decoder : generating errors internally
+# mode=1 submode=0: use BP decoder
+# BP decoder parameters: steps=10 bpgamma=0.5 bpalpha=1 bpbeta=1 bpretry=1
+#  OSD level lerr=1 maxosd=50
+# ntot=1000 nvec=1000 nfail=0 
+# uW=1, adding errors of weight up to 1 to syndrome hash
+# uX=0, will not use partially matched errors for pre-decoding
+# stored 96 errors / 96 distinct syndrome vectors in hash
+# starting round 1 of 1 pfail=0.5 fail=0 total=0
+# generated 1000 det/obs pairs
+# orig clusters: NC=970 an=1.12268 sn=0.374993 	 ac=10.0661 sc=4.88163 	 av=45.0174 sv=43.9112
+# remaining:     NX=959 an=1.09802 sn=0.34294 	 ac=10.3219 sc=4.75994 	 av=46.0807 sv=44.5004
+# P_FAIL N_TOT FAIL S_TOT : C_TRIVIAL S_TRIVIAL   C_LOW S_LOW  C_CLUS S_CLUS : FAIL_BP N_BP   C_BP C_BP_AVG C_BP_TOT   S_BP S_OSD
+      0.036 1000 36 964 : 6 6 	 24 24 	 11 11 : 36 959 	 507 317 824 	 823  100
