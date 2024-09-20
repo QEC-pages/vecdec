@@ -520,6 +520,18 @@ include::examples/ex_X9_sh.out[]
 
 In this particular case, we have the same number of decoding failures.
 
+Here is a similar file using BP for decoding (only the final output is shown).
+
+.example BP
+[source,sh]
+include::examples/ex_BP.sh[]
+
+[source,sh]
+include::examples/ex_BP_sh.out[lines="6..-1"]
+
+**FIXME:** apparently there is still a bug somewhere as this script gives a
+  small fraction of `det` failures (`5` for `num=100000`)
+
 
 === Simulate quantum Clifford circuit (given a detector error model)
 
