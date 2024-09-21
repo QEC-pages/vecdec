@@ -1448,7 +1448,7 @@ int var_init(int argc, char **argv, params_t *p){
       *ptr = p->useP;    
   }
   else if (p->finP){/** read probabilities */
-    int rows, cols, siz;
+    int rows=0, cols=0, siz=0;
     p->vP = dbl_mm_read(p->finP, &rows, &cols, &siz, NULL);
     if ((rows != 1) || (cols != p->nvar))
       ERROR("expected rows=%d cols=%d have %d %d",1,p->nvar, rows,cols);
