@@ -711,3 +711,5 @@ second run used the constructed matrices.
 **FIXME:** apparently there is a bug somewhere as modified matrices
 result in substantial degraded decoding (`BER` increases from
 `0.00371` up to `0.0230`)
+
+Also, the `pads` parameter has been removed, so the last example altogether fails to run.
