@@ -529,9 +529,7 @@ include::examples/ex_BP.sh[]
 [source,sh]
 include::examples/ex_BP_sh.out[lines="6..-1"]
 
-**FIXME:** apparently there is still a bug somewhere as this script gives a
-  small fraction of `det` failures (`5` for `num=100000`)
-
+Clearly, very similar results for single-block and two-block decoding in this case.
 
 === Simulate quantum Clifford circuit (given a detector error model)
 
