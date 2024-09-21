@@ -1742,6 +1742,7 @@ void var_kill(params_t *p){
   if(p->v1) free(p->v1);
   if(p->svec) free(p->svec);
   if(p->err) free(p->err);
+  if(p->obs) free(p->obs);
   if(p->ufl) ufl_free(p->ufl);
   if(p->hashU_syndr)
     kill_clusters(p);
@@ -1954,6 +1955,7 @@ int main(int argc, char **argv){
       if(p->pobs)
 	mzd_write_01(p->file_pobs, prodLe, 1,p->pobs, p->debug);
 
+      mzd_free(mE0t);
       mzd_add(prodLe, prodLe, p->mLe);
       int fails=0;
       if(p->uW >=0){ /** pre-decoding enabled */
@@ -2017,6 +2019,7 @@ int main(int argc, char **argv){
     else if(p->debug&1)
       printf("# all finished\n");
 
+    mzd_free(srow);
     break;
 
   case 1: /** `mode=1` various BP flavors */    
