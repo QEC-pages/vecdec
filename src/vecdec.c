@@ -787,7 +787,7 @@ void init_Ht(params_t *p){
   }
 
 #ifndef NDEBUG
-  if((p->debug & 2)&&(p->debug &512)){ /** print resulting vectors and matrices */
+  if((p->debug & 2)&&(p->debug &4096)){ /** print resulting vectors and matrices */
     if(p->useP>0)
       printf("# uniform error probability useP=%g LLR=%g\n",p->useP,dbl_from_llr(p->vLLR[0]));
     else{
@@ -1606,8 +1606,8 @@ int var_init(int argc, char **argv, params_t *p){
     ERROR(" mode=%d is currently not supported\n",p->mode);
     break;
   }
-
-  if(p->debug & 64){ /** print matrices */
+#ifndef NDEBUG
+  if(p->debug & 4096){ /** print matrices */
     assert(p->nvar != 0);
     mzd_t *mH0 = mzd_from_csr(NULL,p->mH);
     printf("matrix mH0:\n");  mzd_print(mH0);
@@ -1621,6 +1621,7 @@ int var_init(int argc, char **argv, params_t *p){
     //    for(int i=0; i < p->nvar; i++)
     //      printf(" P[%d]=%g \n",i,p->vP[i]);
   }
+#endif   
   
   if(p->fdet){/** expect both `fdet` and `fobs` to be defined */
     p->internal=0;
@@ -1860,12 +1861,20 @@ int main(int argc, char **argv){
 	mE0=mzd_init(p->nvec,p->nvar);
 	long long int cnt_pre = 0;
 	for(long long int ierr = 0; ierr < ierr_tot; ierr++){ /** cycle over errors */
-	  mzd_copy_row(srow,0,p->mHeT,ierr); /** syndrome row in question */       
+	  mzd_copy_row(srow,0,p->mHeT,ierr); /** syndrome row in question */
+	  if(p->debug&512)
+	    mzd_row_print_sparse(srow,0);
 	  int res_pre = dec_ufl_one(srow,p);
 	  if(res_pre){ /** pre-decoder success */
 	    mzd_row_add_vec(mE0,ierr,p->ufl->error,1);
 	    status[ierr] = res_pre;
 	    cnt_pre++;
+	    if(p->debug&512){
+	      vec_print(p->ufl->syndr);
+	      vec_print(p->ufl->error);
+	      mzd_row_print_sparse(mE0,ierr);
+	      printf("######### done ierr=%lld \n",ierr);
+	    }
 	  }
 	  else{  /** pre-decoder failed */
 	    if(p->uX){
@@ -2039,14 +2048,20 @@ int main(int argc, char **argv){
       for(long long int ierr = 0; ierr < ierr_tot; ierr++){ /** cycle over errors */
 	cnt[TOTAL]++;
 #ifndef NDEBUG	  
-	if((p->debug&8)&&(p->nvar <= 256)&&(p->debug&512)){
+	if((p->debug&8)&&(p->debug&512)){
 	  printf("############# non-trivial error %lld of %lld:\n",ierr+1,ierr_tot);
-	  if(p->mE) /** print column as row */	      
-	    for(int i=0; i<p->nvar; i++)
-	      printf("%s%d%s",i==0?"[":" ",mzd_read_bit(p->mE,i,ierr),i+1<p->nvar?"":"]\n");
-	  mzd_print_row(p->mHeT,ierr);
-	  mzd_print_row(p->mLeT,ierr);
-	  out_llr("i",p->nvar,p->vLLR);
+	  if(p->nvar <= 256){
+	    if(p->mE) /** print column as row */	      
+	      for(int i=0; i<p->nvar; i++)
+		printf("%s%d%s",i==0?"[":" ",mzd_read_bit(p->mE,i,ierr),i+1<p->nvar?"":"]\n");
+	    mzd_print_row(p->mHeT,ierr);
+	    mzd_print_row(p->mLeT,ierr);
+	    out_llr("i",p->nvar,p->vLLR);
+	  }
+	  else{
+	    //	    mzd_row_print_sparse(p->mHeT,ierr);
+	    mzd_row_print_sparse(p->mHeT,ierr);
+	  }
 	}
 #endif /* NDEBUG */	  
 	//	mzd_t * const srow = mzd_init_window(p->mHeT, ierr,0, ierr+1,p->nchk); /* syndrome row */
@@ -2056,6 +2071,14 @@ int main(int argc, char **argv){
 	if(p->uW >=0)
 	  res_pre = dec_ufl_one(srow,p);
 	if(res_pre){ /** pre-decoder success */
+	  if(p->debug&512){
+	    printf("p sy:");
+	    vec_print(p->ufl->syndr);
+	    printf("p er:");
+	    vec_print(p->ufl->error);
+	    //	    mzd_row_print_sparse(mE0,ierr);
+	    printf("######### done ierr=%lld \n",ierr);
+	  }
 	  if(p->perr) 
 	    write_01_vec(p->file_perr, p->ufl->error, p->mH->cols, p->perr); /** error prediction */
 	  if(p->pdet)

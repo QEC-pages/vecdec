@@ -1,10 +1,10 @@
 submatrix of bigH.mmx minR=0 maxR=83 minC=0 maxC=1401
 submatrix of bigH.mmx minR=36 maxR=119 minC=0 maxC=585
 submatrix of bigH.mmx minR=36 maxR=119 minC=586 maxC=1678
-      0.844 1000 844 156 : 129 129 	 579 27 	 202 0 : 90 90 	 0 38 38 	 0  0
-      0.782 1000 782 218 : 199 199 	 599 19 	 130 0 : 72 72 	 0 49 49 	 0  0
+       0.09 1000 90 910 : 129 129 	 579 579 	 202 202 : 90 90 	 0 38 38 	 0  0
+      0.072 1000 72 928 : 199 199 	 599 599 	 130 130 : 72 72 	 0 49 49 	 0  0
 mismatched det: 0 obs: 3 out of 1000
 two-step decoding BP failed: det 0 obs 3 out of 1000
-      0.002 1000 2 998 : 65 65 	 472 472 	 326 326 : 2 137 	 0 90 90 	 90  45
+      0.127 1000 127 873 : 65 65 	 472 415 	 326 258 : 2 137 	 0 90 90 	 90  45
 one-step BP mismatch det: 0 obs: 2 out of 1000
 two-step BP mismatch det: 0 obs: 3 out of 1000

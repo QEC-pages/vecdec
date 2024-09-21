@@ -148,6 +148,8 @@ csr_t * csr_from_mzd(csr_t *mat, const mzd_t * const orig);
  */
 size_t mzd_weight(const mzd_t *A);
 
+  void mzd_row_print_sparse(const mzd_t * const A, const int row);  
+
 static inline void mzd_flip_bit(mzd_t const *M, rci_t const row, rci_t const col ) {
   __M4RI_FLIP_BIT(M->rows[row][col/m4ri_radix], col%m4ri_radix);
 }

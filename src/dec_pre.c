@@ -242,9 +242,9 @@ static inline int add_v(const int v, const int cls, ufl_t * const u){
     }
     /** otherwise merge `cl` and `lbl` clusters */
     //    printf("found %d, already in %d !=  %d\n",v,lbl,cl);
-    int c1=lbl, c2=cl; /** merge `c2` into `c1` */
+    int c1=lbl, c2=cl; 
     if (cl < lbl){ c1=cl; c2=lbl; } /** `c1` has the smaller index */
-    merge_clus(c1,c2,u);
+    merge_clus(c1,c2,u); /** merge `c2` into `c1` */
 #ifndef NDEBUG
     cluster_verify(c1, & u->clus[c1]);
     cluster_verify(c2, & u->clus[c2]);
@@ -350,7 +350,7 @@ int dec_ufl_start(const vec_t * const s, ufl_t * const u, const params_t * const
  * still need to verify the `obs`
  */
 int dec_ufl_lookup(ufl_t * const u, const params_t * const p){
-  ufl_cnt_update(0,u,p); //! update original cluster statistics
+  ufl_cnt_update(0,u,p); //! update original cluster statistics to output
   if(p->debug&64){
     printf("### original cluster num_proper=%d:\n",u->num_prop);
     //    ufl_print(u);
@@ -365,6 +365,7 @@ int dec_ufl_lookup(ufl_t * const u, const params_t * const p){
       int cnt=0;
       for(point_t * tmp = clus->first_c; tmp != NULL; tmp = tmp ->next, cnt++)
 	vec_push(tmp->index, u->syndr);
+      assert(cnt==clus->num_poi_c);
       /** sort check node indices for this cluster */
       int * beg = u->syndr->vec + beg_c;
       qsort(beg, cnt, sizeof(rci_t), cmp_rci_t);
@@ -388,6 +389,7 @@ int dec_ufl_lookup(ufl_t * const u, const params_t * const p){
     qsort(u->error->vec, u->error->wei, sizeof(rci_t), cmp_rci_t);
     qsort(u->syndr->vec, u->syndr->wei, sizeof(rci_t), cmp_rci_t);
     assert(u->syndr->wei == u->num_c);
+    vec_compress(u->error); /** sometimes necessary if `uR>1` */
     return 1; /** `success`; decoded */
   }
   ufl_cnt_update(1,u,p); //! update remaing cluster statistics 
@@ -656,7 +658,7 @@ void do_clusters(params_t * const p){
   HASH_SORT(p->hashU_error, by_syndrome);
 
   //#ifndef NDEBUG
-  if(p->debug&64){
+  if(p->debug&2048){
     int cnt=0;
     printf("############################# error vectors in hash:\n");
     HASH_ITER(hh, p->hashU_error, entry, pvec) {
@@ -732,7 +734,7 @@ void do_clusters(params_t * const p){
   if(p->debug&1)
     printf("# stored %lld errors / %lld distinct syndrome vectors in hash\n",cnt_err, cnt_synd);
 #ifndef NDEBUG
-  if(p->debug&64){
+  if(p->debug&2048){
     int cnt=0;
     printf("############################# error vectors in hash:\n");
     HASH_ITER(hh, p->hashU_syndr, entry, pvec) {
@@ -783,18 +785,18 @@ int dec_ufl_one(const mzd_t * const srow, params_t * const p){
   }
   svec->wei = w;
 
-#ifndef NDEBUG
+  //#ifndef NDEBUG
   if(p->debug&32){
     printf("# decoding w_s=%d\n",svec->wei);
     if(p->debug&64)
       vec_print(svec);
   }
-#endif
+  //#endif
   two_vec_t *tmp;
   if(svec->wei == 0){
     cnt[CONV_TRIVIAL]++;
     ans = 1; /** trivial syndrome */
-    //    ufl->syndr->wei =0;
+    ufl->syndr->wei =0;
     ufl->error->wei =0;
   }
   else{  /** `look up the entire syndrome -- a bit faster` */

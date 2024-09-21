@@ -24,6 +24,18 @@ size_t mzd_weight_naive(const mzd_t *A){
   return (count);
 }
 
+void mzd_row_print_sparse(const mzd_t * const A, const int row){
+  //  for(rci_t i = 0; i < A->nrows; ++i){
+  int i = row;
+    printf("# row=%d [",i);
+    for(rci_t j = 0; j < A->ncols; ++j)
+      if(mzd_read_bit(A, i, j))
+	printf(" %d",j);
+    printf(" ]\n");
+    //  }
+}
+
+
 size_t mzd_weight(const mzd_t *A){
   size_t count = 0;
   if(A->width == 1) {
@@ -282,7 +294,6 @@ mzd_t * csr_mzd_mul(mzd_t *C, const csr_t *S, const mzd_t *B, int clear){
       mzd_set_ui(C,0); 
   }
   rci_t const m = S->rows;
-  
   for(rci_t i = 0; i < m; ++i)
     for(int j=S->p[i]; j < S->p[i+1] ; j++)
       mzd_combine(C,i,0, C,i,0, B,S->i[j],0); /* combine the two rows */
