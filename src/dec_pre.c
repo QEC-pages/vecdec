@@ -556,6 +556,8 @@ void hash_add_maybe(vec_t *vec, params_t * const p){
 
 void do_clusters(params_t * const p){
   const int wmax=p->uW;
+  if(!wmax)
+    return; 
   vec_t *err = vec_init(wmax);
   two_vec_t *entry, *pvec;
   const int max = p->mHt->rows;
