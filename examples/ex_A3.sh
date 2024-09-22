@@ -1,5 +1,5 @@
 vecdec=./src/vecdec
-for uW in 1 2 3 4; do 
+for uW in -1 0 1 2 3 4; do 
     echo -e uW=$uW "\t" \
   	 `$vecdec debug=0 seed=113 mode=0 lerr=0 \
 	     finH= ./examples/96.3.963.alist \

@@ -1,4 +1,4 @@
-# initializing seed=38001768132 from time(NULL)+1000000ul*getpid()+0
+# initializing seed=207980038387 from time(NULL)+1000000ul*getpid()+0
 # Analyze small-weight codewords in 10000 RIS steps; swait=0
 # maxC=0 dE=-1 dW=0 maxW=0
 # calculating minimum weight

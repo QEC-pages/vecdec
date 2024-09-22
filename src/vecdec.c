@@ -2094,12 +2094,11 @@ int main(int argc, char **argv){
 	  vec_t *vobs = csr_vec_mul(p->err, p->obs, p->mLt, p->ufl->error, 1);
 	  if(p->pobs)
 	    write_01_vec(p->file_pobs, vobs, p->mL->rows, p->pobs); /** obs prediction */	  
-	  //	  cnt_update(CONV_TRIVIAL,0); /** trivial convergence after `0` steps */
 	  if(mzd_row_vec_match(p->mLeT,ierr,vobs)){
 #ifndef NDEBUG	  
 	    if((p->debug&8)&&(p->nvar <= 256)&&(p->debug&512)){
 	      printf("# pre-decoder success ans=%d\n",res_pre);
-	      mzd_print_row(p->mLeT,ierr);
+	      mzd_row_print_sparse(p->mLeT,ierr);
 	      vec_print(vobs);
 	      vec_print(p->ufl->error);
 	      //	      csr_out(p->mLt);
@@ -2150,7 +2149,6 @@ int main(int argc, char **argv){
 	      /** TODO: verify that this works (add example) */
 	    }
 	  if(do_file_output){ /** output predicted values */
-	    //	    ERROR("make sure updated `srow` and `pErr` are used properly\n");
 	    for(int i=0; i < p->nvar; i++)
 	      if(ans[i]<0)
 		mzd_flip_bit(pErr,0,i);

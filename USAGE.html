@@ -6,7 +6,7 @@
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
 <meta name="generator" content="AsciiDoc 10.1.2" />
 <meta name="description" content="This page contains examples of how `vecdec` can be used for calculations with classical or quantum codes" />
-<title>USAGE</title>
+<title>USAGE: Common tasks with <code>vecdec</code></title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
 
@@ -729,13 +729,13 @@ install: function(toclevels) {
 }
 
 }
-asciidoc.install(4);
+asciidoc.install(3);
 /*]]>*/
 </script>
 </head>
 <body class="article">
 <div id="header">
-<h1>USAGE</h1>
+<h1>USAGE: Common tasks with <code>vecdec</code></h1>
 <div id="toc">
   <div id="toctitle">Table of Contents</div>
   <noscript><p><b>JavaScript must be enabled in your browser to display the table of contents.</b></p></noscript>
@@ -743,12 +743,10 @@ asciidoc.install(4);
 </div>
 <div id="content">
 <div class="sect1">
-<h2 id="_common_tasks_with_code_vecdec_code">Common tasks with <code>vecdec</code></h2>
+<h2 id="_simulate_the_performance_of_a_classical_or_quantum_code">Simulate the performance of a classical or quantum code</h2>
 <div class="sectionbody">
 <div class="sect2">
-<h3 id="_simulate_the_performance_of_a_classical_or_quantum_code">Simulate the performance of a classical or quantum code</h3>
-<div class="sect3">
-<h4 id="_simulate_the_performance_of_a_classical_code">Simulate the performance of a classical code</h4>
+<h3 id="_simulate_the_performance_of_a_classical_code">Simulate the performance of a classical code</h3>
 <div class="paragraph"><p>A classical (binary linear) code must be specified with a parity-check
 matrix using Matrix Market coordinate (<code>MTX</code>) or David MacKay&#8217;s
 <code>alist</code> format; errors in this mode can only be generated internally.</p></div>
@@ -756,8 +754,8 @@ matrix using Matrix Market coordinate (<code>MTX</code>) or David MacKay&#8217;s
 from David MacKay collection
 (<a href="https://www.inference.org.uk/mackay/codes/data.html">https://www.inference.org.uk/mackay/codes/data.html</a>) in the file
 <code>./examples/96.3.963.alist</code></p></div>
-<div class="sect4">
-<h5 id="_use_the_default_decoder">Use the default decoder</h5>
+<div class="sect3">
+<h4 id="_use_the_default_decoder">Use the default decoder</h4>
 <div class="paragraph"><p>The RIS decoder <code>mode=0 lerr=1</code> is the default option (here using
 <code>steps=5000</code> information sets).  Also default is the pre-decoder
 parameter <code>uW=1</code>.  The latter specifies that only errors of weight up
@@ -802,7 +800,7 @@ vectors.)  The number of successfully decoded syndrome vectors is a
 sum of <code>S_TRIVIAL=8</code> cases of trivial (all zero) syndrome vectors,
 <code>S_LOW=44</code> low-weight (single-cluster) syndrome vector, <code>S_CLUS=16</code>
 syndrome vectors formed by several clusters, and <code>S_RIS=899</code>
-successful (out of <code>C_RIS=932</code> attempted) RIS decoding events.</p></div>
+successful (out of <code>N_RIS=932</code> attempted) RIS decoding events.</p></div>
 <div class="paragraph"><p>To guarantee the same error vectors, specify the same <code>seed</code>
 parameter, and also use the same values for <code>ntot</code> and <code>nvec</code>
 parameters (or just read detector events / observables from files).
@@ -838,21 +836,28 @@ by Lorenzo Bettini
 http://www.lorenzobettini.it
 http://www.gnu.org/software/src-highlite -->
 <pre><tt><span style="color: #009900">vecdec</span><span style="color: #990000">=.</span>/src/vecdec
-<span style="font-weight: bold"><span style="color: #0000FF">for</span></span> uW <span style="font-weight: bold"><span style="color: #0000FF">in</span></span> <span style="color: #993399">1</span> <span style="color: #993399">2</span> <span style="color: #993399">3</span> <span style="color: #993399">4</span><span style="color: #990000">;</span> <span style="font-weight: bold"><span style="color: #0000FF">do</span></span>
+<span style="font-weight: bold"><span style="color: #0000FF">for</span></span> uW <span style="font-weight: bold"><span style="color: #0000FF">in</span></span> -<span style="color: #993399">1</span> <span style="color: #993399">0</span> <span style="color: #993399">1</span> <span style="color: #993399">2</span> <span style="color: #993399">3</span> <span style="color: #993399">4</span><span style="color: #990000">;</span> <span style="font-weight: bold"><span style="color: #0000FF">do</span></span>
     echo -e <span style="color: #009900">uW</span><span style="color: #990000">=</span><span style="color: #009900">$uW</span> <span style="color: #FF0000">"</span><span style="color: #CC33CC">\t</span><span style="color: #FF0000">"</span> <span style="color: #990000">\</span>
          `<span style="color: #009900">$vecdec</span> <span style="color: #009900">debug</span><span style="color: #990000">=</span><span style="color: #993399">0</span> <span style="color: #009900">seed</span><span style="color: #990000">=</span><span style="color: #993399">113</span> <span style="color: #009900">mode</span><span style="color: #990000">=</span><span style="color: #993399">0</span> <span style="color: #009900">lerr</span><span style="color: #990000">=</span><span style="color: #993399">0</span> <span style="color: #990000">\</span>
              <span style="color: #009900">finH</span><span style="color: #990000">=</span> <span style="color: #990000">.</span>/examples<span style="color: #990000">/</span><span style="color: #993399">96.3</span><span style="color: #990000">.</span><span style="color: #993399">963</span><span style="color: #990000">.</span>alist <span style="color: #990000">\</span>
              <span style="color: #009900">ntot</span><span style="color: #990000">=</span><span style="color: #993399">1000</span> <span style="color: #009900">nvec</span><span style="color: #990000">=</span><span style="color: #993399">1000</span> <span style="color: #009900">steps</span><span style="color: #990000">=</span><span style="color: #993399">5000</span> <span style="color: #009900">useP</span><span style="color: #990000">=</span><span style="color: #993399">0.05</span> <span style="color: #009900">uW</span><span style="color: #990000">=</span><span style="color: #009900">$uW</span> `
 <span style="font-weight: bold"><span style="color: #0000FF">done</span></span>
 ---
+<span style="color: #009900">uW</span><span style="color: #990000">=</span>-<span style="color: #993399">1</span>    <span style="color: #993399">0.024</span> <span style="color: #993399">1000</span> <span style="color: #993399">24</span> <span style="color: #993399">976</span> <span style="color: #990000">:</span> <span style="color: #993399">24</span> <span style="color: #993399">1000</span> <span style="color: #993399">976</span>
+<span style="color: #009900">uW</span><span style="color: #990000">=</span><span style="color: #993399">0</span>     <span style="color: #993399">0.024</span> <span style="color: #993399">1000</span> <span style="color: #993399">24</span> <span style="color: #993399">976</span> <span style="color: #990000">:</span> <span style="color: #993399">6</span> <span style="color: #993399">6</span> <span style="color: #990000">:</span> <span style="color: #993399">24</span> <span style="color: #993399">994</span> <span style="color: #993399">970</span>
 <span style="color: #009900">uW</span><span style="color: #990000">=</span><span style="color: #993399">1</span>     <span style="color: #993399">0.024</span> <span style="color: #993399">1000</span> <span style="color: #993399">24</span> <span style="color: #993399">976</span> <span style="color: #990000">:</span> <span style="color: #993399">6</span> <span style="color: #993399">6</span> <span style="color: #993399">24</span> <span style="color: #993399">24</span> <span style="color: #993399">11</span> <span style="color: #993399">11</span> <span style="color: #990000">:</span> <span style="color: #993399">24</span> <span style="color: #993399">959</span> <span style="color: #993399">935</span>
 <span style="color: #009900">uW</span><span style="color: #990000">=</span><span style="color: #993399">2</span>     <span style="color: #993399">0.024</span> <span style="color: #993399">1000</span> <span style="color: #993399">24</span> <span style="color: #993399">976</span> <span style="color: #990000">:</span> <span style="color: #993399">6</span> <span style="color: #993399">6</span> <span style="color: #993399">117</span> <span style="color: #993399">117</span> <span style="color: #993399">9</span> <span style="color: #993399">9</span> <span style="color: #990000">:</span> <span style="color: #993399">24</span> <span style="color: #993399">868</span> <span style="color: #993399">844</span>
 <span style="color: #009900">uW</span><span style="color: #990000">=</span><span style="color: #993399">3</span>     <span style="color: #993399">0.024</span> <span style="color: #993399">1000</span> <span style="color: #993399">24</span> <span style="color: #993399">976</span> <span style="color: #990000">:</span> <span style="color: #993399">6</span> <span style="color: #993399">6</span> <span style="color: #993399">290</span> <span style="color: #993399">290</span> <span style="color: #993399">5</span> <span style="color: #993399">5</span> <span style="color: #990000">:</span> <span style="color: #993399">24</span> <span style="color: #993399">699</span> <span style="color: #993399">675</span>
 <span style="color: #009900">uW</span><span style="color: #990000">=</span><span style="color: #993399">4</span>     <span style="color: #993399">0.024</span> <span style="color: #993399">1000</span> <span style="color: #993399">24</span> <span style="color: #993399">976</span> <span style="color: #990000">:</span> <span style="color: #993399">6</span> <span style="color: #993399">6</span> <span style="color: #993399">461</span> <span style="color: #993399">461</span> <span style="color: #993399">2</span> <span style="color: #993399">2</span> <span style="color: #990000">:</span> <span style="color: #993399">24</span> <span style="color: #993399">531</span> <span style="color: #993399">507</span></tt></pre></div></div>
 <div class="paragraph"><p>Here, with <code>uW=4</code>, the pre-decoder took care of about half of the
-syndrome vectors.  With longer codes, the syndrome vector list may be
-too long; use non-zero values of <code>uR</code> to restrict the graph distance
-between set bits in stored error clusters:</p></div>
+syndrome vectors (in this case all vectors of weight <code>1</code>, <code>2</code>, and <code>3</code> are stored in the hash; zero-weight error is automatically included but only if
+<code>uW&gt;=0</code>; with <code>uW=-1</code> the pre-decoder is altogether disabled.)</p></div>
+<div class="paragraph"><p>Notice that error probability <code>0.05</code> is close to the threshold for
+this code; pre-decoder is substantially more efficient for smaller
+error rates.</p></div>
+<div class="paragraph"><p>With longer codes, there may be too many errors of weights bigger
+than one.  For such codes, use non-zero values of <code>uR</code> to restrict the
+graph distance between set bits in stored error clusters:</p></div>
 <div class="listingblock">
 <div class="title">example A4</div>
 <div class="content"><!-- Generator: GNU source-highlight
@@ -873,15 +878,16 @@ http://www.gnu.org/software/src-highlite -->
 <span style="color: #009900">uW</span><span style="color: #990000">=</span><span style="color: #993399">2</span> <span style="color: #009900">uR</span><span style="color: #990000">=</span><span style="color: #993399">2</span>        <span style="color: #993399">0.024</span> <span style="color: #993399">1000</span> <span style="color: #993399">24</span> <span style="color: #993399">976</span> <span style="color: #990000">:</span> <span style="color: #993399">6</span> <span style="color: #993399">6</span> <span style="color: #993399">106</span> <span style="color: #993399">106</span> <span style="color: #993399">20</span> <span style="color: #993399">20</span> <span style="color: #990000">:</span> <span style="color: #993399">24</span> <span style="color: #993399">868</span> <span style="color: #993399">844</span>
 <span style="color: #009900">uW</span><span style="color: #990000">=</span><span style="color: #993399">2</span> <span style="color: #009900">uR</span><span style="color: #990000">=</span><span style="color: #993399">3</span>        <span style="color: #993399">0.024</span> <span style="color: #993399">1000</span> <span style="color: #993399">24</span> <span style="color: #993399">976</span> <span style="color: #990000">:</span> <span style="color: #993399">6</span> <span style="color: #993399">6</span> <span style="color: #993399">117</span> <span style="color: #993399">117</span> <span style="color: #993399">9</span> <span style="color: #993399">9</span> <span style="color: #990000">:</span> <span style="color: #993399">24</span> <span style="color: #993399">868</span> <span style="color: #993399">844</span>
 <span style="color: #009900">uW</span><span style="color: #990000">=</span><span style="color: #993399">2</span> <span style="color: #009900">uR</span><span style="color: #990000">=</span><span style="color: #993399">0</span>        <span style="color: #993399">0.024</span> <span style="color: #993399">1000</span> <span style="color: #993399">24</span> <span style="color: #993399">976</span> <span style="color: #990000">:</span> <span style="color: #993399">6</span> <span style="color: #993399">6</span> <span style="color: #993399">117</span> <span style="color: #993399">117</span> <span style="color: #993399">9</span> <span style="color: #993399">9</span> <span style="color: #990000">:</span> <span style="color: #993399">24</span> <span style="color: #993399">868</span> <span style="color: #993399">844</span></tt></pre></div></div>
-<div class="paragraph"><p>Here <code>uR=0</code> corresponds to infinite distance, i.e., with <code>uW=2</code>, all
-error vectors of weight <code>0</code>, <code>1</code>, and <code>2</code> are stored in the hash.</p></div>
+<div class="paragraph"><p>Clearly, <code>uR=3</code> is sufficient to give the same results as <code>uR=0</code> which
+corresponds to infinite distance.</p></div>
 </div>
-<div class="sect4">
-<h5 id="_use_belief_propagation_bp_decoder_with_optional_osd">Use Belief Propagation (BP) decoder with optional OSD.</h5>
+<div class="sect3">
+<h4 id="_use_belief_propagation_bp_decoder_with_optional_osd">Use Belief Propagation (BP) decoder with optional OSD.</h4>
 <div class="paragraph"><p>Same classical code, using up to <code>steps=10</code> BP iterations with
 parallel update schedule, using both average and instantaneous LLR
 (whichever converges first), followed by OSD1 (<code>lerr=1</code>) using up to
-<code>maxosd=50</code> columns for OSD decoding (only last two lines of the output are included):</p></div>
+<code>maxosd=50</code> columns for OSD decoding (only last two lines of the
+output are included):</p></div>
 <div class="listingblock">
 <div class="title">example B1</div>
 <div class="content"><!-- Generator: GNU source-highlight
@@ -898,9 +904,10 @@ http://www.gnu.org/software/src-highlite -->
 decoder.  The statistics given includes the total count of converged
 BP cases <code>C_BP_TOT=824</code>, which includes convergence with instantaneous
 LLR values <code>C_BP=507</code> and those with average LLR values
-<code>C_BP_AVG=317</code>.  When BP failed to converge, OSD is used (it converges
-always).  The last two columns give separate success counts for BP
-alone (<code>S_BP=823</code> out of converged <code>C_BP=824</code>) and OSD (<code>S_OSD=100</code>).</p></div>
+<code>C_BP_AVG=317</code>.  When BP fails to converge, OSD post-decoder is used
+(it converges always).  The last two columns give separate success
+counts for BP alone (<code>S_BP=823</code> out of converged <code>C_BP=824</code>) and OSD
+(<code>S_OSD=100</code>).</p></div>
 <div class="paragraph"><p>The success rate can be improved by increasing the OSD level.
 Interestingly, larger number of steps can actually decrease the
 performance of the parallel BP decoder:</p></div>
@@ -999,8 +1006,8 @@ http://www.gnu.org/software/src-highlite -->
 <span style="color: #009900">minor</span><span style="color: #990000">=</span><span style="color: #993399">14</span> <span style="color: #009900">steps</span><span style="color: #990000">=</span><span style="color: #993399">50</span>        <span style="color: #993399">0.03903</span> <span style="color: #993399">100000</span> <span style="color: #993399">3903</span> <span style="color: #993399">96097</span> <span style="color: #990000">:</span> <span style="color: #993399">749</span> <span style="color: #993399">749</span> <span style="color: #993399">3686</span> <span style="color: #993399">3686</span> <span style="color: #993399">1005</span> <span style="color: #993399">1005</span> <span style="color: #990000">:</span> <span style="color: #993399">3903</span> <span style="color: #993399">94560</span> <span style="color: #993399">0</span> <span style="color: #993399">85312</span> <span style="color: #993399">85312</span> <span style="color: #993399">84772</span> <span style="color: #993399">5885</span></tt></pre></div></div>
 </div>
 </div>
-<div class="sect3">
-<h4 id="_simulate_the_performance_of_a_quantum_css_code">Simulate the performance of a quantum CSS code</h4>
+<div class="sect2">
+<h3 id="_simulate_the_performance_of_a_quantum_css_code_use_matrices">Simulate the performance of a quantum CSS code (use matrices)</h3>
 <div class="paragraph"><p>The only difference is that one additional matrix is needed.  One can
 specify, e.g., the CSS generator matrices <code>H=Hx</code> and <code>G=Hz</code>.  The
 following example uses <code>{5,5}</code> hyperbolic code with parameters <code>[[40,10,4]]</code>
@@ -1045,6 +1052,9 @@ http://www.gnu.org/software/src-highlite -->
 <span style="font-style: italic"><span style="color: #9A1900"># remaining:     NX=186 an=1.20968 sn=0.407078   ac=3.32444 sc=1.72216   av=14.0711 sv=13.9327</span></span>
 <span style="font-style: italic"><span style="color: #9A1900"># P_FAIL N_TOT FAIL S_TOT : C_TRIVIAL S_TRIVIAL   C_LOW S_LOW  C_CLUS S_CLUS : FAIL_BP N_BP   C_BP C_BP_AVG C_BP_TOT   S_BP S_OSD</span></span>
       <span style="color: #993399">0.049</span> <span style="color: #993399">1000</span> <span style="color: #993399">49</span> <span style="color: #993399">951</span> <span style="color: #990000">:</span> <span style="color: #993399">446</span> <span style="color: #993399">446</span>        <span style="color: #993399">356</span> <span style="color: #993399">356</span>         <span style="color: #993399">12</span> <span style="color: #993399">12</span> <span style="color: #990000">:</span> <span style="color: #993399">49</span> <span style="color: #993399">186</span>          <span style="color: #993399">0</span> <span style="color: #993399">156</span> <span style="color: #993399">156</span>       <span style="color: #993399">129</span>  <span style="color: #993399">8</span></tt></pre></div></div>
+</div>
+<div class="sect2">
+<h3 id="_simulate_the_performance_of_a_quantum_circuit_use_dem">Simulate the performance of a quantum circuit (use DEM)</h3>
 <div class="paragraph"><p>Alternatively, one can use a DEM (detector error model) file output by
 <code>stim</code>, which specifies matrices <code>H=Hx</code> and <code>L=Lx</code> and the probability
 vector.  The probabilities can be scaled using <code>mulP</code> parameter.  This
@@ -1096,12 +1106,52 @@ value, and the pre-decoder (using <code>uW=2</code>) is able to match about <cod
 syndrome vectors with a very good success rate.</p></div>
 </div>
 </div>
-<div class="sect2">
-<h3 id="_find_the_distance_of_a_classical_or_quantum_code_and_estimate_the_ler">Find the distance of a classical or quantum code and estimate the LER.</h3>
+</div>
+<div class="sect1">
+<h2 id="_find_the_distance_of_a_classical_or_quantum_code_and_estimate_the_ler">Find the distance of a classical or quantum code and estimate the LER.</h2>
+<div class="sectionbody">
 <div class="paragraph"><p>The program in <code>mode=2</code> uses RIS algorithm to enumerate small-weight
 codewords and estimate the LER based on the codewords available.  The
 list of codewords can be exported to and imported from a file and
 therefore reused with a different set of error probabilities.</p></div>
+<div class="paragraph"><p>In the simplest case, we just want to calculate the code distance.
+Use parameter <code>dW=0</code> to indicate that only the smallest-weight
+codewords are of interest.</p></div>
+<div class="listingblock">
+<div class="title">example D0</div>
+<div class="content"><!-- Generator: GNU source-highlight
+by Lorenzo Bettini
+http://www.lorenzobettini.it
+http://www.gnu.org/software/src-highlite -->
+<pre><tt><span style="font-style: italic"><span style="color: #9A1900">#</span></span>
+src/vecdec <span style="color: #009900">seed</span><span style="color: #990000">=</span><span style="color: #993399">7</span> <span style="color: #009900">mode</span><span style="color: #990000">=</span><span style="color: #993399">2</span> <span style="color: #009900">dW</span><span style="color: #990000">=</span><span style="color: #993399">0</span> <span style="color: #009900">finH</span><span style="color: #990000">=</span> examples<span style="color: #990000">/</span><span style="color: #993399">204.33</span><span style="color: #990000">.</span><span style="color: #993399">484</span><span style="color: #990000">.</span>alist <span style="color: #009900">useP</span><span style="color: #990000">=</span><span style="color: #993399">0.01</span> <span style="color: #009900">steps</span><span style="color: #990000">=</span><span style="color: #993399">10000</span>
+---
+<span style="font-style: italic"><span style="color: #9A1900"># Could not process Matrix Market banner; try 'alist' format</span></span>
+<span style="font-style: italic"><span style="color: #9A1900"># read alist file examples/204.33.484.alist (transposed): rows=102 cols=204 nz=612</span></span>
+<span style="font-style: italic"><span style="color: #9A1900"># Analyze small-weight codewords in 10000 RIS steps; swait=0</span></span>
+<span style="font-style: italic"><span style="color: #9A1900"># maxC=0 dE=-1 dW=0 maxW=0</span></span>
+<span style="font-style: italic"><span style="color: #9A1900"># calculating minimum weight</span></span>
+<span style="font-style: italic"><span style="color: #9A1900"># mode=2, estimating fail probability in 10000 steps</span></span>
+<span style="font-style: italic"><span style="color: #9A1900"># nz=1 cnt=57 energ=261.927</span></span>
+<span style="font-style: italic"><span style="color: #9A1900"># nz=1 cnt=54 energ=248.142</span></span>
+<span style="font-style: italic"><span style="color: #9A1900"># nz=1 cnt=50 energ=229.761</span></span>
+<span style="font-style: italic"><span style="color: #9A1900"># nz=1 cnt=45 energ=206.785</span></span>
+<span style="font-style: italic"><span style="color: #9A1900"># nz=1 cnt=43 energ=197.594</span></span>
+<span style="font-style: italic"><span style="color: #9A1900"># nz=1 cnt=42 energ=192.999</span></span>
+<span style="font-style: italic"><span style="color: #9A1900"># nz=1 cnt=38 energ=174.618</span></span>
+<span style="font-style: italic"><span style="color: #9A1900"># nz=1 cnt=26 energ=119.476</span></span>
+<span style="font-style: italic"><span style="color: #9A1900"># nz=1 cnt=24 energ=110.285</span></span>
+<span style="font-style: italic"><span style="color: #9A1900"># nz=1 cnt=14 energ=64.333</span></span>
+<span style="font-style: italic"><span style="color: #9A1900"># nz=1 cnt=8 energ=36.7617</span></span>
+<span style="font-style: italic"><span style="color: #9A1900"># try to remove reducible codewords dx=1 ...</span></span>
+<span style="font-style: italic"><span style="color: #9A1900"># scanned for reducible codewords, found none of 15</span></span>
+<span style="font-style: italic"><span style="color: #9A1900"># done</span></span>
+<span style="font-style: italic"><span style="color: #9A1900"># min_weight N_min N_use N_tot</span></span>
+<span style="color: #993399">8</span> <span style="color: #993399">1</span> <span style="color: #993399">15</span> <span style="color: #993399">15</span></tt></pre></div></div>
+<div class="paragraph"><p>The output <code>min_weight=8</code> is the code distance; <code>N_min=1</code> indicates
+that only one codeword of such a weight has been found.  There are
+<code>N_tot=15</code> codewords found, and all of them have been stored in hash
+memory (<code>N_use=15</code>).</p></div>
 <div class="paragraph"><p>The following example uses <code>100,000</code> RIS steps to enumerate codewords
 of weight up to <code>dW=10</code> above the minimum weight found (for this particular
 code the code distance <code>minW=6</code>) and write them to a file <code>tmp.nz</code>.</p></div>
@@ -1125,22 +1175,22 @@ http://www.gnu.org/software/src-highlite -->
 <span style="font-style: italic"><span style="color: #9A1900"># maxC=0 dE=-1 dW=10 maxW=0</span></span>
 <span style="font-style: italic"><span style="color: #9A1900"># calculating est fail prob, exact fail prob, minimum weight</span></span>
 <span style="font-style: italic"><span style="color: #9A1900"># mode=2, estimating fail probability in 100000 steps</span></span>
-<span style="color: #009900">nz</span><span style="color: #990000">=</span><span style="color: #993399">1</span> <span style="color: #009900">cnt</span><span style="color: #990000">=</span><span style="color: #993399">32</span> <span style="color: #009900">energ</span><span style="color: #990000">=</span><span style="color: #993399">94.2188</span>
-<span style="color: #009900">nz</span><span style="color: #990000">=</span><span style="color: #993399">1</span> <span style="color: #009900">cnt</span><span style="color: #990000">=</span><span style="color: #993399">24</span> <span style="color: #009900">energ</span><span style="color: #990000">=</span><span style="color: #993399">70.6641</span>
-<span style="color: #009900">nz</span><span style="color: #990000">=</span><span style="color: #993399">1</span> <span style="color: #009900">cnt</span><span style="color: #990000">=</span><span style="color: #993399">12</span> <span style="color: #009900">energ</span><span style="color: #990000">=</span><span style="color: #993399">35.332</span>
-<span style="color: #009900">nz</span><span style="color: #990000">=</span><span style="color: #993399">1</span> <span style="color: #009900">cnt</span><span style="color: #990000">=</span><span style="color: #993399">10</span> <span style="color: #009900">energ</span><span style="color: #990000">=</span><span style="color: #993399">29.4434</span>
-<span style="color: #009900">nz</span><span style="color: #990000">=</span><span style="color: #993399">1</span> <span style="color: #009900">cnt</span><span style="color: #990000">=</span><span style="color: #993399">8</span> <span style="color: #009900">energ</span><span style="color: #990000">=</span><span style="color: #993399">23.5547</span>
-<span style="color: #009900">nz</span><span style="color: #990000">=</span><span style="color: #993399">1</span> <span style="color: #009900">cnt</span><span style="color: #990000">=</span><span style="color: #993399">6</span> <span style="color: #009900">energ</span><span style="color: #990000">=</span><span style="color: #993399">17.666</span>
+<span style="font-style: italic"><span style="color: #9A1900"># nz=1 cnt=32 energ=94.2188</span></span>
+<span style="font-style: italic"><span style="color: #9A1900"># nz=1 cnt=24 energ=70.6641</span></span>
+<span style="font-style: italic"><span style="color: #9A1900"># nz=1 cnt=12 energ=35.332</span></span>
+<span style="font-style: italic"><span style="color: #9A1900"># nz=1 cnt=10 energ=29.4434</span></span>
+<span style="font-style: italic"><span style="color: #9A1900"># nz=1 cnt=8 energ=23.5547</span></span>
+<span style="font-style: italic"><span style="color: #9A1900"># nz=1 cnt=6 energ=17.666</span></span>
 <span style="font-style: italic"><span style="color: #9A1900"># try to remove reducible codewords dx=1 ...</span></span>
 <span style="font-style: italic"><span style="color: #9A1900"># scanned for reducible codewords, found none of 195690</span></span>
 <span style="font-style: italic"><span style="color: #9A1900"># done</span></span>
 <span style="font-style: italic"><span style="color: #9A1900"># sumP(fail) maxP(fail) min_weight N_min N_use N_tot</span></span>
 <span style="color: #993399">0.657861</span> <span style="color: #993399">0.006859</span> <span style="color: #993399">6</span> <span style="color: #993399">3</span> <span style="color: #993399">195690</span> <span style="color: #993399">195690</span>
 <span style="font-style: italic"><span style="color: #9A1900"># wrote 195690 computed codewords to file tmp.nz</span></span></tt></pre></div></div>
-<div class="paragraph"><p>Notice that the minimum weight <code>min_weight=6</code> of a codeword found is
-the third number in the output line; only <code>N_min=3</code> codewords of such
-weight have been found.  Overall, in this particular run, <code>195690</code>
-codewords have been generated; more codewords can be found by
+<div class="paragraph"><p>Notice that here the minimum weight <code>min_weight=6</code> of a codeword found
+is the third number in the output line; only <code>N_min=3</code> codewords of
+such weight have been found.  Overall, in this particular run,
+<code>195690</code> codewords have been generated; more codewords can be found by
 repeatedly running the same command line (with a different seed, or by
 setting <code>seed=0</code>) after reading the codewords (only the last lines of
 the output are shown):</p></div>
@@ -1159,11 +1209,11 @@ by Lorenzo Bettini
 http://www.lorenzobettini.it
 http://www.gnu.org/software/src-highlite -->
 <pre><tt><span style="font-style: italic"><span style="color: #9A1900"># try to remove reducible codewords dx=1 ...</span></span>
-<span style="font-style: italic"><span style="color: #9A1900"># scanned for reducible codewords, found none of 210918</span></span>
+<span style="font-style: italic"><span style="color: #9A1900"># scanned for reducible codewords, found none of 210879</span></span>
 <span style="font-style: italic"><span style="color: #9A1900"># done</span></span>
 <span style="font-style: italic"><span style="color: #9A1900"># sumP(fail) maxP(fail) min_weight N_min N_use N_tot</span></span>
-<span style="color: #993399">0.683724</span> <span style="color: #993399">0.006859</span> <span style="color: #993399">6</span> <span style="color: #993399">3</span> <span style="color: #993399">210918</span> <span style="color: #993399">210918</span>
-<span style="font-style: italic"><span style="color: #9A1900"># wrote 210918 computed codewords to file tmp.nz</span></span></tt></pre></div></div>
+<span style="color: #993399">0.683658</span> <span style="color: #993399">0.006859</span> <span style="color: #993399">6</span> <span style="color: #993399">3</span> <span style="color: #993399">210879</span> <span style="color: #993399">210879</span>
+<span style="font-style: italic"><span style="color: #9A1900"># wrote 210879 computed codewords to file tmp.nz</span></span></tt></pre></div></div>
 <div class="paragraph"><p>In a particular run, <code>210918</code> codewords were written to the file.  The
 computed codewords can be used to estimate the BER, e.g, by running a
 <code>bash</code> script</p></div>
@@ -1193,7 +1243,7 @@ http://www.gnu.org/software/src-highlite -->
 <span style="color: #993399">13</span> <span style="color: #993399">0.190795</span> <span style="color: #993399">0.006859</span> <span style="color: #993399">6</span> <span style="color: #993399">3</span> <span style="color: #993399">2149</span> <span style="color: #993399">2149</span>
 <span style="color: #993399">14</span> <span style="color: #993399">0.361757</span> <span style="color: #993399">0.006859</span> <span style="color: #993399">6</span> <span style="color: #993399">3</span> <span style="color: #993399">21275</span> <span style="color: #993399">21275</span>
 <span style="color: #993399">15</span> <span style="color: #993399">0.361757</span> <span style="color: #993399">0.006859</span> <span style="color: #993399">6</span> <span style="color: #993399">3</span> <span style="color: #993399">21275</span> <span style="color: #993399">21275</span>
-<span style="color: #993399">16</span> <span style="color: #993399">0.683706</span> <span style="color: #993399">0.006859</span> <span style="color: #993399">6</span> <span style="color: #993399">3</span> <span style="color: #993399">210840</span> <span style="color: #993399">210840</span></tt></pre></div></div>
+<span style="color: #993399">16</span> <span style="color: #993399">0.68364</span> <span style="color: #993399">0.006859</span> <span style="color: #993399">6</span> <span style="color: #993399">3</span> <span style="color: #993399">210801</span> <span style="color: #993399">210801</span></tt></pre></div></div>
 <div class="paragraph"><p>The second column is a greedy estimate for the LER (sum over
 contributions for each codeword), the third is the single maximum term
 in the sum, the fourth is the minimum weight of a codeword, and the
@@ -1257,8 +1307,10 @@ http://www.gnu.org/software/src-highlite -->
 compares well with the <code>mode=2.2</code> greedy estimate of <code>4.1e-5</code> based on an
 incomplete set of codewords.</p></div>
 </div>
-<div class="sect2">
-<h3 id="_export_code_matrices_to_matrix_market_code_mmx_code_or_code_dem_code_files">Export code matrices to Matrix Market (<code>MMX</code>) or <code>DEM</code> files</h3>
+</div>
+<div class="sect1">
+<h2 id="_export_code_matrices_to_matrix_market_code_mmx_code_or_code_dem_code_files">Export code matrices to Matrix Market (<code>MMX</code>) or <code>DEM</code> files</h2>
+<div class="sectionbody">
 <div class="paragraph"><p>Use <code>mode=3</code>.  Create all five matrices (<code>H=Hx</code>, <code>G=Hz</code>, <code>L=Lx</code>, <code>K=Lz</code>)
 and the probability vector <code>P</code> from the DEM file
 <code>./examples/surf_d3.dem</code>:</p></div>
@@ -1303,7 +1355,7 @@ http://www.gnu.org/software/src-highlite -->
 by Lorenzo Bettini
 http://www.lorenzobettini.it
 http://www.gnu.org/software/src-highlite -->
-<pre><tt><span style="font-style: italic"><span style="color: #9A1900"># initializing seed=38001768132 from time(NULL)+1000000ul*getpid()+0</span></span>
+<pre><tt><span style="font-style: italic"><span style="color: #9A1900"># initializing seed=207980038387 from time(NULL)+1000000ul*getpid()+0</span></span>
 <span style="font-style: italic"><span style="color: #9A1900"># Analyze small-weight codewords in 10000 RIS steps; swait=0</span></span>
 <span style="font-style: italic"><span style="color: #9A1900"># maxC=0 dE=-1 dW=0 maxW=0</span></span>
 <span style="font-style: italic"><span style="color: #9A1900"># calculating minimum weight</span></span>
@@ -1391,10 +1443,12 @@ http://www.gnu.org/software/src-highlite -->
 scaled by a factor <code>mulP=2</code>.  The file can be used, e.g., as an input
 to <code>Stim</code>, to generate errors/det/obs files externally.</p></div>
 </div>
+</div>
+<div class="sect1">
+<h2 id="_use_externally_generated_vectors">Use externally generated vectors</h2>
+<div class="sectionbody">
 <div class="sect2">
-<h3 id="_use_externally_generated_vectors">Use externally generated vectors</h3>
-<div class="sect3">
-<h4 id="_simple_examples">Simple examples</h4>
+<h3 id="_simple_examples">Simple examples</h3>
 <div class="paragraph"><p>In addition to internal sampler, externally generated error vectors,
 detector events, or observables can be used.  These can be generated, e.g.,
 with the help of <code>Stim</code>:</p></div>
@@ -1414,7 +1468,7 @@ src/vecdec <span style="color: #009900">mode</span><span style="color: #990000">
 by Lorenzo Bettini
 http://www.lorenzobettini.it
 http://www.gnu.org/software/src-highlite -->
-<pre><tt><span style="font-style: italic"><span style="color: #9A1900"># initializing seed=86963779709 from time(NULL)+1000000ul*getpid()+0</span></span>
+<pre><tt><span style="font-style: italic"><span style="color: #9A1900"># initializing seed=207989038387 from time(NULL)+1000000ul*getpid()+0</span></span>
 <span style="font-style: italic"><span style="color: #9A1900"># opening DEM file ./examples/surf_d3.dem</span></span>
 <span style="font-style: italic"><span style="color: #9A1900"># read DEM ./examples/surf_d3.dem: rows_H=24 rows_L=1 cols=221; nz_H=568 nz_L=36</span></span>
 <span style="font-style: italic"><span style="color: #9A1900"># mode=0, running vecdec RIS decoder : use DET and OBS files</span></span>
@@ -1426,10 +1480,10 @@ http://www.gnu.org/software/src-highlite -->
 <span style="font-style: italic"><span style="color: #9A1900"># stored 221 errors / 221 distinct syndrome vectors in hash</span></span>
 <span style="font-style: italic"><span style="color: #9A1900"># starting round 1 of 2</span></span>
 <span style="font-style: italic"><span style="color: #9A1900"># read 2500 det/obs pairs</span></span>
-<span style="font-style: italic"><span style="color: #9A1900"># starting round 2 of 2 pfail=0.0172 fail=43 out of total=2500</span></span>
+<span style="font-style: italic"><span style="color: #9A1900"># starting round 2 of 2 pfail=0.018 fail=45 out of total=2500</span></span>
 <span style="font-style: italic"><span style="color: #9A1900"># read 2500 det/obs pairs</span></span>
 <span style="font-style: italic"><span style="color: #9A1900"># P_FAIL N_TOT FAIL S_TOT : C_TRIVIAL S_TRIVIAL   C_LOW S_LOW  C_CLUS S_CLUS : FAIL_RIS N_RIS S_RIS</span></span>
-     <span style="color: #993399">0.0182</span> <span style="color: #993399">5000</span> <span style="color: #993399">91</span> <span style="color: #993399">4909</span> <span style="color: #990000">:</span> <span style="color: #993399">2113</span> <span style="color: #993399">2113</span>     <span style="color: #993399">1919</span> <span style="color: #993399">1908</span>       <span style="color: #993399">386</span> <span style="color: #993399">367</span> <span style="color: #990000">:</span> <span style="color: #993399">61</span> <span style="color: #993399">582</span> <span style="color: #993399">521</span></tt></pre></div></div>
+     <span style="color: #993399">0.0188</span> <span style="color: #993399">5000</span> <span style="color: #993399">94</span> <span style="color: #993399">4906</span> <span style="color: #990000">:</span> <span style="color: #993399">2098</span> <span style="color: #993399">2098</span>     <span style="color: #993399">1949</span> <span style="color: #993399">1937</span>       <span style="color: #993399">382</span> <span style="color: #993399">361</span> <span style="color: #990000">:</span> <span style="color: #993399">61</span> <span style="color: #993399">571</span> <span style="color: #993399">510</span></tt></pre></div></div>
 <div class="paragraph"><p>Instead of decoding, generated or constructed detector events and
 observables in <code>mode=0</code> and <code>mode=1</code> can be written to files.  The
 file names are set by the command line arguments <code>gdet=...</code> and
@@ -1447,7 +1501,7 @@ http://www.gnu.org/software/src-highlite -->
 by Lorenzo Bettini
 http://www.lorenzobettini.it
 http://www.gnu.org/software/src-highlite -->
-<pre><tt><span style="font-style: italic"><span style="color: #9A1900"># initializing seed=86966779709 from time(NULL)+1000000ul*getpid()+0</span></span>
+<pre><tt><span style="font-style: italic"><span style="color: #9A1900"># initializing seed=207991038387 from time(NULL)+1000000ul*getpid()+0</span></span>
 <span style="font-style: italic"><span style="color: #9A1900"># opening DEM file input/rep_code3.dem</span></span>
 <span style="font-style: italic"><span style="color: #9A1900"># read DEM input/rep_code3.dem: rows_H=8 rows_L=1 cols=9; nz_H=16 nz_L=1</span></span>
 <span style="font-style: italic"><span style="color: #9A1900"># mode=0, running vecdec RIS decoder : generating errors internally</span></span>
@@ -1457,7 +1511,7 @@ http://www.gnu.org/software/src-highlite -->
 <span style="font-style: italic"><span style="color: #9A1900"># uW=-1, will not use cluster-based pre-decoder</span></span>
 <span style="font-style: italic"><span style="color: #9A1900"># starting round 1 of 2</span></span>
 <span style="font-style: italic"><span style="color: #9A1900"># generated 1000 det/obs pairs</span></span>
-<span style="font-style: italic"><span style="color: #9A1900"># starting round 2 of 2 pfail=0.252 fail=252 out of total=1000</span></span>
+<span style="font-style: italic"><span style="color: #9A1900"># starting round 2 of 2 pfail=0.258 fail=258 out of total=1000</span></span>
 <span style="font-style: italic"><span style="color: #9A1900"># generated 1000 det/obs pairs</span></span></tt></pre></div></div>
 <div class="paragraph"><p>Here <code>steps=0 uW=-1</code> are used to ensure that the decoder is
 not run. Respectively, there is no output with the results.  Note that
@@ -1488,7 +1542,7 @@ echo mismatched det<span style="color: #990000">:</span> <span style="color: #00
 by Lorenzo Bettini
 http://www.lorenzobettini.it
 http://www.gnu.org/software/src-highlite -->
-<pre><tt><span style="font-style: italic"><span style="color: #9A1900"># initializing seed=86969779709 from time(NULL)+1000000ul*getpid()+0</span></span>
+<pre><tt><span style="font-style: italic"><span style="color: #9A1900"># initializing seed=207993038387 from time(NULL)+1000000ul*getpid()+0</span></span>
 <span style="font-style: italic"><span style="color: #9A1900"># opening DEM file ./examples/surf_d3.dem</span></span>
 <span style="font-style: italic"><span style="color: #9A1900"># read DEM ./examples/surf_d3.dem: rows_H=24 rows_L=1 cols=221; nz_H=568 nz_L=36</span></span>
 <span style="font-style: italic"><span style="color: #9A1900"># mode=0, running vecdec RIS decoder : use DET and OBS files</span></span>
@@ -1500,16 +1554,15 @@ http://www.gnu.org/software/src-highlite -->
 <span style="font-style: italic"><span style="color: #9A1900"># stored 221 errors / 221 distinct syndrome vectors in hash</span></span>
 <span style="font-style: italic"><span style="color: #9A1900"># starting round 1 of 2</span></span>
 <span style="font-style: italic"><span style="color: #9A1900"># read 2500 det/obs pairs</span></span>
-<span style="font-style: italic"><span style="color: #9A1900"># starting round 2 of 2 pfail=0.0164 fail=41 out of total=2500</span></span>
+<span style="font-style: italic"><span style="color: #9A1900"># starting round 2 of 2 pfail=0.016 fail=40 out of total=2500</span></span>
 <span style="font-style: italic"><span style="color: #9A1900"># read 2500 det/obs pairs</span></span>
 <span style="font-style: italic"><span style="color: #9A1900"># P_FAIL N_TOT FAIL S_TOT : C_TRIVIAL S_TRIVIAL   C_LOW S_LOW  C_CLUS S_CLUS : FAIL_RIS N_RIS S_RIS</span></span>
-     <span style="color: #993399">0.0174</span> <span style="color: #993399">5000</span> <span style="color: #993399">87</span> <span style="color: #993399">4913</span> <span style="color: #990000">:</span> <span style="color: #993399">2113</span> <span style="color: #993399">2113</span>     <span style="color: #993399">1919</span> <span style="color: #993399">1908</span>       <span style="color: #993399">386</span> <span style="color: #993399">367</span> <span style="color: #990000">:</span> <span style="color: #993399">57</span> <span style="color: #993399">582</span> <span style="color: #993399">525</span>
-mismatched det<span style="color: #990000">:</span> <span style="color: #993399">0</span> obs<span style="color: #990000">:</span> <span style="color: #993399">87</span></tt></pre></div></div>
+     <span style="color: #993399">0.0178</span> <span style="color: #993399">5000</span> <span style="color: #993399">89</span> <span style="color: #993399">4911</span> <span style="color: #990000">:</span> <span style="color: #993399">2098</span> <span style="color: #993399">2098</span>     <span style="color: #993399">1949</span> <span style="color: #993399">1937</span>       <span style="color: #993399">382</span> <span style="color: #993399">361</span> <span style="color: #990000">:</span> <span style="color: #993399">56</span> <span style="color: #993399">571</span> <span style="color: #993399">515</span>
+mismatched det<span style="color: #990000">:</span> <span style="color: #993399">0</span> obs<span style="color: #990000">:</span> <span style="color: #993399">89</span></tt></pre></div></div>
 <div class="paragraph"><p>The last line in the output indicates that all detector events are
 recovered correctly (as expected), but there are some logical errors,
-in agreement with the <code>fail_fraction</code> and <code>success_cnt</code> reported by
-the program.</p></div>
-<div class="paragraph"><p>A similar run with <code>mode=1.12 lerr=-1</code> (serial-V BP without OSD) gave
+in agreement with the <code>Fail</code> count reported by the program.</p></div>
+<div class="paragraph"><p>A similar run with <code>mode=1.12 lerr=-1</code> (serial-V BP without OSD) gives
 output with the last three lines</p></div>
 <div class="listingblock">
 <div class="title">example X4</div>
@@ -1522,20 +1575,16 @@ http://www.gnu.org/software/src-highlite -->
            <span style="color: #009900">perr</span><span style="color: #990000">=</span>tmp_E<span style="color: #990000">.</span><span style="color: #993399">01</span> <span style="color: #009900">pdet</span><span style="color: #990000">=</span>tmp_D<span style="color: #990000">.</span><span style="color: #993399">01</span> <span style="color: #009900">pobs</span><span style="color: #990000">=</span>tmp_L<span style="color: #990000">.</span><span style="color: #993399">01</span>
 <span style="color: #009900">det_mism</span><span style="color: #990000">=</span>`paste tmp_D<span style="color: #990000">.</span><span style="color: #993399">01</span> tmp_det<span style="color: #990000">.</span><span style="color: #993399">01</span> -d<span style="color: #FF0000">" "</span><span style="color: #990000">|</span> grep -E -c -v <span style="color: #FF0000">'^([01]+) </span><span style="color: #CC33CC">\1</span><span style="color: #FF0000">$'</span>`
 <span style="color: #009900">obs_mism</span><span style="color: #990000">=</span>`paste tmp_L<span style="color: #990000">.</span><span style="color: #993399">01</span> tmp_obs<span style="color: #990000">.</span><span style="color: #993399">01</span> -d<span style="color: #FF0000">" "</span><span style="color: #990000">|</span> grep -E -c -v <span style="color: #FF0000">'^([01]+) </span><span style="color: #CC33CC">\1</span><span style="color: #FF0000">$'</span>`
-echo mismatched det<span style="color: #990000">:</span> <span style="color: #009900">$det_mism</span> obs<span style="color: #990000">:</span> <span style="color: #009900">$obs_mism</span></tt></pre></div></div>
-<div class="listingblock">
-<div class="content"><!-- Generator: GNU source-highlight
-by Lorenzo Bettini
-http://www.lorenzobettini.it
-http://www.gnu.org/software/src-highlite -->
-<pre><tt><span style="font-style: italic"><span style="color: #9A1900"># P_FAIL N_TOT FAIL S_TOT : C_TRIVIAL S_TRIVIAL   C_LOW S_LOW  C_CLUS S_CLUS : FAIL_BP N_BP   C_BP C_BP_AVG C_BP_TOT   S_BP S_OSD</span></span>
-     <span style="color: #993399">0.0472</span> <span style="color: #993399">5000</span> <span style="color: #993399">236</span> <span style="color: #993399">4764</span> <span style="color: #990000">:</span> <span style="color: #993399">2113</span> <span style="color: #993399">2113</span>    <span style="color: #993399">1919</span> <span style="color: #993399">1908</span>       <span style="color: #993399">386</span> <span style="color: #993399">367</span> <span style="color: #990000">:</span> <span style="color: #993399">206</span> <span style="color: #993399">582</span>       <span style="color: #993399">382</span> <span style="color: #993399">11</span> <span style="color: #993399">393</span>      <span style="color: #993399">376</span>  <span style="color: #993399">0</span>
-mismatched det<span style="color: #990000">:</span> <span style="color: #993399">189</span> obs<span style="color: #990000">:</span> <span style="color: #993399">117</span></tt></pre></div></div>
+echo mismatched det<span style="color: #990000">:</span> <span style="color: #009900">$det_mism</span> obs<span style="color: #990000">:</span> <span style="color: #009900">$obs_mism</span>
+---
+<span style="font-style: italic"><span style="color: #9A1900"># P_FAIL N_TOT FAIL S_TOT : C_TRIVIAL S_TRIVIAL   C_LOW S_LOW  C_CLUS S_CLUS : FAIL_BP N_BP   C_BP C_BP_AVG C_BP_TOT   S_BP S_OSD</span></span>
+     <span style="color: #993399">0.0464</span> <span style="color: #993399">5000</span> <span style="color: #993399">232</span> <span style="color: #993399">4768</span> <span style="color: #990000">:</span> <span style="color: #993399">2098</span> <span style="color: #993399">2098</span>    <span style="color: #993399">1949</span> <span style="color: #993399">1937</span>       <span style="color: #993399">382</span> <span style="color: #993399">361</span> <span style="color: #990000">:</span> <span style="color: #993399">199</span> <span style="color: #993399">571</span>       <span style="color: #993399">385</span> <span style="color: #993399">7</span> <span style="color: #993399">392</span>       <span style="color: #993399">372</span>  <span style="color: #993399">0</span>
+mismatched det<span style="color: #990000">:</span> <span style="color: #993399">179</span> obs<span style="color: #990000">:</span> <span style="color: #993399">130</span></tt></pre></div></div>
 <div class="paragraph"><p>The <code>mismatched det</code> value in the last line is in agreement with the
 difference <code>N_BP - C_BP_TOT</code>.  However, the number of times the
-observable was incorrect does not match the number of <code>FAIL`s reported by `vecdec</code>.  To
-reproduce the total number of logical errors, both the <code>det</code> and <code>obs</code>
-have to be compared at once, e.g., by running</p></div>
+observable was incorrect does not match the <code>FAIL</code> count reported by
+<code>vecdec</code>.  To reproduce the total number of logical errors, both the
+<code>det</code> and <code>obs</code> have to be compared at once, e.g., by running</p></div>
 <div class="listingblock">
 <div class="title">example X5</div>
 <div class="content"><!-- Generator: GNU source-highlight
@@ -1545,20 +1594,23 @@ http://www.gnu.org/software/src-highlite -->
 <pre><tt><span style="color: #009900">num</span><span style="color: #990000">=</span><span style="color: #993399">5000</span>
 src/vecdec <span style="color: #009900">mode</span><span style="color: #990000">=</span><span style="color: #993399">1.12</span> <span style="color: #009900">seed</span><span style="color: #990000">=</span><span style="color: #993399">7</span> <span style="color: #009900">fdet</span><span style="color: #990000">=</span>tmp_det<span style="color: #990000">.</span><span style="color: #993399">01</span> <span style="color: #009900">fobs</span><span style="color: #990000">=</span>tmp_obs<span style="color: #990000">.</span><span style="color: #993399">01</span> <span style="color: #990000">\</span>
            <span style="color: #009900">fdem</span><span style="color: #990000">=</span> <span style="color: #990000">.</span>/examples/surf_d3<span style="color: #990000">.</span>dem <span style="color: #009900">nvec</span><span style="color: #990000">=</span><span style="color: #009900">$num</span> <span style="color: #009900">steps</span><span style="color: #990000">=</span><span style="color: #993399">10</span> <span style="color: #009900">lerr</span><span style="color: #990000">=</span>-<span style="color: #993399">1</span> <span style="color: #009900">ntot</span><span style="color: #990000">=</span><span style="color: #009900">$num</span> <span style="color: #990000">\</span>
-           <span style="color: #009900">perr</span><span style="color: #990000">=</span>tmp_E<span style="color: #990000">.</span><span style="color: #993399">01</span> <span style="color: #009900">pdet</span><span style="color: #990000">=</span>tmp_D<span style="color: #990000">.</span><span style="color: #993399">01</span> <span style="color: #009900">pobs</span><span style="color: #990000">=</span>tmp_L<span style="color: #990000">.</span><span style="color: #993399">01</span></tt></pre></div></div>
-<div class="paragraph"><p>paste -d: tmp_det.01 tmp_obs.01 | head -$num &gt; tmp1.01
-paste -d: tmp_D.01 tmp_L.01 &gt; tmp2.01
-echo failed: <code>paste tmp1.01 tmp2.01 -d" "| grep -E -v -c '^([01]+:[01]+) \1$'</code></p></div>
+           <span style="color: #009900">perr</span><span style="color: #990000">=</span>tmp_E<span style="color: #990000">.</span><span style="color: #993399">01</span> <span style="color: #009900">pdet</span><span style="color: #990000">=</span>tmp_D<span style="color: #990000">.</span><span style="color: #993399">01</span> <span style="color: #009900">pobs</span><span style="color: #990000">=</span>tmp_L<span style="color: #990000">.</span><span style="color: #993399">01</span>
+paste -d<span style="color: #990000">:</span> tmp_det<span style="color: #990000">.</span><span style="color: #993399">01</span> tmp_obs<span style="color: #990000">.</span><span style="color: #993399">01</span> <span style="color: #990000">|</span> head -<span style="color: #009900">$num</span> <span style="color: #990000">&gt;</span> tmp1<span style="color: #990000">.</span><span style="color: #993399">01</span>
+paste -d<span style="color: #990000">:</span> tmp_D<span style="color: #990000">.</span><span style="color: #993399">01</span> tmp_L<span style="color: #990000">.</span><span style="color: #993399">01</span> <span style="color: #990000">&gt;</span> tmp2<span style="color: #990000">.</span><span style="color: #993399">01</span>
+echo failed<span style="color: #990000">:</span> `paste tmp1<span style="color: #990000">.</span><span style="color: #993399">01</span> tmp2<span style="color: #990000">.</span><span style="color: #993399">01</span> -d<span style="color: #FF0000">" "</span><span style="color: #990000">|</span> grep -E -v -c <span style="color: #FF0000">'^([01]+:[01]+) </span><span style="color: #CC33CC">\1</span><span style="color: #FF0000">$'</span>`</tt></pre></div></div>
 <div class="listingblock">
 <div class="content"><!-- Generator: GNU source-highlight
 by Lorenzo Bettini
 http://www.lorenzobettini.it
 http://www.gnu.org/software/src-highlite -->
-<pre><tt>which returns the number of failed decoding <span style="font-weight: bold"><span style="color: #0000FF">in</span></span> agreement with `FAIL`
-reported by `vecdec`<span style="color: #990000">.</span></tt></pre></div></div>
+<pre><tt><span style="font-style: italic"><span style="color: #9A1900"># P_FAIL N_TOT FAIL S_TOT : C_TRIVIAL S_TRIVIAL   C_LOW S_LOW  C_CLUS S_CLUS : FAIL_BP N_BP   C_BP C_BP_AVG C_BP_TOT   S_BP S_OSD</span></span>
+     <span style="color: #993399">0.0464</span> <span style="color: #993399">5000</span> <span style="color: #993399">232</span> <span style="color: #993399">4768</span> <span style="color: #990000">:</span> <span style="color: #993399">2098</span> <span style="color: #993399">2098</span>    <span style="color: #993399">1949</span> <span style="color: #993399">1937</span>       <span style="color: #993399">382</span> <span style="color: #993399">361</span> <span style="color: #990000">:</span> <span style="color: #993399">199</span> <span style="color: #993399">571</span>       <span style="color: #993399">385</span> <span style="color: #993399">7</span> <span style="color: #993399">392</span>       <span style="color: #993399">372</span>  <span style="color: #993399">0</span>
+failed<span style="color: #990000">:</span> <span style="color: #993399">232</span></tt></pre></div></div>
+<div class="paragraph"><p>which returns the number of failed decodings in agreement with the <code>FAIL</code>
+count reported by <code>vecdec</code>.</p></div>
 </div>
-<div class="sect3">
-<h4 id="_syndrome_vector_manipulation">Syndrome vector manipulation</h4>
+<div class="sect2">
+<h3 id="_syndrome_vector_manipulation">Syndrome vector manipulation</h3>
 <div class="paragraph"><p>In some cases, we may need to modify the syndrome vectors read from a
 file.  Input parameters <code>fer0</code> and <code>finA</code> are used to this extent.
 Namely, the detector events <code>s</code> read from a file specified with the
@@ -1591,7 +1643,7 @@ http://www.gnu.org/software/src-highlite -->
       <span style="color: #993399">0.094</span> <span style="color: #993399">1000</span> <span style="color: #993399">94</span> <span style="color: #993399">906</span> <span style="color: #990000">:</span> <span style="color: #993399">3</span> <span style="color: #993399">3</span>    <span style="color: #993399">31</span> <span style="color: #993399">31</span>   <span style="color: #993399">11</span> <span style="color: #993399">11</span> <span style="color: #990000">:</span> <span style="color: #993399">94</span> <span style="color: #993399">955</span>          <span style="color: #993399">513</span> <span style="color: #993399">352</span> <span style="color: #993399">865</span>     <span style="color: #993399">861</span>  <span style="color: #993399">0</span>
 <span style="font-style: italic"><span style="color: #9A1900"># Could not process Matrix Market banner; try 'alist' format</span></span>
 <span style="font-style: italic"><span style="color: #9A1900"># read alist file ./examples/96.3.963.alist (transposed): rows=48 cols=96 nz=288</span></span>
-<span style="font-style: italic"><span style="color: #9A1900"># initializing seed=87002779710 from time(NULL)+1000000ul*getpid()+0</span></span>
+<span style="font-style: italic"><span style="color: #9A1900"># initializing seed=208019038388 from time(NULL)+1000000ul*getpid()+0</span></span>
 <span style="font-style: italic"><span style="color: #9A1900"># Could not process Matrix Market banner; try 'alist' format</span></span>
 <span style="font-style: italic"><span style="color: #9A1900"># read alist file ./examples/96.3.963.alist (transposed): rows=48 cols=96 nz=288</span></span>
 <span style="font-style: italic"><span style="color: #9A1900"># mode=0, running vecdec RIS decoder : use DET file</span></span>
@@ -1604,10 +1656,11 @@ http://www.gnu.org/software/src-highlite -->
 <span style="font-style: italic"><span style="color: #9A1900"># read 1000 det events</span></span>
 <span style="font-style: italic"><span style="color: #9A1900"># updated 1000 det += A*e0 events</span></span>
 <span style="font-style: italic"><span style="color: #9A1900"># number of convergence failures: 90</span></span></tt></pre></div></div>
-<div class="paragraph"><p>Here each line in the file <code>yyy.01</code> is the combination <code>s+A*e0</code>, with the
-lines <code>s</code> and <code>e0</code> read from the files <code>dets.01</code> and <code>bperr.01</code>,
-respectively.  The convergence failures is in agreement with
-the number of non-zero syndrome vectors in the file <code>yyy.01</code></p></div>
+<div class="paragraph"><p>Here each line in the file <code>yyy.01</code> is the combination <code>s+A*e0</code>, with
+the lines <code>s</code> and <code>e0</code> read from the files <code>dets.01</code> and <code>bperr.01</code>,
+respectively.  The number of convergence failures <code>N_BP</code>-<code>C_BP_TOT</code> is
+in agreement with the number of non-zero syndrome vectors in the file
+<code>yyy.01</code></p></div>
 <div class="paragraph"><p>The input parameters <code>finA</code>, <code>fer0</code>, and <code>fdet</code> can be used for decoding
 (in <code>mode=0</code> and <code>mode=1</code>); they must be specified at the same time.
 The only effect of <code>fer0</code> and <code>finA</code> is that the syndrome vectors are modified;
@@ -1623,8 +1676,8 @@ http://www.lorenzobettini.it
 http://www.gnu.org/software/src-highlite -->
 <pre><tt>cut -c <span style="color: #993399">3</span>-<span style="color: #993399">5</span> dets<span style="color: #990000">.</span><span style="color: #993399">01</span></tt></pre></div></div>
 </div>
-<div class="sect3">
-<h4 id="_just_in_time_decoding">Just-in-time decoding</h4>
+<div class="sect2">
+<h3 id="_just_in_time_decoding">Just-in-time decoding</h3>
 <div class="paragraph"><p>To be useful in scalable quantum computation, quantum error correction
 would be run over millions of measurement rounds.  In such a case, we
 do not expect to be able to decode the entire syndrome vector,
@@ -1679,21 +1732,21 @@ by Lorenzo Bettini
 http://www.lorenzobettini.it
 http://www.gnu.org/software/src-highlite -->
 <pre><tt><span style="font-style: italic"><span style="color: #9A1900"># row blocks: 12 36 60 84 108 120</span></span>
-src/mtx_sub <span style="color: #009900">fin</span><span style="color: #990000">=</span>bigH<span style="color: #990000">.</span>mmx <span style="color: #009900">rows</span><span style="color: #990000">=</span><span style="color: #993399">0</span><span style="color: #990000">,</span><span style="color: #993399">11</span> <span style="color: #009900">rows</span><span style="color: #990000">=</span><span style="color: #993399">12</span><span style="color: #990000">,</span><span style="color: #993399">35</span> <span style="color: #009900">rows</span><span style="color: #990000">=</span><span style="color: #993399">36</span><span style="color: #990000">,</span><span style="color: #993399">59</span> <span style="color: #009900">rows</span><span style="color: #990000">=</span><span style="color: #993399">60</span><span style="color: #990000">,</span><span style="color: #993399">83</span> <span style="color: #009900">rows</span><span style="color: #990000">=</span><span style="color: #993399">84</span><span style="color: #990000">,</span><span style="color: #993399">107</span> <span style="color: #009900">rows</span><span style="color: #990000">=</span><span style="color: #993399">108</span><span style="color: #990000">,</span><span style="color: #993399">119</span></tt></pre></div></div>
-<div class="paragraph"><p>---
-# matrix dimensions 120 by 1679
-# row range [0 .. 11], first and last non-zero columns:
-0 147
-# row range [12 .. 35], first and last non-zero columns:
-1 585
-# row range [36 .. 59], first and last non-zero columns:
-150 993
-# row range [60 .. 83], first and last non-zero columns:
-588 1401
-# row range [84 .. 107], first and last non-zero columns:
-996 1657
-# row range [108 .. 119], first and last non-zero columns:
-1404 1678</p></div>
+src/mtx_sub <span style="color: #009900">fin</span><span style="color: #990000">=</span>bigH<span style="color: #990000">.</span>mmx <span style="color: #009900">rows</span><span style="color: #990000">=</span><span style="color: #993399">0</span><span style="color: #990000">,</span><span style="color: #993399">11</span> <span style="color: #009900">rows</span><span style="color: #990000">=</span><span style="color: #993399">12</span><span style="color: #990000">,</span><span style="color: #993399">35</span> <span style="color: #009900">rows</span><span style="color: #990000">=</span><span style="color: #993399">36</span><span style="color: #990000">,</span><span style="color: #993399">59</span> <span style="color: #009900">rows</span><span style="color: #990000">=</span><span style="color: #993399">60</span><span style="color: #990000">,</span><span style="color: #993399">83</span> <span style="color: #009900">rows</span><span style="color: #990000">=</span><span style="color: #993399">84</span><span style="color: #990000">,</span><span style="color: #993399">107</span> <span style="color: #009900">rows</span><span style="color: #990000">=</span><span style="color: #993399">108</span><span style="color: #990000">,</span><span style="color: #993399">119</span>
+---
+<span style="font-style: italic"><span style="color: #9A1900"># matrix dimensions 120 by 1679</span></span>
+<span style="font-style: italic"><span style="color: #9A1900"># row range [0 .. 11], first and last non-zero columns:</span></span>
+<span style="color: #993399">0</span> <span style="color: #993399">147</span>
+<span style="font-style: italic"><span style="color: #9A1900"># row range [12 .. 35], first and last non-zero columns:</span></span>
+<span style="color: #993399">1</span> <span style="color: #993399">585</span>
+<span style="font-style: italic"><span style="color: #9A1900"># row range [36 .. 59], first and last non-zero columns:</span></span>
+<span style="color: #993399">150</span> <span style="color: #993399">993</span>
+<span style="font-style: italic"><span style="color: #9A1900"># row range [60 .. 83], first and last non-zero columns:</span></span>
+<span style="color: #993399">588</span> <span style="color: #993399">1401</span>
+<span style="font-style: italic"><span style="color: #9A1900"># row range [84 .. 107], first and last non-zero columns:</span></span>
+<span style="color: #993399">996</span> <span style="color: #993399">1657</span>
+<span style="font-style: italic"><span style="color: #9A1900"># row range [108 .. 119], first and last non-zero columns:</span></span>
+<span style="color: #993399">1404</span> <span style="color: #993399">1678</span></tt></pre></div></div>
 <div class="paragraph"><p>For this simple example, the first block will include rows from <code>0</code> to
 <code>83</code>, and columns from <code>0</code> to <code>a=1401</code>, and the second block rows from
 <code>[36..119]</code> and all columns, with error vector in columns <code>[0..585]</code>
@@ -1808,7 +1861,7 @@ two-step decoding failed<span style="color: #990000">:</span> det <span style="c
 <div class="paragraph"><p>In this particular case, we have the same number of decoding failures.</p></div>
 <div class="paragraph"><p>Here is a similar file using BP for decoding (only the final output is shown).</p></div>
 <div class="listingblock">
-<div class="title">example BP</div>
+<div class="title">example YBP</div>
 <div class="content"><!-- Generator: GNU source-highlight
 by Lorenzo Bettini
 http://www.lorenzobettini.it
@@ -1889,14 +1942,16 @@ http://www.lorenzobettini.it
 http://www.gnu.org/software/src-highlite -->
 <pre><tt>mismatched det<span style="color: #990000">:</span> <span style="color: #993399">0</span> obs<span style="color: #990000">:</span> <span style="color: #993399">3</span> out of <span style="color: #993399">1000</span>
 two-step decoding BP failed<span style="color: #990000">:</span> det <span style="color: #993399">0</span> obs <span style="color: #993399">3</span> out of <span style="color: #993399">1000</span>
-      <span style="color: #993399">0.127</span> <span style="color: #993399">1000</span> <span style="color: #993399">127</span> <span style="color: #993399">873</span> <span style="color: #990000">:</span> <span style="color: #993399">65</span> <span style="color: #993399">65</span>         <span style="color: #993399">472</span> <span style="color: #993399">415</span>         <span style="color: #993399">326</span> <span style="color: #993399">258</span> <span style="color: #990000">:</span> <span style="color: #993399">2</span> <span style="color: #993399">137</span>         <span style="color: #993399">0</span> <span style="color: #993399">90</span> <span style="color: #993399">90</span>         <span style="color: #993399">90</span>  <span style="color: #993399">45</span>
+      <span style="color: #993399">0.002</span> <span style="color: #993399">1000</span> <span style="color: #993399">2</span> <span style="color: #993399">998</span> <span style="color: #990000">:</span> <span style="color: #993399">65</span> <span style="color: #993399">65</span>   <span style="color: #993399">472</span> <span style="color: #993399">472</span>         <span style="color: #993399">326</span> <span style="color: #993399">326</span> <span style="color: #990000">:</span> <span style="color: #993399">2</span> <span style="color: #993399">137</span>         <span style="color: #993399">0</span> <span style="color: #993399">90</span> <span style="color: #993399">90</span>         <span style="color: #993399">90</span>  <span style="color: #993399">45</span>
 one-step BP mismatch det<span style="color: #990000">:</span> <span style="color: #993399">0</span> obs<span style="color: #990000">:</span> <span style="color: #993399">2</span> out of <span style="color: #993399">1000</span>
 two-step BP mismatch det<span style="color: #990000">:</span> <span style="color: #993399">0</span> obs<span style="color: #990000">:</span> <span style="color: #993399">3</span> out of <span style="color: #993399">1000</span></tt></pre></div></div>
 <div class="paragraph"><p>Clearly, very similar results for single-block and two-block decoding in this case.</p></div>
 </div>
 </div>
-<div class="sect2">
-<h3 id="_simulate_quantum_clifford_circuit_given_a_detector_error_model">Simulate quantum Clifford circuit (given a detector error model)</h3>
+</div>
+<div class="sect1">
+<h2 id="_simulate_quantum_clifford_circuit_given_a_detector_error_model">Simulate quantum Clifford circuit (given a detector error model)</h2>
+<div class="sectionbody">
 <div class="paragraph"><p>In this particular example, detector error model (DEM) file is
 generated by <code>Stim</code> for a specific quantum circuit.  Namely, a $d=5$
 surface code with $5$ rounds of measurements and a standard circuit
@@ -1906,8 +1961,7 @@ error model with the same probability <code>p=0.005</code> of four common error 
 by Lorenzo Bettini
 http://www.lorenzobettini.it
 http://www.gnu.org/software/src-highlite -->
-<pre><tt><span style="color: #990000">===</span>
-<span style="color: #009900">vecdec</span><span style="color: #990000">=.</span>/src/vecdec
+<pre><tt><span style="color: #009900">vecdec</span><span style="color: #990000">=.</span>/src/vecdec
 <span style="color: #009900">stim</span><span style="color: #990000">=..</span>/Stim/out/stim <span style="font-style: italic"><span style="color: #9A1900"># location of `stim` command-line binary</span></span>
 <span style="color: #009900">d</span><span style="color: #990000">=</span><span style="color: #993399">5</span>                      <span style="font-style: italic"><span style="color: #9A1900"># code distance (and number of rounds)</span></span>
 <span style="color: #009900">p</span><span style="color: #990000">=</span><span style="color: #993399">0.005</span>                  <span style="font-style: italic"><span style="color: #9A1900"># error probability to use</span></span>
@@ -1924,8 +1978,7 @@ http://www.gnu.org/software/src-highlite -->
 <span style="color: #009900">$stim</span> analyze_errors --in <span style="color: #009900">$fnam</span><span style="color: #990000">.</span>stim <span style="color: #990000">&gt;</span> <span style="color: #009900">$fnam</span><span style="color: #990000">.</span>dem
 <span style="font-style: italic"><span style="color: #9A1900"># use `vecdec` to generate errors internally and do the actual decoding</span></span>
 <span style="color: #009900">$vecdec</span> <span style="color: #009900">debug</span><span style="color: #990000">=</span><span style="color: #993399">1</span> <span style="color: #009900">mode</span><span style="color: #990000">=</span><span style="color: #993399">0</span> <span style="color: #009900">fdem</span><span style="color: #990000">=</span><span style="color: #009900">$fnam</span><span style="color: #990000">.</span>dem <span style="color: #009900">steps</span><span style="color: #990000">=</span><span style="color: #993399">500</span> <span style="color: #009900">lerr</span><span style="color: #990000">=</span><span style="color: #993399">1</span> <span style="color: #990000">\</span>
-          <span style="color: #009900">ntot</span><span style="color: #990000">=</span><span style="color: #993399">10240</span> <span style="color: #009900">nvec</span><span style="color: #990000">=</span><span style="color: #993399">1024</span> <span style="color: #009900">nfail</span><span style="color: #990000">=</span><span style="color: #993399">100</span>
-<span style="color: #990000">===</span></tt></pre></div></div>
+          <span style="color: #009900">ntot</span><span style="color: #990000">=</span><span style="color: #993399">10240</span> <span style="color: #009900">nvec</span><span style="color: #990000">=</span><span style="color: #993399">1024</span> <span style="color: #009900">nfail</span><span style="color: #990000">=</span><span style="color: #993399">100</span></tt></pre></div></div>
 <div class="paragraph"><p>This gives BER of <code>0.0581055</code> (<code>119</code> out of  <code>2048</code>).  Note that the
 DEM file, in effect, specifies matrices <code>H=Hx</code>, <code>L=Lx</code>, and the error
 probabilities in different variable nodes.  In this particular case,
@@ -1941,9 +1994,7 @@ use <code>vecdec</code> with <code>mode=3</code>:</p></div>
 by Lorenzo Bettini
 http://www.lorenzobettini.it
 http://www.gnu.org/software/src-highlite -->
-<pre><tt><span style="color: #990000">===</span>
-<span style="color: #009900">$vecdec</span> <span style="color: #009900">mode</span><span style="color: #990000">=</span><span style="color: #993399">3.28</span> <span style="color: #009900">fdem</span><span style="color: #990000">=</span>sd5<span style="color: #990000">.</span>dem <span style="color: #009900">fout</span><span style="color: #990000">=</span>tmp
-<span style="color: #990000">===</span></tt></pre></div></div>
+<pre><tt><span style="color: #009900">$vecdec</span> <span style="color: #009900">mode</span><span style="color: #990000">=</span><span style="color: #993399">3.28</span> <span style="color: #009900">fdem</span><span style="color: #990000">=</span>sd5<span style="color: #990000">.</span>dem <span style="color: #009900">fout</span><span style="color: #990000">=</span>tmp</tt></pre></div></div>
 <div class="paragraph"><p>This creates the files <code>tmpH.mmx</code>, <code>tmpL.mmx</code>, and <code>tmpP.mmx</code> with
 matrices <code>H</code> and <code>L</code> and the probability vector <code>P</code> extracted from the
 DEM file.  The submode bitmap <code>28=4+8+16</code> specifies the matrices to
@@ -1961,10 +2012,8 @@ argument).</p></div>
 by Lorenzo Bettini
 http://www.lorenzobettini.it
 http://www.gnu.org/software/src-highlite -->
-<pre><tt><span style="color: #990000">===</span>
-<span style="color: #009900">$vecdec</span> <span style="color: #009900">mode</span><span style="color: #990000">=</span><span style="color: #993399">1.14</span> <span style="color: #009900">finH</span><span style="color: #990000">=</span>tmpH<span style="color: #990000">.</span>mmx <span style="color: #009900">finL</span><span style="color: #990000">=</span>tmpL<span style="color: #990000">.</span>mmx <span style="color: #009900">finP</span><span style="color: #990000">=</span>tmpP<span style="color: #990000">.</span>mmx <span style="color: #009900">steps</span><span style="color: #990000">=</span><span style="color: #993399">50</span> <span style="color: #009900">lerr</span><span style="color: #990000">=</span><span style="color: #993399">2</span> <span style="color: #990000">\</span>
-          <span style="color: #009900">ntot</span><span style="color: #990000">=</span><span style="color: #993399">10240</span> <span style="color: #009900">nvec</span><span style="color: #990000">=</span><span style="color: #993399">1024</span> <span style="color: #009900">nfail</span><span style="color: #990000">=</span><span style="color: #993399">100</span>
-<span style="color: #990000">===</span></tt></pre></div></div>
+<pre><tt><span style="color: #009900">$vecdec</span> <span style="color: #009900">mode</span><span style="color: #990000">=</span><span style="color: #993399">1.14</span> <span style="color: #009900">finH</span><span style="color: #990000">=</span>tmpH<span style="color: #990000">.</span>mmx <span style="color: #009900">finL</span><span style="color: #990000">=</span>tmpL<span style="color: #990000">.</span>mmx <span style="color: #009900">finP</span><span style="color: #990000">=</span>tmpP<span style="color: #990000">.</span>mmx <span style="color: #009900">steps</span><span style="color: #990000">=</span><span style="color: #993399">50</span> <span style="color: #009900">lerr</span><span style="color: #990000">=</span><span style="color: #993399">2</span> <span style="color: #990000">\</span>
+          <span style="color: #009900">ntot</span><span style="color: #990000">=</span><span style="color: #993399">10240</span> <span style="color: #009900">nvec</span><span style="color: #990000">=</span><span style="color: #993399">1024</span> <span style="color: #009900">nfail</span><span style="color: #990000">=</span><span style="color: #993399">100</span></tt></pre></div></div>
 <div class="paragraph"><p>It gives BER of <code>0.0103306</code> (<code>100</code> out of <code>9680</code>), substantially
 better than the RIS decoding.</p></div>
 <div class="ulist"><ul>
@@ -1979,15 +2028,13 @@ Use <code>vecdec</code> with detector and observable events generated by <code>S
 by Lorenzo Bettini
 http://www.lorenzobettini.it
 http://www.gnu.org/software/src-highlite -->
-<pre><tt><span style="color: #990000">===</span>
-<span style="color: #009900">stim</span><span style="color: #990000">=..</span>/Stim/out/stim
+<pre><tt><span style="color: #009900">stim</span><span style="color: #990000">=..</span>/Stim/out/stim
 <span style="color: #009900">fnam</span><span style="color: #990000">=</span>sd5
 <span style="color: #009900">$stim</span> sample_dem --shots <span style="color: #993399">10240</span> --in <span style="color: #009900">$fnam</span><span style="color: #990000">.</span>dem <span style="color: #990000">\</span>
         --out <span style="color: #009900">$fnam</span><span style="color: #990000">.</span>det --out_format <span style="color: #993399">01</span> <span style="color: #990000">\</span>
         --obs_out <span style="color: #009900">$fnam</span><span style="color: #990000">.</span>obs --obs_out_format <span style="color: #993399">01</span>
 <span style="color: #009900">$vecdec</span> <span style="color: #009900">debug</span><span style="color: #990000">=</span><span style="color: #993399">1</span> <span style="color: #009900">mode</span><span style="color: #990000">=</span><span style="color: #993399">1.14</span> <span style="color: #009900">fdem</span><span style="color: #990000">=</span><span style="color: #009900">$fnam</span><span style="color: #990000">.</span>dem <span style="color: #009900">fdet</span><span style="color: #990000">=</span><span style="color: #009900">$fnam</span><span style="color: #990000">.</span>det <span style="color: #009900">fobs</span><span style="color: #990000">=</span><span style="color: #009900">$fnam</span><span style="color: #990000">.</span>obs <span style="color: #009900">steps</span><span style="color: #990000">=</span><span style="color: #993399">50</span> <span style="color: #009900">lerr</span><span style="color: #990000">=</span><span style="color: #993399">2</span> <span style="color: #990000">\</span>
-           <span style="color: #009900">nvec</span><span style="color: #990000">=</span><span style="color: #993399">1024</span> <span style="color: #009900">ntot</span><span style="color: #990000">=</span><span style="color: #993399">10240</span>
-<span style="color: #990000">===</span></tt></pre></div></div>
+           <span style="color: #009900">nvec</span><span style="color: #990000">=</span><span style="color: #993399">1024</span> <span style="color: #009900">ntot</span><span style="color: #990000">=</span><span style="color: #993399">10240</span></tt></pre></div></div>
 <div class="paragraph"><p>Finally, to estimate the decoding
 performance at small error probabilities, <code>mode=2</code> can be used:</p></div>
 <div class="listingblock">
@@ -1995,21 +2042,18 @@ performance at small error probabilities, <code>mode=2</code> can be used:</p></
 by Lorenzo Bettini
 http://www.lorenzobettini.it
 http://www.gnu.org/software/src-highlite -->
-<pre><tt><span style="color: #990000">===</span>
-<span style="color: #009900">vecdec</span><span style="color: #990000">=.</span>/src/vecdec
+<pre><tt><span style="color: #009900">vecdec</span><span style="color: #990000">=.</span>/src/vecdec
 <span style="color: #009900">$vecdec</span> <span style="color: #009900">mode</span><span style="color: #990000">=</span><span style="color: #993399">2.0</span> <span style="color: #009900">fdem</span><span style="color: #990000">=</span>sd5<span style="color: #990000">.</span>dem <span style="color: #009900">steps</span><span style="color: #990000">=</span><span style="color: #993399">100000</span> <span style="color: #009900">dW</span><span style="color: #990000">=</span><span style="color: #993399">7</span> <span style="color: #009900">outC</span><span style="color: #990000">=</span>tmp<span style="color: #990000">.</span>nz
 <span style="font-weight: bold"><span style="color: #0000FF">for</span></span> <span style="color: #990000">((</span><span style="color: #009900">w</span><span style="color: #990000">=</span><span style="color: #993399">5</span><span style="color: #990000">;</span> w<span style="color: #990000">&lt;=</span><span style="color: #993399">10</span><span style="color: #990000">;</span> w<span style="color: #990000">++))</span> <span style="color: #990000">;</span> <span style="font-weight: bold"><span style="color: #0000FF">do</span></span>
   echo <span style="color: #009900">$w</span> `<span style="color: #009900">$vecdec</span> <span style="color: #009900">debug</span><span style="color: #990000">=</span><span style="color: #993399">0</span> <span style="color: #009900">mode</span><span style="color: #990000">=</span><span style="color: #993399">2.2</span> <span style="color: #009900">fdem</span><span style="color: #990000">=</span>sd5<span style="color: #990000">.</span>dem <span style="color: #009900">steps</span><span style="color: #990000">=</span><span style="color: #993399">0</span> <span style="color: #009900">maxW</span><span style="color: #990000">=</span><span style="color: #009900">$w</span> <span style="color: #009900">finC</span><span style="color: #990000">=</span>tmp<span style="color: #990000">.</span>nz`
-<span style="font-weight: bold"><span style="color: #0000FF">done</span></span>
-<span style="color: #990000">===</span></tt></pre></div></div>
+<span style="font-weight: bold"><span style="color: #0000FF">done</span></span></tt></pre></div></div>
 <div class="paragraph"><p>This the output (truncated at the top)</p></div>
 <div class="listingblock">
 <div class="content"><!-- Generator: GNU source-highlight
 by Lorenzo Bettini
 http://www.lorenzobettini.it
 http://www.gnu.org/software/src-highlite -->
-<pre><tt><span style="color: #990000">===</span>
-<span style="font-style: italic"><span style="color: #9A1900"># min_weight N_min N_use N_tot</span></span>
+<pre><tt><span style="font-style: italic"><span style="color: #9A1900"># min_weight N_min N_use N_tot</span></span>
 <span style="color: #993399">5</span> <span style="color: #993399">13800</span> <span style="color: #993399">5471523</span> <span style="color: #993399">5471523</span>
 <span style="font-style: italic"><span style="color: #9A1900"># wrote 5471523 computed codewords to file tmp.nz</span></span>
 <span style="color: #993399">5</span> <span style="color: #993399">0.00258921</span> <span style="color: #993399">2.71648e-05</span> <span style="color: #993399">5</span> <span style="color: #993399">13800</span> <span style="color: #993399">13800</span> <span style="color: #993399">13800</span>
@@ -2017,18 +2061,14 @@ http://www.gnu.org/software/src-highlite -->
 <span style="color: #993399">7</span> <span style="color: #993399">0.009567</span> <span style="color: #993399">2.71648e-05</span> <span style="color: #993399">5</span> <span style="color: #993399">13800</span> <span style="color: #993399">533481</span> <span style="color: #993399">533481</span>
 <span style="color: #993399">8</span> <span style="color: #993399">0.00968002</span> <span style="color: #993399">2.71648e-05</span> <span style="color: #993399">5</span> <span style="color: #993399">13800</span> <span style="color: #993399">1090400</span> <span style="color: #993399">1090400</span>
 <span style="color: #993399">9</span> <span style="color: #993399">0.00968931</span> <span style="color: #993399">2.71648e-05</span> <span style="color: #993399">5</span> <span style="color: #993399">13800</span> <span style="color: #993399">1858982</span> <span style="color: #993399">1858982</span>
-<span style="color: #993399">10</span> <span style="color: #993399">0.00969025</span> <span style="color: #993399">2.71648e-05</span> <span style="color: #993399">5</span> <span style="color: #993399">13800</span> <span style="color: #993399">2845251</span> <span style="color: #993399">2845251</span>
-<span style="color: #990000">===</span></tt></pre></div></div>
-<div class="listingblock">
-<div class="content"><!-- Generator: GNU source-highlight
-by Lorenzo Bettini
-http://www.lorenzobettini.it
-http://www.gnu.org/software/src-highlite -->
-<pre><tt>Clearly<span style="color: #990000">,</span> the expansion converges<span style="color: #990000">,</span> and the greedy estimate is
-numerically close to the actual error rate<span style="color: #990000">.</span></tt></pre></div></div>
+<span style="color: #993399">10</span> <span style="color: #993399">0.00969025</span> <span style="color: #993399">2.71648e-05</span> <span style="color: #993399">5</span> <span style="color: #993399">13800</span> <span style="color: #993399">2845251</span> <span style="color: #993399">2845251</span></tt></pre></div></div>
+<div class="paragraph"><p>Clearly, the expansion converges, and the greedy estimate is
+numerically close to the actual error rate.</p></div>
 </div>
-<div class="sect2">
-<h3 id="_use_matrix_transformations_to_simplify_the_error_model">Use matrix transformations to simplify the error model</h3>
+</div>
+<div class="sect1">
+<h2 id="_use_matrix_transformations_to_simplify_the_error_model">Use matrix transformations to simplify the error model</h2>
+<div class="sectionbody">
 <div class="paragraph"><p>The transformations [@Pryadko-2020] reduce the degeneracy of a quantum
 code while preserving the maximum-likelihood (ML) decoding
 performance.  These correspond to <strong>inverse decoration</strong> or
@@ -2047,9 +2087,7 @@ matrix matrix and the probability vector <code>P</code> (here these go to files
 by Lorenzo Bettini
 http://www.lorenzobettini.it
 http://www.gnu.org/software/src-highlite -->
-<pre><tt><span style="color: #990000">===</span>
-<span style="color: #009900">$vecdec</span> <span style="color: #009900">mode</span><span style="color: #990000">=</span><span style="color: #993399">3.20</span> <span style="color: #009900">fdem</span><span style="color: #990000">=</span> <span style="color: #990000">.</span>/examples/surf_d3<span style="color: #990000">.</span>dem <span style="color: #009900">fout</span><span style="color: #990000">=</span>tmp
-<span style="color: #990000">===</span></tt></pre></div></div>
+<pre><tt><span style="color: #009900">$vecdec</span> <span style="color: #009900">mode</span><span style="color: #990000">=</span><span style="color: #993399">3.20</span> <span style="color: #009900">fdem</span><span style="color: #990000">=</span> <span style="color: #990000">.</span>/examples/surf_d3<span style="color: #990000">.</span>dem <span style="color: #009900">fout</span><span style="color: #990000">=</span>tmp</tt></pre></div></div>
 <div class="paragraph"><p>Second, create a list of (classical)
 codewords of weight <code>3</code> orthogonal to the rows of <code>H</code></p></div>
 <div class="listingblock">
@@ -2057,9 +2095,7 @@ codewords of weight <code>3</code> orthogonal to the rows of <code>H</code></p><
 by Lorenzo Bettini
 http://www.lorenzobettini.it
 http://www.gnu.org/software/src-highlite -->
-<pre><tt><span style="color: #990000">===</span>
-<span style="color: #009900">$vecdec</span> <span style="color: #009900">mode</span><span style="color: #990000">=</span><span style="color: #993399">2</span> <span style="color: #009900">finH</span><span style="color: #990000">=</span>tmpH<span style="color: #990000">.</span>mmx <span style="color: #009900">steps</span><span style="color: #990000">=</span><span style="color: #993399">10000</span> <span style="color: #009900">maxW</span><span style="color: #990000">=</span><span style="color: #993399">3</span> <span style="color: #009900">finP</span><span style="color: #990000">=</span> tmpP<span style="color: #990000">.</span>mmx <span style="color: #009900">outC</span><span style="color: #990000">=</span>tmp<span style="color: #990000">.</span>nz
-<span style="color: #990000">===</span></tt></pre></div></div>
+<pre><tt><span style="color: #009900">$vecdec</span> <span style="color: #009900">mode</span><span style="color: #990000">=</span><span style="color: #993399">2</span> <span style="color: #009900">finH</span><span style="color: #990000">=</span>tmpH<span style="color: #990000">.</span>mmx <span style="color: #009900">steps</span><span style="color: #990000">=</span><span style="color: #993399">10000</span> <span style="color: #009900">maxW</span><span style="color: #990000">=</span><span style="color: #993399">3</span> <span style="color: #009900">finP</span><span style="color: #990000">=</span> tmpP<span style="color: #990000">.</span>mmx <span style="color: #009900">outC</span><span style="color: #990000">=</span>tmp<span style="color: #990000">.</span>nz</tt></pre></div></div>
 <div class="paragraph"><p>This creates a file <code>tmp.nz</code> with <code>854</code> vectors of weight <code>3</code>.</p></div>
 <div class="paragraph"><p>Third, create the modified matrices <code>H</code>, <code>L</code>, and the vector of
 probabilities <code>P</code> using the created list of codewords and the original
@@ -2069,9 +2105,7 @@ DEM model:</p></div>
 by Lorenzo Bettini
 http://www.lorenzobettini.it
 http://www.gnu.org/software/src-highlite -->
-<pre><tt><span style="color: #990000">===</span>
-<span style="color: #009900">$vecdec</span> <span style="color: #009900">mode</span><span style="color: #990000">=</span><span style="color: #993399">3.32</span> <span style="color: #009900">finC</span><span style="color: #990000">=</span>tmp<span style="color: #990000">.</span>nz <span style="color: #009900">fout</span><span style="color: #990000">=</span>tmpX <span style="color: #009900">fdem</span><span style="color: #990000">=</span> <span style="color: #990000">.</span>/examples/surf_d3<span style="color: #990000">.</span>dem
-<span style="color: #990000">===</span></tt></pre></div></div>
+<pre><tt><span style="color: #009900">$vecdec</span> <span style="color: #009900">mode</span><span style="color: #990000">=</span><span style="color: #993399">3.32</span> <span style="color: #009900">finC</span><span style="color: #990000">=</span>tmp<span style="color: #990000">.</span>nz <span style="color: #009900">fout</span><span style="color: #990000">=</span>tmpX <span style="color: #009900">fdem</span><span style="color: #990000">=</span> <span style="color: #990000">.</span>/examples/surf_d3<span style="color: #990000">.</span>dem</tt></pre></div></div>
 <div class="paragraph"><p>The modified matrices can be used with <code>det</code> and <code>obs</code> events
 generated using <code>Stim</code> from the original <code>DEM</code> file by setting the
 parameter <code>pads=1</code> which enables padding the syndrome vectors with
@@ -2081,8 +2115,7 @@ zeros.</p></div>
 by Lorenzo Bettini
 http://www.lorenzobettini.it
 http://www.gnu.org/software/src-highlite -->
-<pre><tt><span style="color: #990000">===</span>
-<span style="color: #009900">stim</span><span style="color: #990000">=..</span>/Stim/out/stim
+<pre><tt><span style="color: #009900">stim</span><span style="color: #990000">=..</span>/Stim/out/stim
 <span style="color: #009900">fnam</span><span style="color: #990000">=</span>try
 <span style="color: #009900">$stim</span> sample_dem --shots <span style="color: #993399">10240</span> --in <span style="color: #990000">.</span>/examples/surf_d3<span style="color: #990000">.</span>dem <span style="color: #990000">\</span>
         --out <span style="color: #009900">$fnam</span><span style="color: #990000">.</span>det --out_format <span style="color: #993399">01</span> <span style="color: #990000">\</span>
@@ -2092,14 +2125,20 @@ http://www.gnu.org/software/src-highlite -->
            <span style="color: #009900">nvec</span><span style="color: #990000">=</span><span style="color: #993399">1024</span> <span style="color: #009900">ntot</span><span style="color: #990000">=</span><span style="color: #993399">10240</span>
 <span style="color: #009900">$vecdec</span> <span style="color: #009900">debug</span><span style="color: #990000">=</span><span style="color: #993399">1</span> <span style="color: #009900">mode</span><span style="color: #990000">=</span><span style="color: #993399">1.14</span> <span style="color: #009900">finH</span><span style="color: #990000">=</span>tmpXH<span style="color: #990000">.</span>mmx <span style="color: #009900">finL</span><span style="color: #990000">=</span>tmpXL<span style="color: #990000">.</span>mmx <span style="color: #009900">finP</span><span style="color: #990000">=</span>tmpXP<span style="color: #990000">.</span>mmx <span style="color: #990000">\</span>
            <span style="color: #009900">fdet</span><span style="color: #990000">=</span><span style="color: #009900">$fnam</span><span style="color: #990000">.</span>det <span style="color: #009900">fobs</span><span style="color: #990000">=</span><span style="color: #009900">$fnam</span><span style="color: #990000">.</span>obs <span style="color: #009900">steps</span><span style="color: #990000">=</span><span style="color: #993399">50</span> <span style="color: #009900">lerr</span><span style="color: #990000">=</span><span style="color: #993399">2</span> <span style="color: #990000">\</span>
-           <span style="color: #009900">nvec</span><span style="color: #990000">=</span><span style="color: #993399">1024</span> <span style="color: #009900">ntot</span><span style="color: #990000">=</span><span style="color: #993399">10240</span> <span style="color: #009900">pads</span><span style="color: #990000">=</span><span style="color: #993399">1</span>
-<span style="color: #990000">===</span></tt></pre></div></div>
+           <span style="color: #009900">nvec</span><span style="color: #990000">=</span><span style="color: #993399">1024</span> <span style="color: #009900">ntot</span><span style="color: #990000">=</span><span style="color: #993399">10240</span> <span style="color: #009900">pads</span><span style="color: #990000">=</span><span style="color: #993399">1</span></tt></pre></div></div>
 <div class="paragraph"><p>Here the first <code>vecdec</code> run uses the original <code>DEM</code> file, while the
 second run used the constructed matrices.</p></div>
-<div class="paragraph"><p><strong>FIXME:</strong> apparently there is a bug somewhere as modified matrices
+<div class="admonitionblock">
+<table><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">apparently there is a bug somewhere as modified matrices
 result in substantial degraded decoding (<code>BER</code> increases from
-<code>0.00371</code> up to <code>0.0230</code>)</p></div>
-<div class="paragraph"><p>Also, the <code>pads</code> parameter has been removed, so the last example altogether fails to run.</p></div>
+<code>0.00371</code> up to <code>0.0230</code>).
+Also, the <code>pads</code> parameter has been
+removed, so the last example altogether fails to run.</td>
+</tr></table>
 </div>
 </div>
 </div>
@@ -2108,7 +2147,7 @@ result in substantial degraded decoding (<code>BER</code> increases from
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2024-09-22 11:35:17 PDT
+ 2024-09-22 15:32:44 PDT
 </div>
 </div>
 </body>

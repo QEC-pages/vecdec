@@ -1,4 +1,4 @@
-# initializing seed=86966779709 from time(NULL)+1000000ul*getpid()+0
+# initializing seed=207991038387 from time(NULL)+1000000ul*getpid()+0
 # opening DEM file input/rep_code3.dem
 # read DEM input/rep_code3.dem: rows_H=8 rows_L=1 cols=9; nz_H=16 nz_L=1
 # mode=0, running vecdec RIS decoder : generating errors internally
@@ -8,5 +8,5 @@
 # uW=-1, will not use cluster-based pre-decoder
 # starting round 1 of 2
 # generated 1000 det/obs pairs
-# starting round 2 of 2 pfail=0.252 fail=252 out of total=1000
+# starting round 2 of 2 pfail=0.258 fail=258 out of total=1000
 # generated 1000 det/obs pairs

@@ -2,7 +2,7 @@
       0.094 1000 94 906 : 3 3 	 31 31 	 11 11 : 94 955 	 513 352 865 	 861  0
 # Could not process Matrix Market banner; try 'alist' format
 # read alist file ./examples/96.3.963.alist (transposed): rows=48 cols=96 nz=288
-# initializing seed=87002779710 from time(NULL)+1000000ul*getpid()+0
+# initializing seed=208019038388 from time(NULL)+1000000ul*getpid()+0
 # Could not process Matrix Market banner; try 'alist' format
 # read alist file ./examples/96.3.963.alist (transposed): rows=48 cols=96 nz=288
 # mode=0, running vecdec RIS decoder : use DET file

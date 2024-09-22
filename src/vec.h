@@ -118,7 +118,7 @@ static inline void write_01_vec(FILE *fout, const vec_t * const vec, const int c
   static inline int mzd_row_vec_match(const mzd_t * const mat, const int row, const vec_t * const vec){
     const word * const rawrow = mat->rows[row];
     int idx=-1;
-#if 0
+#if 1
     for(int i=0; i<vec->wei; i++){
       int idx_vec = vec->vec[i];
       if(((idx=nextelement(rawrow,mat->width,idx))!=-1)&&(idx < mat->ncols)){
@@ -131,7 +131,7 @@ static inline void write_01_vec(FILE *fout, const vec_t * const vec, const int c
     if(idx < mat->ncols)
       if(((idx=nextelement(rawrow,mat->width,idx))!=-1)&&(idx < mat->ncols))
 	return 0; /* extra non-zero bit found */
-#else /** second attempt */
+#else /** try shorter WARNING: there is some bug in this code */
     int i=0;
     while(((idx=nextelement(rawrow,mat->width,idx))!=-1)&&
 	  (idx >= 0)&&
@@ -230,7 +230,8 @@ static inline vec_t * csr_vec_mul(vec_t * tmp, vec_t * v0, csr_t *H, const vec_t
     ERROR("this should not happen tmp->max=%d v0->max=%d H[%d,%d]",tmp->max, v0->max, H->rows, H->cols);
 #endif
   if(clear)
-    v0->wei=0;
+    v0->wei = 0;
+  tmp->wei = 0;
   int w=0;
   for(int i=0; i < wgt; i++){
 #ifndef NDEBUG    
