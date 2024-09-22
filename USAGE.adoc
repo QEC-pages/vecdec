@@ -2,6 +2,7 @@
 :description: This page contains examples of how `vecdec` can be used for calculations with classical or quantum codes
 :url-repo: https://github.com/QEC-pages/vecdec/blob/main/USAGE.adoc
 :toc:
+:toclevels: 4
 
 == Common tasks with `vecdec`
 
