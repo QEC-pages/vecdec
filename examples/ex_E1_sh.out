@@ -1,0 +1,11 @@
+# opening DEM file ./examples/surf_d3.dem
+# read DEM ./examples/surf_d3.dem: rows_H=24 rows_L=1 cols=221; nz_H=568 nz_L=36
+# Output matrices 
+# writing H=Hx matrix [ 24 x 221 ] to 	tmpH.mmx
+# writing L=Lx matrix [ 1 x 221 ] to 	tmpL.mmx
+# writing P vector [ 221 ] to      	tmpP.mmx
+# quantum code parameters: n=221 k=1 rkH=24 rkG=196
+# creating G=Hz matrix and writing to	tmpG.mmx
+# n=221 k=1 rankG=196
+# Created matrix G of size 726 x 221 (all weight-3 rows)
+# creating K=Lz matrix and writing to	tmpK.mmx

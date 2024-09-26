@@ -148,6 +148,8 @@ csr_t * csr_from_mzd(csr_t *mat, const mzd_t * const orig);
  */
 size_t mzd_weight(const mzd_t *A);
 
+  void mzd_row_print_sparse(const mzd_t * const A, const int row);  
+
 static inline void mzd_flip_bit(mzd_t const *M, rci_t const row, rci_t const col ) {
   __M4RI_FLIP_BIT(M->rows[row][col/m4ri_radix], col%m4ri_radix);
 }
@@ -473,7 +475,7 @@ void csr_mm_write( char * const fout, const char fext[], const csr_t * const mat
 		  const char comment[]);
 
 int read_01(mzd_t *M, FILE *fin, long long int *lineno, const char* fnam,
-	    const int pads, const int by_col, const int debug);
+	    const int by_col, const int debug);
 
 void mzd_write_01(FILE *fout, const mzd_t * const M, const int by_cols, const char* fnam, const int debug);
 void write_01_zeros(FILE *fout, const int count, const char * fnam);  

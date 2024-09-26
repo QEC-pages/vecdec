@@ -50,6 +50,24 @@ typedef struct VEC_T{
     return vec->wei;
   }
 
+  /** @brief eat up any equal pairs, return new weight */
+  static inline int vec_compress(vec_t * const vec){
+    const int wm1 = vec->wei - 1;
+    int i, j=0;
+    for(i=0; i < vec->wei; i++){
+      if((i < wm1)&&(vec->vec[i] == vec->vec[i+1]))
+	i++;
+      else{
+	if(i != j)
+	  vec->vec[j] = vec->vec[i];
+	j++;
+      }
+    }
+    vec->wei = j;    
+    return vec->wei;
+  }
+
+  
   /** @brief generate random sparse vector of length `max`, return weight */
   static inline int vec_rnd(const double p, vec_t * const vec){
     int w=0;
@@ -83,7 +101,7 @@ static inline void vec_print(const vec_t * const pvec){
 /** @brief write `vec` as a 01 line to `fout` named `fnam` */
 static inline void write_01_vec(FILE *fout, const vec_t * const vec, const int count, const char * fnam){
   if(!vec)
-    ERROR("expected initialized vecor 'vec'!\n");
+    ERROR("expected initialized vector 'vec'!\n");
   if(!fout)
     ERROR("file 'fout' named %s must be open for writing\n",fnam);
   int j=0;
@@ -99,16 +117,33 @@ static inline void write_01_vec(FILE *fout, const vec_t * const vec, const int c
 
   static inline int mzd_row_vec_match(const mzd_t * const mat, const int row, const vec_t * const vec){
     const word * const rawrow = mat->rows[row];
-    int idx=0;
+    int idx=-1;
+#if 1
     for(int i=0; i<vec->wei; i++){
       int idx_vec = vec->vec[i];
       if(((idx=nextelement(rawrow,mat->width,idx))!=-1)&&(idx < mat->ncols)){
 	if(idx++ != idx_vec)
 	  return 0; /** match failed */
       }
+      else /** not in range, unexpected */
+	return 0;
     }
-    if(((idx=nextelement(rawrow,mat->width,idx))!=-1)||(idx >= mat->ncols))
-      return 0;
+    if(idx < mat->ncols)
+      if(((idx=nextelement(rawrow,mat->width,idx))!=-1)&&(idx < mat->ncols))
+	return 0; /* extra non-zero bit found */
+#else /** try shorter WARNING: there is some bug in this code */
+    int i=0;
+    while(((idx=nextelement(rawrow,mat->width,idx))!=-1)&&
+	  (idx >= 0)&&
+	  (idx < mat->ncols)){
+      if(i < vec->wei){
+	if(vec->vec[i++] != idx)
+	  return 0;
+      }
+      else 
+	return 0;
+    }
+#endif     
     return 1;
   }
 
@@ -195,7 +230,8 @@ static inline vec_t * csr_vec_mul(vec_t * tmp, vec_t * v0, csr_t *H, const vec_t
     ERROR("this should not happen tmp->max=%d v0->max=%d H[%d,%d]",tmp->max, v0->max, H->rows, H->cols);
 #endif
   if(clear)
-    v0->wei=0;
+    v0->wei = 0;
+  tmp->wei = 0;
   int w=0;
   for(int i=0; i < wgt; i++){
 #ifndef NDEBUG    

@@ -566,3 +566,26 @@ observable or soft-out row), and rows not-yet decoded.
 - [ ] Try to figure out why BP is so slow (excessive memory allocation?)
 - [ ] Rewrite debug statements (reasonable debug bits)
 - [ ] All debugging output -> `stderr`
+
+### new items 2014/09/14
+ - [ ] make sure steps=0 and uW=0 generates no fail stats when writing `det` and `obs` files
+ - [ ] Come up with `cli` file to generate nice html documentation
+       from `adoc` (with properly included files)
+ - [ ] Come up with a script to verify the results statistics from the `ex_**.sh` files
+ - [ ] Make more examples with internal error generation for classical and quantum codes 
+ - [x] here `lerr=1` seems to be detrimental:
+ ```
+ ./src/vecdec  seed=7 steps=5000 lerr=0             finH= ./examples/96.3.963.alist useP=0.05       ntot=10 nvec=10 uW=-1
+ ./src/vecdec  seed=7 steps=5000 lerr=1             finH= ./examples/96.3.963.alist useP=0.05       ntot=10 nvec=10 uW=-1
+ ```
+ the first line gives 0 fails, the second 1 fail
+``` 
+ s=124; 
+ ./src/vecdec debug=1 seed=$s steps=5000 lerr=0 finH= ./examples/96.3.963.alist useP=0.05 ntot=1 nvec=1 uW=-1;
+ echo; 
+ echo ;
+ ./src/vecdec debug=1 seed=$s steps=5000 lerr=1 finH= ./examples/96.3.963.alist useP=0.05 ntot=1 nvec=1 uW=-1
+ ```
+  **verified this is not a bug but genuine equal-weight vectors (code distance is 6)**
+  
+

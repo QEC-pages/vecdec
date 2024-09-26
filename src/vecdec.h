@@ -115,9 +115,6 @@ typedef struct UFL_T {
     int nchk; /** rows in `H` or `r` (set in the `input file`) */
     int ncws;  /** how many codewords `k` (set in the `input file`) */
     int nvar;     /** columns in H `n` (set in the `input file`) */
-    int pads; /** if `1`, pad detector events (syndrome vectors) read from
-		     `fdet` file to required number of columns; if `0`, do
-		     no padding */
     int rankH;
     int rankG;
     int rankL;
@@ -375,7 +372,6 @@ typedef struct UFL_T {
   "\t\t specify either 'ferr' OR a pair of 'ferr' and 'fdet' (or none for internal)\n" \
   "\t gobs, gdet=[string]\t: out file for generated vectors (01 format)\n" \
   "\t perr, pobs, pdet=[string]\t: out file for predicted vectors (01 format)\n" \
-  "\t pads=[integer]\t: if non-zero, pad vectors from `fdet` file with zeros (0)\n" \
   "\t fout=[string]\t: header for output file names ('tmp', see 'mode=3')\n" \
   "\t steps=[integer]\t: num of RIS or BP decoding steps (default: 50)\n" \
   "\t lerr =[integer]\t: OSD search level (-1, only implemented with `mode=0`, `1`)\n" \
@@ -478,8 +474,6 @@ typedef struct UFL_T {
   "\t Errors can be generated internally or read from 01 file 'ferr'.\n" \
   "\t Alternatively, files with detector events and observables \n"	\
   "\t can be specified via 'fdet' and 'fobs'. \n"			\
-  "\t Long lines in these files may be silently truncated. \n"		\
-  "\t Use 'pads=1' to pad lines in 'fdet' file with zeros.\n"	\
   "\t Set 'nfail' and/or 'swait' for early termination.\n"		\
   "\t Total of 'ntot' errors will be read or generated in chunks of 'nvec'.\n" \
   "\t                                                       \n"
@@ -511,8 +505,6 @@ typedef struct UFL_T {
   "\t Errors can be generated internally or read from 01 file 'ferr'.\n" \
   "\t Alternatively, files with detector events and observables \n"	\
   "\t can be specified via 'fdet' and 'fobs'. \n"			\
-  "\t Long lines in these files may be silently truncated. \n"		\
-  "\t Use 'pads=1' to pad lines in 'fdet' file with zeros.\n"	\
   "\t Set 'nfail' and/or 'swait' for early termination.\n"		\
   "\t Total of 'ntot' errors will be read or generated in chunks of 'nvec'.\n" \
   "\t                                                       \n"

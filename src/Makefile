@@ -27,6 +27,8 @@ src = Makefile ${VECDEC_HDRS} ${VECDEC_SRC}
 
 default: give_help
 
+all: vecdec mtx_sub
+
 # The vecdec program
 vecdec: ${VECDEC_OBJS} ${VECDEC_XTRA} ${VECDEC_HDRS} Makefile 
 	${CPP} ${CFLAGS} ${VECDEC_OBJS} ${VECDEC_XTRA} -o vecdec -l m4ri

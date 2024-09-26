@@ -100,10 +100,10 @@ int do_local_search(qllr_t *vE0, mzd_t * mE0, rci_t jstart, int lev,
 	  for(rci_t ir = 0 ;  ir < rnum; ++ir)
 	    mzd_flip_bit(mE1, is, rlis[ir]);
 	}
-        if(energ < vE0[is]-1e-10){
+        if(energ < vE0[is]){
 #ifndef NDEBUG
-          if(p->debug & 128){/** inf set decoding */
-            printf("lev=%d j=%d jj=%d is=%d E0=%g E=%g success\n", lev,j,jj,is,
+          if(p->debug & 256){/** inf set decoding */
+            printf("lev=%d j=%d jj=%d is=%d E0=%g -> E=%g\n", lev,j,jj,is,
 		   dbl_from_llr(vE0[is]),dbl_from_llr(energ));
           }
 #endif
@@ -174,15 +174,6 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
       if(ret)
 	pivs->values[rank++]=col;
     }
-    if((p->debug &4)&&(p->debug &512)){ /** debug gauss */
-      printf("rank=%d\n",rank);
-      //    printf("perm: "); mzp_out(perm);
-      //    printf("pivs: "); mzp_out(pivs);
-      //    printf("mH:\n");
-      //    mzd_print(mH);
-      //    printf("mS:\n");
-      //    mzd_print(mS);
-    }
     
     // for each syndrome, calculate error vector and energy
     for(int i=0;i< rank; i++)
@@ -206,12 +197,14 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
       vE1 = malloc(sizeof(qllr_t) * mEt0->nrows);  if(!vE1) ERROR("memory allocation failed!");
       memcpy(vE1,vE,sizeof(qllr_t) * mEt0->nrows);
     }
-    do_local_search(vE, mEt0, 0, 1,
+    int changed = do_local_search(vE, mEt0, 0, 1,
 		    p->lerr > 1 ? vE1 : vE,
 		    p->lerr > 1 ? mEt1 : mEt0, mH, skip_pivs, pivs, p);
-    if(p->debug & 512){
-      printf("mEt0 after local search:\n");
-      mzd_print(mEt0);
+    if(changed){
+      if(p->debug & 512){
+	printf("mEt0 after local search:\n");
+	mzd_print(mEt0);
+      }
     }
     mzp_free(skip_pivs);
     //    if (p->lerr > 1){
@@ -254,22 +247,19 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
       if(p->lerr > 0)
 	vE1[i]=energ;
       if(energ < vE[i]){
+#ifndef NDEBUG	
+	if(p->debug&256){
+	  printf("i=%d E=%g -> E=%g\n",i,dbl_from_llr(vE[i]),dbl_from_llr(energ));
+	}
+#endif 	
 	vE[i]=energ;
 	mzd_copy_row(mEt0,i,mEt,i);
 	ichanged++;
+	
       }
     }
     if(ichanged){
       if(p->debug & 512){
-        if(p->debug &4){ /** debug gauss */
-          printf("after round %d rank=%d\n",ii,rank);
-          //          printf("perm: "); mzp_out(perm);
-          //          printf("pivs: "); mzp_out(pivs);
-          //          printf("mH:\n");
-          //          mzd_print(mH);
-          //          printf("mS:\n");
-          //          mzd_print(mS);
-        }
         printf("mEt0:\n");
         mzd_print(mEt0);
       }

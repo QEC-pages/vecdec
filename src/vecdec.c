@@ -29,12 +29,12 @@
 #include <stdbool.h>
 #include <float.h>
 
-params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50, .pads=0,
+params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50,
   .rankH=0, .rankG=-1, .rankL=-1, 
   .lerr=-1, .maxosd=100, .swait=0, .maxC=0,
   .dW=0, .minW=INT_MAX, .maxW=0, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
   .bpalpha=1, .bpbeta=1, .bpgamma=0.5, .bpretry=1, 
-  .uW=2, .uX=0, .uR=4, //.uEdbl=-1, .uE=-1,
+  .uW=1, .uX=0, .uR=0, //.uEdbl=-1, .uE=-1,
   .numU=0, .numE=0, .maxU=0,
   .hashU_error=NULL, .hashU_syndr=NULL, .permHe=NULL,
   .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8, .useP=0, .mulP=0, .dmin=0,
@@ -63,10 +63,10 @@ params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50, .pads=0,
   .ufl=NULL
 };
 
-params_t prm_default={  .steps=50, .pads=0, 
+params_t prm_default={  .steps=50, 
   .lerr=-1, .maxosd=100, .bpgamma=0.5, .bpretry=1, .swait=0, .maxC=0,
   .dW=0, .minW=INT_MAX, .maxW=0, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
-  .uW=2, .uX=0, .uR=4, //.uEdbl=-1, .uE=-1,
+  .uW=1, .uX=0, .uR=0, //.uEdbl=-1, .uE=-1,
   .maxU=0, .bpalpha=1, .bpbeta=1,
   .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8, .useP=0, .mulP=0, .dmin=0,
   .debug=1, .fout="tmp", .ferr=NULL,
@@ -275,7 +275,7 @@ long long int nzlist_read(const char fnam[], params_t *p){
   p->num_cws += count; 
   fclose(f);
   if(p->debug&1)
-    printf("read %lld codewords from %s, total %lld\n",count, fnam, p->num_cws);
+    printf("# read %lld codewords from %s, total %lld\n",count, fnam, p->num_cws);
   return count; 
 }
 
@@ -663,7 +663,7 @@ int do_LLR_dist(params_t  * const p, const int classical){
 	    ichanged++; 
 	    if (ptr->energ < p->minE){  /** legacy code */
 	      if(p->debug&1)
-		printf("nz=%d cnt=%d energ=%g\n",nz,cnt,dbl_from_llr(ptr->energ));
+		printf("# nz=%d cnt=%d energ=%g\n",nz,cnt,dbl_from_llr(ptr->energ));
 	      p->minE=ptr->energ;
 	    }
 	    if (p->minW<0)
@@ -2103,23 +2103,25 @@ void init_Ht(params_t *p){
   p->mHt = csr_transpose(p->mHt, p->mH);
   //! construct v-v graph 
   //  csr_t *vv_gr = do_vv_graph(p->mH, p->mHt, p);
-  if(p->uW > 0){
+  if(p->mode < 2){
     if(p->debug&1){
-      if(p->uR==0)
-	printf("# adding errors of weight up to %d to syndrome hash\n",p->uW);
-      else 
-	printf("# adding error clusters of w <= %d and radius <= %d to syndrome hash\n",p->uW, p->uR);
-      if(p->maxU)
-	printf("# maximum number of error syndromes in hash maxU=%lld\n",p->maxU);
-      printf("# uX=%d, will %s use partially matched errors for pre-decoding\n",p->uX,p->uX==0? "not":"");
+      if(p->uW < 0)
+	printf("# uW=%d, will not use cluster-based pre-decoder\n",p->uW);
+      else{
+	if(p->uR==0)
+	  printf("# uW=%d, adding errors of weight up to %d to syndrome hash\n",p->uW, p->uW);
+	else 
+	  printf("# uW=%d, adding error clusters of w <= %d and radius <= uR=%d to syndrome hash\n",p->uW, p->uW, p->uR);
+	if(p->maxU)
+	  printf("# maximum number of error syndromes in hash maxU=%lld\n",p->maxU);
+	printf("# uX=%d, will %s use partially matched errors for pre-decoding\n",p->uX,p->uX==0? "not":"");
+      }
     }
     p->v0 = vec_init(p->nchk);
     p->v1 = vec_init(p->nchk);
     if(p->uW >=0)
       do_clusters(p);
   }
-    if(p->debug&1)
-  printf("# initialize matrices\n");
   if(p->mL)
     p->mLt = csr_transpose(p->mLt,p->mL);
   /** todo: fix reallocation logic to be able to reuse the pointers model */
@@ -2147,7 +2149,7 @@ void init_Ht(params_t *p){
   }
 
 #ifndef NDEBUG
-  if((p->debug & 2)&&(p->debug &512)){ /** print resulting vectors and matrices */
+  if((p->debug & 2)&&(p->debug &4096)){ /** print resulting vectors and matrices */
     if(p->useP>0)
       printf("# uniform error probability useP=%g LLR=%g\n",p->useP,dbl_from_llr(p->vLLR[0]));
     else{
@@ -2259,13 +2261,6 @@ int var_init(int argc, char **argv, params_t *p){
       if(p->mode>1)
 	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
     }
-    else if (sscanf(argv[i],"pads=%d",&dbg)==1){ /** `pads` */
-      p -> pads = dbg;
-      if (p->debug&4)
-	printf("# read %s, pads=%d\n",argv[i],p-> pads);
-      if(p->mode>1)
-	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
-    }
     else if (sscanf(argv[i],"dmin=%d",&dbg)==1){ /** `dmin` */
       p -> dmin = dbg;
       if (dbg<0)
@@ -2286,7 +2281,7 @@ int var_init(int argc, char **argv, params_t *p){
       p -> swait = dbg;
       if (p->debug&4)
 	printf("# read %s, swait=%d\n",argv[i],p-> swait);
-      if((p->mode >0)|| (p->mode!=2))
+      if((p->mode >0) && (p->mode!=2))
 	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
     }
     else if (sscanf(argv[i],"lerr=%d",&dbg)==1){ /** `lerr` */
@@ -2815,10 +2810,10 @@ int var_init(int argc, char **argv, params_t *p){
       *ptr = p->useP;    
   }
   else if (p->finP){/** read probabilities */
-    int rows, cols, siz;
+    int rows=0, cols=0, siz=0;
     p->vP = dbl_mm_read(p->finP, &rows, &cols, &siz, NULL);
-    assert(rows == 1);
-    assert(cols == p->nvar);
+    if ((rows != 1) || (cols != p->nvar))
+      ERROR("expected rows=%d cols=%d have %d %d",1,p->nvar, rows,cols);
     if(p->debug&1)
       printf("# read %d probability values from %s\n", cols, p->finP);
   }
@@ -2838,8 +2833,9 @@ int var_init(int argc, char **argv, params_t *p){
   
   switch(p->mode){
   case 1: /** both `mode=1` (BP) and `mode=0` */
+    if(p->debug&2)
+            out_LLR_params(LLR_table);
     if(p->debug&1){
-      out_LLR_params(LLR_table);
       printf("# submode=%d, %s BP using %s LLR\n",
 	     p->submode,
 	     p->submode & 4 ? (p->submode & 8 ? "serial-V" : "serial-C") : "parallel",
@@ -2910,7 +2906,7 @@ int var_init(int argc, char **argv, params_t *p){
     if(p->fer0){
       p->file_er0=fopen(p->fer0, "r");
       if(p->file_er0==NULL)
-	ERROR("can't open the (er0) file %s for reading\n",p->fdet);
+	ERROR("can't open the (er0) file %s for reading\n",p->fer0);
     }
     if(p->fdet){/** expect both `fdet` and `fobs` to be defined */
       p->file_det=fopen(p->fdet, "r");
@@ -2972,8 +2968,8 @@ int var_init(int argc, char **argv, params_t *p){
     ERROR(" mode=%d is currently not supported\n",p->mode);
     break;
   }
-
-  if(p->debug & 64){ /** print matrices */
+#ifndef NDEBUG
+  if(p->debug & 4096){ /** print matrices */
     assert(p->nvar != 0);
     mzd_t *mH0 = mzd_from_csr(NULL,p->mH);
     printf("matrix mH0:\n");  mzd_print(mH0);
@@ -2987,6 +2983,7 @@ int var_init(int argc, char **argv, params_t *p){
     //    for(int i=0; i < p->nvar; i++)
     //      printf(" P[%d]=%g \n",i,p->vP[i]);
   }
+#endif   
   
   if(p->fdet){/** expect both `fdet` and `fobs` to be defined */
     p->internal=0;
@@ -3017,7 +3014,7 @@ int var_init(int argc, char **argv, params_t *p){
 	break;
       }
       if(p->fer0)
-	printf("modifying DET events +A*e0 with A %s and e0 %s files\n",p->finA, p->fer0);
+	printf("# modifying DET events +A*e0 with A %s and e0 %s files\n",p->finA, p->fer0);
     }
 
     /** initialize the counters */
@@ -3029,16 +3026,21 @@ int var_init(int argc, char **argv, params_t *p){
 
   }
   if(p->debug &1){
-    printf("# using variables: mode=%d submode=%d\n",p->mode, p->submode);
     switch(p->mode){
-    case 1:
-      printf("# BP decoder parameters: bpgamma=%g bpretry=%d OSD level lerr=%d maxosd=%d\n",
-	     p->bpgamma, p->bpretry, p->lerr,p->maxosd);
-      /* fall through */      
     case 0:
-      if(p->mode==0)
-	printf("# RIS decoder parameters: swait=%d\n",p->swait);
-      printf("# ntot=%lld nvec=%d steps=%d nfail=%lld lerr=%d\n",p->ntot,p->nvec,p->steps,p->nfail,p->lerr);
+      printf("# mode=%d submode=%d: use RIS decoder\n",p->mode, p->submode);
+      printf("# RIS decoder parameters: steps=%d swait=%d lerr=%d\n",p->steps, p->swait, p->lerr);
+      printf("# ntot=%lld nvec=%d nfail=%lld\n",p->ntot,p->nvec, p->nfail);
+      break;
+    case 1:
+      printf("# mode=%d submode=%d: use BP decoder\n",p->mode, p->submode);
+      printf("# BP decoder parameters: steps=%d bpgamma=%g bpalpha=%g bpbeta=%g bpretry=%d\n",
+	     p->steps, p->bpgamma, p->bpalpha, p->bpbeta, p->bpretry);
+      if(p->lerr >= 0)	
+	printf("#  OSD level lerr=%d maxosd=%d\n", p->lerr,p->maxosd);
+      else 
+	printf("# lerr=%d, no OSD\n", p->lerr);
+      printf("# ntot=%lld nvec=%d nfail=%lld \n",p->ntot,p->nvec,p->nfail);
       break;
     case 2:
       printf("# Analyze small-weight codewords in %d RIS steps; swait=%d\n",p->steps,p->swait);
@@ -3102,6 +3104,7 @@ void var_kill(params_t *p){
   if(p->v1) free(p->v1);
   if(p->svec) free(p->svec);
   if(p->err) free(p->err);
+  if(p->obs) free(p->obs);
   if(p->ufl) ufl_free(p->ufl);
   if(p->hashU_syndr)
     kill_clusters(p);
@@ -3113,12 +3116,12 @@ int do_err_vecs(params_t * const p){
   /** prepare error vectors ************************************************************/
   switch(p->internal){
   case 0: /** read `det` and `obs` files (each line a column) */
-    il1=read_01(p->mHe,p->file_det, &p->line_det, p->fdet, 1, p->pads, p->debug);
+    il1=read_01(p->mHe,p->file_det, &p->line_det, p->fdet, 1, p->debug);
     if(p->fobs){
-      il2=read_01(p->mLe,p->file_obs, &p->line_obs, p->fobs, 1, 0, p->debug);
+      il2=read_01(p->mLe,p->file_obs, &p->line_obs, p->fobs, 1, p->debug);
       if(il1!=il2)
-	ERROR("mismatched DET %s (line %lld) and OBS %s (line %lld) files!",
-	      p->fdet,p->line_det,p->fobs,p->line_obs);
+	ERROR("mismatched DET %s (line %lld il=%d) and OBS %s (line %lld il=%d) files!",
+	      p->fdet,p->line_det, il1, p->fobs,p->line_obs, il2);
       if(p->debug&1)
 	printf("# read %d det/obs pairs\n",il1);
     }
@@ -3126,13 +3129,13 @@ int do_err_vecs(params_t * const p){
       if(p->debug&1)
 	printf("# read %d det events\n",il1);
     if(p->fer0){
-      il2=read_01(p->mE0,p->file_er0, &p->line_er0, p->fer0, 1, 0, p->debug);
+      il2=read_01(p->mE0,p->file_er0, &p->line_er0, p->fer0, 1, p->debug);
       if(il1!=il2)
 	ERROR("mismatched DET %s (line %lld) and ER0 %s (line %lld) files!",
 	      p->fdet,p->line_det,p->fer0,p->line_er0);
       csr_mzd_mul(p->mHe,p->mA,p->mE0,0);
       if(p->debug&1)
-	printf("updated %d det += A*e0 events\n",il1);
+	printf("# updated %d det += A*e0 events\n",il1);
     }
     break;
   case 1: /** generate errors internally */
@@ -3148,14 +3151,14 @@ int do_err_vecs(params_t * const p){
 
     break;
   case 2: /** read errors from file and generate corresponding `obs` and `det` matrices */
-    il1=read_01(p->mE,p->file_err, &p->line_err, p->ferr, 1, 0, p->debug);
+    il1=read_01(p->mE,p->file_err, &p->line_err, p->ferr, 1, p->debug);
     if(p->debug&1)
       printf("# read %d errors from file %s\n",il1,p->ferr);
     csr_mzd_mul(p->mHe,p->mH,p->mE,1);
     if(p->mL)
       csr_mzd_mul(p->mLe,p->mL,p->mE,1);
     if(p->fer0){
-      il2=read_01(p->mE0,p->file_er0, &p->line_er0, p->fer0, 1, 0, p->debug);
+      il2=read_01(p->mE0,p->file_er0, &p->line_er0, p->fer0, 1, p->debug);
       if(il1!=il2)
 	ERROR("mismatched ERR %s (line %lld) and ER0 %s (line %lld) files!",
 	      p->ferr,p->line_err,p->fer0,p->line_er0);
@@ -3185,9 +3188,6 @@ int main(int argc, char **argv){
   var_init(argc,argv,  p);
   init_Ht(p);
 
-  if(p->debug & 1)
-    printf("# mode=%d submode=%d debug=%d\n",p->mode,p->submode,p->debug);
-
   long long int ierr_tot=0, rounds=(long long int )ceil((double) p->ntot / (double) p->nvec);
   if(((p->mode == 0) || (p->mode == 1)) && (p->debug & 2))
     printf("# ntot=%lld nvec=%d will do calculation in %lld rounds\n",p->ntot,p->nvec,rounds);
@@ -3200,6 +3200,7 @@ int main(int argc, char **argv){
     qllr_t *ans;                  /** case 1 */
     size_t size;                  /** case 3 */
     char * comment;
+
 
 
   case 0: // mode=0 internal vecdec decoder
@@ -3548,6 +3549,8 @@ int main(int argc, char **argv){
 
         break;
 
+
+
   case 1: /** `mode=1` various BP flavors */    
     ans = calloc(p->nvar, sizeof(qllr_t));
     if(!ans) ERROR("memory allocation failed!"); 
@@ -3577,16 +3580,22 @@ int main(int argc, char **argv){
       for(long long int ierr = 0; ierr < ierr_tot; ierr++){ /** cycle over errors */
 	cnt[TOTAL]++;
 #ifndef NDEBUG	  
-	if((p->debug&8)&&(p->nvar <= 256)&&(p->debug&512)){
-	  printf("non-trivial error %lld of %lld:\n",ierr+1,ierr_tot);
-	  if(p->mE) /** print column as row */	      
-	    for(int i=0; i<p->nvar; i++)
-	      printf("%s%d%s",i==0?"[":" ",mzd_read_bit(p->mE,i,ierr),i+1<p->nvar?"":"]\n");
-	  mzd_print_row(p->mHeT,ierr);
-	  mzd_print_row(p->mLeT,ierr);
-	  out_llr("i",p->nvar,p->vLLR);
+	if((p->debug&8)&&(p->debug&512)){
+	  printf("############# non-trivial error %lld of %lld:\n",ierr+1,ierr_tot);
+	  if(p->nvar <= 256){
+	    if(p->mE) /** print column as row */	      
+	      for(int i=0; i<p->nvar; i++)
+		printf("%s%d%s",i==0?"[":" ",mzd_read_bit(p->mE,i,ierr),i+1<p->nvar?"":"]\n");
+	    mzd_print_row(p->mHeT,ierr);
+	    mzd_print_row(p->mLeT,ierr);
+	    out_llr("i",p->nvar,p->vLLR);
+	  }
+	  else{
+	    //	    mzd_row_print_sparse(p->mHeT,ierr);
+	    mzd_row_print_sparse(p->mHeT,ierr);
+	  }
 	}
-#endif 	  
+#endif /* NDEBUG */	  
 	//	mzd_t * const srow = mzd_init_window(p->mHeT, ierr,0, ierr+1,p->nchk); /* syndrome row */
 	//! TODO: why does the above fail? 
 	mzd_copy_row(srow,0,p->mHeT,ierr); /** syndrome row in question */
@@ -3594,6 +3603,14 @@ int main(int argc, char **argv){
 	if(p->uW >=0)
 	  res_pre = dec_ufl_one(srow,p);
 	if(res_pre){ /** pre-decoder success */
+	  if(p->debug&512){
+	    printf("p sy:");
+	    vec_print(p->ufl->syndr);
+	    printf("p er:");
+	    vec_print(p->ufl->error);
+	    //	    mzd_row_print_sparse(mE0,ierr);
+	    printf("######### done ierr=%lld \n",ierr);
+	  }
 	  if(p->perr) 
 	    write_01_vec(p->file_perr, p->ufl->error, p->mH->cols, p->perr); /** error prediction */
 	  if(p->pdet)
@@ -3606,19 +3623,43 @@ int main(int argc, char **argv){
 	  vec_t *vobs = csr_vec_mul(p->err, p->obs, p->mLt, p->ufl->error, 1);
 	  if(p->pobs)
 	    write_01_vec(p->file_pobs, vobs, p->mL->rows, p->pobs); /** obs prediction */	  
-	  //	  cnt_update(CONV_TRIVIAL,0); /** trivial convergence after `0` steps */
 	  if(mzd_row_vec_match(p->mLeT,ierr,vobs)){
-	      cnt[SUCC_TOT]++;
-	      switch(res_pre){
-	      case 1: cnt[SUCC_TRIVIAL]++; break;
-	      case 2: cnt[SUCC_LOWW]++; break;
-	      case 3: cnt[SUCC_CLUS]++; break;
-	      default: ERROR("unexpected"); break;
-	      }
+#ifndef NDEBUG	  
+	    if((p->debug&8)&&(p->nvar <= 256)&&(p->debug&512)){
+	      printf("# pre-decoder success ans=%d\n",res_pre);
+	      mzd_row_print_sparse(p->mLeT,ierr);
+	      vec_print(vobs);
+	      vec_print(p->ufl->error);
+	      //	      csr_out(p->mLt);
+	      //	      mzd_print_row
+	    }
+#endif /* NDEBUG */	    
+	    cnt[SUCC_TOT]++;
+	    switch(res_pre){
+	    case 1: cnt[SUCC_TRIVIAL]++; break;
+	    case 2: cnt[SUCC_LOWW]++; break;
+	    case 3: cnt[SUCC_CLUS]++; break;
+	    default: ERROR("unexpected"); break;
+	    }
 	    continue ; /** next error / syndrome vector pair */     	    
 	  }
+#ifndef NDEBUG	    
+	  else{	    
+	    if((p->debug&8)&&(p->nvar <= 256)&&(p->debug&512)){
+	      printf("# pre-decoder failed ans=%d\n",res_pre);
+	      mzd_print_row(p->mLeT,ierr);
+	      vec_print(vobs);
+	      vec_print(p->ufl->error);
+	      //	      csr_out(p->mLt);
+	    }	    
+	  }
+#endif /* NDEBUG */	  
 	}
 	else{ /** failed `pre`, do actual BP */
+#ifndef NDEBUG	  
+	  if((p->debug&8)&&(p->nvar <= 256)&&(p->debug&512))
+	    printf("# pre-decoder failed, try BP\n");
+#endif /* NDEBUG */
 	  if((p->uW > 0)&&(p->uX)&&(p->ufl->error->wei)){ /** `pre`-decoding and `partial cluster match` */
 	    mzd_row_add_vec(srow,0,p->ufl->syndr,0); /** modify syndrome vector / do `not` clear */
 	    cnt[PART_CLUS]++;
@@ -3634,9 +3675,9 @@ int main(int argc, char **argv){
 	      assert((i >= 0)&&(i < p->nvar));
 	      ans[i] = - ans[i];  /** adjust BP result by cluster error */
 	      /** TODO: should we make sure that the original values are positive? */
+	      /** TODO: verify that this works (add example) */
 	    }
 	  if(do_file_output){ /** output predicted values */
-	    ERROR("make sure updated `srow` and `pErr` are used properly\n");
 	    for(int i=0; i < p->nvar; i++)
 	      if(ans[i]<0)
 		mzd_flip_bit(pErr,0,i);
@@ -3786,6 +3827,10 @@ int main(int argc, char **argv){
       csr_mm_write(p->fout,"H.mmx",p->mH,comment);
     }
     if(!(p->submode & 31) || (p->submode & 8)){
+      if((p->mL==0) && (p->classical)){
+	p->mL=do_L_classical(p->mH, p);
+	p->ncws = p->mL->rows;
+      }
       if(p->mL){
 	if(p->debug&1)
 	  printf("# writing L=Lx matrix [ %d x %d ] to \t%s%s\n",
@@ -3793,10 +3838,8 @@ int main(int argc, char **argv){
 	comment[0]='L';
 	csr_mm_write(p->fout,"L.mmx",p->mL,comment);
       }
-      else {
-	if(p->debug&1)
-	  printf("# skippling L=Lx matrix for a classical code\n");	
-      }
+      else
+	ERROR("this should not happen");
     }
 
     if(!(p->submode & 31) || (p->submode & 16)){      
@@ -3819,7 +3862,7 @@ int main(int argc, char **argv){
 	if(p->ncws != p->rankL)
 	  ERROR("code parameters mismatch: rkH=%d rkL=%d Num(codewords)=%d\n",p->rankH, p->rankL, p->ncws);
 	if(p->debug &1)
-	  printf("quantum code parameters: n=%d k=%d rkH=%d rkG=%d\n",p->nvar,p->ncws,p->rankH, p->rankG);
+	  printf("# quantum code parameters: n=%d k=%d rkH=%d rkG=%d\n",p->nvar,p->ncws,p->rankH, p->rankG);
       }
       else{
 	p->rankL=p->nvar - p->rankH;

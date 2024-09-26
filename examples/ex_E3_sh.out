@@ -1,0 +1,7 @@
+# opening DEM file ./examples/surf_d3.dem
+# read DEM ./examples/surf_d3.dem: rows_H=24 rows_L=1 cols=221; nz_H=568 nz_L=36
+# Output G=Hz matrices 
+# read 854 codewords from tmp.nz, total 854
+# quantum code parameters: n=221 k=1 rkH=24 rkG=196
+# creating G=Hz matrix and writing to	tmpG.mmx
+# num_need=196 rows=221 cols=1 minW=3 maxW=3

@@ -1,0 +1,17 @@
+# initializing seed=207993038387 from time(NULL)+1000000ul*getpid()+0
+# opening DEM file ./examples/surf_d3.dem
+# read DEM ./examples/surf_d3.dem: rows_H=24 rows_L=1 cols=221; nz_H=568 nz_L=36
+# mode=0, running vecdec RIS decoder : use DET and OBS files
+# mode=0 submode=0: use RIS decoder
+# RIS decoder parameters: steps=1000 swait=0 lerr=-1
+# ntot=5000 nvec=2500 nfail=0
+# uW=1, adding errors of weight up to 1 to syndrome hash
+# uX=0, will not use partially matched errors for pre-decoding
+# stored 221 errors / 221 distinct syndrome vectors in hash
+# starting round 1 of 2
+# read 2500 det/obs pairs
+# starting round 2 of 2 pfail=0.016 fail=40 out of total=2500
+# read 2500 det/obs pairs
+# P_FAIL N_TOT FAIL S_TOT : C_TRIVIAL S_TRIVIAL   C_LOW S_LOW  C_CLUS S_CLUS : FAIL_RIS N_RIS S_RIS
+     0.0178 5000 89 4911 : 2098 2098 	 1949 1937 	 382 361 : 56 571 515 
+mismatched det: 0 obs: 89
