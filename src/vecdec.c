@@ -829,26 +829,55 @@ void csr_add_row_to_row(csr_t *A, int i, const csr_t *B, int j) {
         return;
     }
 
+    int num_cols = A->cols;
+    if (num_cols == 0) {
+        // No columns to process, nothing to do
+        return;
+    }
+
     int start_A = A->p[i];
     int end_A = A->p[i + 1];
     int start_B = B->p[j];
     int end_B = B->p[j + 1];
 
-    int *toggle_columns = calloc(A->cols, sizeof(int));
+    int *toggle_columns = calloc(num_cols, sizeof(int));
     if (toggle_columns == NULL) {
         ERROR("Memory allocation failed in csr_add_row_to_row.\n");
         return;
     }
 
-    for (int idx_A = start_A; idx_A < end_A; ++idx_A) {
-        toggle_columns[A->i[idx_A]] ^= 1;
+    // Only process if A->i is not NULL
+    if (A->i != NULL) {
+        for (int idx_A = start_A; idx_A < end_A; ++idx_A) {
+            int col_idx = A->i[idx_A];
+            if (col_idx >= 0 && col_idx < num_cols) {
+                toggle_columns[col_idx] ^= 1;
+            } else {
+                ERROR("Index out of bounds in csr_add_row_to_row: idx_A=%d, col_idx=%d, num_cols=%d\n",
+                      idx_A, col_idx, num_cols);
+                free(toggle_columns);
+                return;
+            }
+        }
     }
-    for (int idx_B = start_B; idx_B < end_B; ++idx_B) {
-        toggle_columns[B->i[idx_B]] ^= 1;
+
+    // Only process if B->i is not NULL
+    if (B->i != NULL) {
+        for (int idx_B = start_B; idx_B < end_B; ++idx_B) {
+            int col_idx = B->i[idx_B];
+            if (col_idx >= 0 && col_idx < num_cols) {
+                toggle_columns[col_idx] ^= 1;
+            } else {
+                ERROR("Index out of bounds in csr_add_row_to_row: idx_B=%d, col_idx=%d, num_cols=%d\n",
+                      idx_B, col_idx, num_cols);
+                free(toggle_columns);
+                return;
+            }
+        }
     }
 
     int nz_required = 0;
-    for (int col = 0; col < A->cols; col++) {
+    for (int col = 0; col < num_cols; col++) {
         if (toggle_columns[col]) {
             nz_required++;
         }
@@ -858,8 +887,21 @@ void csr_add_row_to_row(csr_t *A, int i, const csr_t *B, int j) {
     int total_nonzeros = A->p[A->rows];
     int new_total_nonzeros = total_nonzeros - old_nz + nz_required;
 
+    // Ensure A->i is allocated before writing to it
+    if (A->i == NULL) {
+        if (A->nzmax < new_total_nonzeros) {
+            A->nzmax = MAX(new_total_nonzeros * 2, 1); // Ensure nzmax is at least 1
+        }
+        A->i = malloc(A->nzmax * sizeof(int));
+        if (A->i == NULL) {
+            free(toggle_columns);
+            ERROR("Memory allocation failed in csr_add_row_to_row.\n");
+            return;
+        }
+    }
+
     if (new_total_nonzeros > A->nzmax) {
-        int new_nzmax = new_total_nonzeros * 2;  // Double the size for future growth
+        int new_nzmax = MAX(new_total_nonzeros * 2, 1); // Ensure nzmax is at least 1
         int *new_i = realloc(A->i, new_nzmax * sizeof(int));
         if (new_i == NULL) {
             free(toggle_columns);
@@ -870,20 +912,23 @@ void csr_add_row_to_row(csr_t *A, int i, const csr_t *B, int j) {
         A->nzmax = new_nzmax;
     }
 
-    if (nz_required != old_nz) {
+    if (nz_required != old_nz && (total_nonzeros - end_A) > 0) {
         memmove(&A->i[start_A + nz_required], &A->i[end_A], (total_nonzeros - end_A) * sizeof(int));
     }
 
+    // Write the new indices into A->i
     int idx = 0;
-    for (int col = 0; col < A->cols; col++) {
+    for (int col = 0; col < num_cols; col++) {
         if (toggle_columns[col]) {
             A->i[start_A + idx] = col;
             idx++;
         }
     }
 
+    // Update the row pointers in A->p
+    int delta_nz = nz_required - old_nz;
     for (int k = i + 1; k <= A->rows; k++) {
-        A->p[k] += nz_required - old_nz;
+        A->p[k] += delta_nz;
     }
 
     free(toggle_columns);
@@ -981,9 +1026,9 @@ void csr_add_rows_to_row(csr_t *A, int i, const csr_t *B, const int *rows_to_add
     int new_total_nonzeros = total_nonzeros - old_nz + nz_required;
 
     // Ensure A->i is allocated before writing to it
-    if (A->i == NULL && nz_required > 0) {
+    if (A->i == NULL) {
         if (A->nzmax < new_total_nonzeros) {
-            A->nzmax = new_total_nonzeros * 2;
+            A->nzmax = MAX(new_total_nonzeros * 2, 1); // Ensure nzmax is at least 1
         }
         A->i = malloc(A->nzmax * sizeof(int));
         if (A->i == NULL) {
@@ -994,7 +1039,7 @@ void csr_add_rows_to_row(csr_t *A, int i, const csr_t *B, const int *rows_to_add
     }
 
     if (new_total_nonzeros > A->nzmax) {
-        int new_nzmax = new_total_nonzeros * 2;  // Double the size for future growth
+        int new_nzmax = MAX(new_total_nonzeros * 2, 1); // Ensure nzmax is at least 1
         int *new_i = realloc(A->i, new_nzmax * sizeof(int));
         if (new_i == NULL) {
             free(toggle_columns);
@@ -1005,7 +1050,7 @@ void csr_add_rows_to_row(csr_t *A, int i, const csr_t *B, const int *rows_to_add
         A->nzmax = new_nzmax;
     }
 
-    if (nz_required != old_nz) {
+    if (nz_required != old_nz && (total_nonzeros - end_A) > 0) {
         memmove(&A->i[start_A + nz_required], &A->i[end_A], (total_nonzeros - end_A) * sizeof(int));
     }
 
@@ -1200,7 +1245,12 @@ qllr_t csr_calculate_energy_change_multiple(qllr_t *coeff, const csr_t *A, const
         ERROR("Invalid row index in csr_calculate_energy_change_multiple: i=%d, A->rows=%d\n", i, A->rows);
         return 0;
     }
-
+    if (A->nz != -1) {
+       csr_compress(A);
+    }
+    if (B->nz != -1) {
+       csr_compress(B);
+    }
     // Check if matrices are in compressed form
     if (A->nz != -1 || B->nz != -1) {
         ERROR("Matrices must be in compressed form for csr_calculate_energy_change_multiple.\n");
