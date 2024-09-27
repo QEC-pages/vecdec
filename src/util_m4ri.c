@@ -13,7 +13,7 @@
 
 #include "utils.h"
 #include "util_m4ri.h"
-#define MAX(a, b) ((a) > (b) ? (a) : (b))
+
 
 
 size_t mzd_weight_naive(const mzd_t *A){

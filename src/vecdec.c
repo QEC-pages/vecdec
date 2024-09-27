@@ -758,6 +758,26 @@ qllr_t calculate_energy_change(qllr_t *coeff, const mzd_t *A, const mzd_t *B, co
     return energy_change;
 }
 
+void csr_resize(csr_t *mat, int new_nzmax){
+    assert(mat != NULL);
+    assert(new_nzmax > mat->nzmax); // Ensure we are increasing nzmax
+
+    int *new_i = realloc(mat->i, new_nzmax * sizeof(int));
+    if(new_i == NULL){
+        ERROR("csr_resize: Failed to reallocate i array.\n");
+    }
+    mat->i = new_i;
+    mat->nzmax = new_nzmax;
+
+    // Optionally initialize the new part of the i array
+    for(int idx = mat->nz; idx < new_nzmax; idx++){
+        mat->i[idx] = -1; // Or another sentinel value
+    }
+
+    //printf("[DEBUG] Resized CSR matrix: new nzmax=%d\n", mat->nzmax);
+}
+
+
 /**
  * @brief Copy a CSR matrix
  * @param src The source CSR matrix to copy from.
@@ -1038,7 +1058,8 @@ void csr_add_rows_to_row(csr_t *A, int i, const csr_t *B, const int *rows_to_add
         }
     }
 
-    if (new_total_nonzeros > A->nzmax) {
+    // Modified Condition Here
+    if (new_total_nonzeros >= A->nzmax) { // Changed from > to >=
         int new_nzmax = MAX(new_total_nonzeros * 2, 1); // Ensure nzmax is at least 1
         int *new_i = realloc(A->i, new_nzmax * sizeof(int));
         if (new_i == NULL) {
@@ -1058,6 +1079,11 @@ void csr_add_rows_to_row(csr_t *A, int i, const csr_t *B, const int *rows_to_add
     int idx = 0;
     for (int col = 0; col < num_cols; col++) {
         if (toggle_columns[col]) {
+            if ((start_A + idx) >= A->nzmax) { // Additional safety check
+                ERROR("Attempting to write beyond allocated memory in csr_add_rows_to_row.\n");
+                free(toggle_columns);
+                return;
+            }
             A->i[start_A + idx] = col;
             idx++;
         }
@@ -1071,6 +1097,8 @@ void csr_add_rows_to_row(csr_t *A, int i, const csr_t *B, const int *rows_to_add
 
     free(toggle_columns);
 }
+
+
 
 
 
@@ -1911,23 +1939,9 @@ void sample_states(csr_t *state_k, csr_t *state_j, int k, int j, EnergyDifferenc
         int num_rows_k = rand() % 3 + 1; // Random integer between 1 and 3
         int rows_to_add_k[3];
 
-        // Generate non-redundant random rows for state k
-        int indices_k[p->mG->rows];
-        for (int idx = 0; idx < p->mG->rows; idx++) {
-            indices_k[idx] = idx;
-        }
-
-        // Shuffle the indices
-        for (int idx = p->mG->rows - 1; idx > 0; idx--) {
-            int jdx = rand() % (idx + 1);
-            int temp = indices_k[idx];
-            indices_k[idx] = indices_k[jdx];
-            indices_k[jdx] = temp;
-        }
-
-        // Take the first num_rows_k indices as rows to add
+        // **Modified: Allow duplicate rows for state k**
         for (int idx = 0; idx < num_rows_k; idx++) {
-            rows_to_add_k[idx] = indices_k[idx];
+            rows_to_add_k[idx] = rand() % p->mG->rows;
         }
 
         // Calculate delta_energy for state k
@@ -1941,6 +1955,7 @@ void sample_states(csr_t *state_k, csr_t *state_j, int k, int j, EnergyDifferenc
             csr_add_rows_to_row(state_k, i, p->mG, rows_to_add_k, num_rows_k);
             accepted_k++;
         }
+
         // ---- Calculate Energy Differences ---- //
         // Compute energies for state k and state j
         double U_k = csr_row_energ(p->vLLR, state_k, i);
@@ -1961,23 +1976,9 @@ void sample_states(csr_t *state_k, csr_t *state_j, int k, int j, EnergyDifferenc
         int num_rows_j = rand() % 3 + 1; // Random integer between 1 and 3
         int rows_to_add_j[3];
 
-        // Generate non-redundant random rows for state j
-        int indices_j[p->mG->rows];
-        for (int idx = 0; idx < p->mG->rows; idx++) {
-            indices_j[idx] = idx;
-        }
-
-        // Shuffle the indices
-        for (int idx = p->mG->rows - 1; idx > 0; idx--) {
-            int jdx = rand() % (idx + 1);
-            int temp = indices_j[idx];
-            indices_j[idx] = indices_j[jdx];
-            indices_j[jdx] = temp;
-        }
-
-        // Take the first num_rows_j indices as rows to add
+        // **Modified: Allow duplicate rows for state j**
         for (int idx = 0; idx < num_rows_j; idx++) {
-            rows_to_add_j[idx] = indices_j[idx];
+            rows_to_add_j[idx] = rand() % p->mG->rows;
         }
 
         // Calculate delta_energy for state j
@@ -2026,6 +2027,7 @@ void sample_states(csr_t *state_k, csr_t *state_j, int k, int j, EnergyDifferenc
         fprintf(stderr, "Warning: No energy differences recorded between states %d and %d\n", k, j);
     }
 }
+
 
 
 
@@ -2122,7 +2124,13 @@ mzd_t *do_decode_BAR(mzd_t *mS, params_t const * const p) {
         csr_free(mEt0_csr);
         return NULL;
     }
-    mEt_csr->nzmax = mS->ncols * mHx_dense->ncols / 4;
+   // Check and resize if necessary
+    int desired_nzmax = mS->ncols * mHx_dense->ncols / 4;
+
+    if(desired_nzmax > mEt_csr->nzmax){
+       csr_resize(mEt_csr, desired_nzmax);
+    }
+
 
     // BAR_MCMC and simulated annealing
     for (int i = 0; i < mEt0_csr->rows; i++) {
