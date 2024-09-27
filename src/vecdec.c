@@ -1934,13 +1934,27 @@ void sample_states(csr_t *state_k, csr_t *state_j, int k, int j, EnergyDifferenc
         double delta_energy_k = csr_calculate_energy_change_multiple(p->vLLR, state_k, p->mG, i, rows_to_add_k, num_rows_k);
 
         // Use Metropolis criterion for state k
-        double acceptance_threshold_k = exp(-delta_energy_k / temperature);
+        double acceptance_threshold_k = -delta_energy_k / temperature;
         double rand_uniform_k = (double)rand() / RAND_MAX;
 
-        if (rand_uniform_k < acceptance_threshold_k) {
+        if (log(rand_uniform_k) < acceptance_threshold_k) {
             csr_add_rows_to_row(state_k, i, p->mG, rows_to_add_k, num_rows_k);
             accepted_k++;
         }
+        // ---- Calculate Energy Differences ---- //
+        // Compute energies for state k and state j
+        double U_k = csr_row_energ(p->vLLR, state_k, i);
+        double U_j = csr_row_energ(p->vLLR, state_j, i);
+
+        // Energy difference from configurations sampled from state k
+        double energy_diff_kj = U_j - U_k;
+        U->sizes[k][j]++;
+        U->data[k][j] = realloc(U->data[k][j], U->sizes[k][j] * sizeof(double));
+        if (!U->data[k][j]) {
+            fprintf(stderr, "Memory reallocation failed for U->data[%d][%d]\n", k, j);
+            return;
+        }
+        U->data[k][j][U->sizes[k][j] - 1] = energy_diff_kj;
 
         // ---- Update State j ---- //
         // Propose a move for state j
@@ -1970,28 +1984,18 @@ void sample_states(csr_t *state_k, csr_t *state_j, int k, int j, EnergyDifferenc
         double delta_energy_j = csr_calculate_energy_change_multiple(p->vLLR, state_j, p->mG, i, rows_to_add_j, num_rows_j);
 
         // Use Metropolis criterion for state j
-        double acceptance_threshold_j = exp(-delta_energy_j / temperature);
+        double acceptance_threshold_j = -delta_energy_j / temperature;
         double rand_uniform_j = (double)rand() / RAND_MAX;
 
-        if (rand_uniform_j < acceptance_threshold_j) {
+        if (log(rand_uniform_j) < acceptance_threshold_j) {
             csr_add_rows_to_row(state_j, i, p->mG, rows_to_add_j, num_rows_j);
             accepted_j++;
         }
 
         // ---- Calculate Energy Differences ---- //
         // Compute energies for state k and state j
-        double U_k = csr_row_energ(p->vLLR, state_k, i);
-        double U_j = csr_row_energ(p->vLLR, state_j, i);
-
-        // Energy difference from configurations sampled from state k
-        double energy_diff_kj = U_j - U_k;
-        U->sizes[k][j]++;
-        U->data[k][j] = realloc(U->data[k][j], U->sizes[k][j] * sizeof(double));
-        if (!U->data[k][j]) {
-            fprintf(stderr, "Memory reallocation failed for U->data[%d][%d]\n", k, j);
-            return;
-        }
-        U->data[k][j][U->sizes[k][j] - 1] = energy_diff_kj;
+        U_k = csr_row_energ(p->vLLR, state_k, i);
+        U_j = csr_row_energ(p->vLLR, state_j, i);
 
         // Energy difference from configurations sampled from state j
         double energy_diff_jk = U_k - U_j;
