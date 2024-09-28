@@ -1,7 +1,34 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
-    "configurations": []
+    "configurations": [
+        {
+            "name": "Debug vecdec",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/vecdec", 
+            "args": [
+                "mode=0.1",
+                "finH=toricH_L=4.mtx",
+                "finL=toricL_L=4.mtx",
+                "finG=toricL=4G.mmx",
+                "finK=toricL=4K.mmx",
+                "nvec=1024",
+                "useP=0.005"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/examples",  
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb",
+            "setupCommands": [
+                {
+                    "description": " gdb pretty-printing",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "Build vecdec" 
+        }
+    ]
 }
