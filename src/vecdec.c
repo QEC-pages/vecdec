@@ -28,6 +28,9 @@
 #include "qllr.h"
 #include <stdbool.h>
 #include <float.h>
+#define MAX_K 32
+#define MAX_ITERATIONS 10^5
+#define MAX_ROWS_IN_ONE_MOVE 5
 
 params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50,
   .rankH=0, .rankG=-1, .rankL=-1, 
@@ -734,30 +737,6 @@ int do_energ_verify(const qllr_t * const vE, const mzd_t * const mE, const param
   return nfail;
 }
 
-/**
- * @brief Calculate the energy change when a row from mH is combined with a row from mEt0.
- * @param coeff Coefficients array for energy calculation.
- * @param A The matrix containing current error vectors.
- * @param H The parity-check matrix.
- * @param i The index of the row in A to be updated.
- * @param row_to_add The index of the row in H to add to the i-th row of A.
- * @return The change in energy.
- */
-qllr_t calculate_energy_change(qllr_t *coeff, const mzd_t *A, const mzd_t *B, const int i, const int row_to_add) {
-    qllr_t energy_change = 0;
-    // Loop over all columns to calculate the change in energy due to the row addition.
-    for (rci_t j = 0; j < A->ncols; ++j) {
-        // Check if there is a change in the bit after addition.
-        // If the bits in A and B are different, the result is 1 (change), otherwise it's 0 (no change).
-        if (mzd_read_bit(A, i, j) != mzd_read_bit(B, row_to_add, j)) {
-            // If the original bit in A is 1, the energy will decrease (because the bit flips to 0).
-            // If the original bit in A is 0, the energy will increase (because the bit flips to 1).
-            energy_change += (mzd_read_bit(A, i, j) ? -coeff[j] : coeff[j]);
-        }
-    }
-    return energy_change;
-}
-
 void csr_resize(csr_t *mat, int new_nzmax){
     assert(mat != NULL);
     assert(new_nzmax > mat->nzmax); // Ensure we are increasing nzmax
@@ -766,16 +745,24 @@ void csr_resize(csr_t *mat, int new_nzmax){
     if(new_i == NULL){
         ERROR("csr_resize: Failed to reallocate i array.\n");
     }
-    mat->i = new_i;
+    mat->i = new_i;//
     mat->nzmax = new_nzmax;
 
-    // Optionally initialize the new part of the i array
-    for(int idx = mat->nz; idx < new_nzmax; idx++){
+    // Determine the actual number of non-zeros
+    int actual_nz = mat->nz;
+    if(mat->nz == -1){
+        actual_nz = mat->p[mat->rows];
+        mat->nz = actual_nz;
+    }
+
+    // Initialize the new part of the i array
+    for(int idx = actual_nz; idx < new_nzmax; idx++){
         mat->i[idx] = -1; // Or another sentinel value
     }
 
     //printf("[DEBUG] Resized CSR matrix: new nzmax=%d\n", mat->nzmax);
 }
+
 
 
 /**
@@ -1273,12 +1260,6 @@ qllr_t csr_calculate_energy_change_multiple(qllr_t *coeff, const csr_t *A, const
         ERROR("Invalid row index in csr_calculate_energy_change_multiple: i=%d, A->rows=%d\n", i, A->rows);
         return 0;
     }
-    if (A->nz != -1) {
-       csr_compress(A);
-    }
-    if (B->nz != -1) {
-       csr_compress(B);
-    }
     // Check if matrices are in compressed form
     if (A->nz != -1 || B->nz != -1) {
         ERROR("Matrices must be in compressed form for csr_calculate_energy_change_multiple.\n");
@@ -1469,15 +1450,9 @@ void csr_replace_row(csr_t *dst, const csr_t *src, int row) {
 
 
 
-void simulate_annealing_mcmc(csr_t *mEt0_csr, const params_t *p, int i) {
-    int max_iterations = 400000;
-    double final_temperature = 1.0;
-    double cooling_rate = 0.99;        // Adjusted cooling rate for smoother annealing
-    double reheating_rate = 1.1;       // Adjusted reheating rate
-    int check_interval = 5000;
+void mcmc(csr_t *mEt0_csr, const params_t *p, int i) {
+    int check_interval = 1000;
     double min_acceptance_rate = 0.2;
-
-    double temperature = 1.0;        // Adjusted initial temperature
     int iterations = 0;
     int accepted_updates = 0;
 
@@ -1485,11 +1460,11 @@ void simulate_annealing_mcmc(csr_t *mEt0_csr, const params_t *p, int i) {
     unsigned int seed = (unsigned int)time(NULL) + i;
     srand(seed);
 
-    while (iterations < max_iterations && temperature >= final_temperature) {
+    while (iterations < MAX_ITERATIONS) {
         iterations++;
 
-        int num_rows = rand() % 3 + 1; // Random integer between 1 and 4
-        int rows_to_add[3];
+        int num_rows = rand() % MAX_ROWS_IN_ONE_MOVE + 1; // Random integer between 1 and MAX_ROWS_IN_ONE_MOVE
+        int rows_to_add[MAX_ROWS_IN_ONE_MOVE];
 
         // Generate non-redundant random rows
         int indices[p->mG->rows];
@@ -1514,7 +1489,7 @@ void simulate_annealing_mcmc(csr_t *mEt0_csr, const params_t *p, int i) {
         double delta_energy = csr_calculate_energy_change_multiple(p->vLLR, mEt0_csr, p->mG, i, rows_to_add, num_rows);
 
         // Use logarithmic acceptance criterion
-        double acceptance_threshold = -delta_energy / temperature;
+        double acceptance_threshold = -delta_energy;
         double rand_uniform = (double)rand() / RAND_MAX;
         double ln_rand = log(rand_uniform);
 
@@ -1526,11 +1501,10 @@ void simulate_annealing_mcmc(csr_t *mEt0_csr, const params_t *p, int i) {
         if (iterations % check_interval == 0) {
             double acceptance_rate = (double)accepted_updates / check_interval;
             if (acceptance_rate < min_acceptance_rate) {
-                temperature *= reheating_rate;
+                return;
             }
             accepted_updates = 0; // Reset accepted updates
         }
-        temperature *= cooling_rate;
     }
 }
 
@@ -1548,7 +1522,7 @@ double BAR_equation(double ***U, int **N, int i, int j, double Q_ratio) {
         return NAN;
     }
 
-    double beta = 1.0; // Assuming k_B * T = 1 for simplicity
+    double beta = 1.0;
     double f = 0.0;
 
     // Compute the numerator and denominator
@@ -1610,7 +1584,7 @@ void solve_pairwise_BAR_ratio(double ***U, int **N, int K, double **Q_ratios) {
         }
     }
 
-    // Print the Q_ratios matrix after calculations
+    // // Print the Q_ratios matrix after calculations
     // printf("Q_ratios matrix:\n");
     // for (int i = 0; i < K; i++) {
     //     for (int j = 0; j < K; j++) {
@@ -1620,9 +1594,6 @@ void solve_pairwise_BAR_ratio(double ***U, int **N, int K, double **Q_ratios) {
 }
 
 
-
-#define MAX_K 32
-#define MAX_ITERATIONS 100000
 
 typedef struct {
     double ***data;
@@ -1636,175 +1607,6 @@ typedef struct {
 typedef struct {
     csr_t **vectors;
 } ErrorVectors;
-
-
-void Direct_MCMC(csr_t *mEt0_csr, csr_t *mEt_csr, params_t const * const p, int i) {
-    int mK_rows = p->mK->rows;
-    int K = 1 << mK_rows;  // 2^mK_rows
-
-    if (K > MAX_K) {
-        fprintf(stderr, "Error: K exceeds MAX_K in Direct_MCMC\n");
-        return;
-    }
-
-    ErrorVectors error_vectors = {0};
-    error_vectors.vectors = malloc(K * sizeof(csr_t *));
-    if (!error_vectors.vectors) {
-        fprintf(stderr, "Failed to allocate memory for error_vectors\n");
-        return;
-    }
-
-    double *sum_e_minus_E = calloc(K, sizeof(double));
-    if (!sum_e_minus_E) {
-        fprintf(stderr, "Failed to allocate memory for sum_e_minus_E\n");
-        free(error_vectors.vectors);
-        return;
-    }
-
-    int *sample_counts = calloc(K, sizeof(int));
-    if (!sample_counts) {
-        fprintf(stderr, "Failed to allocate memory for sample_counts\n");
-        free(sum_e_minus_E);
-        free(error_vectors.vectors);
-        return;
-    }
-
-    // Initialize error_vectors
-    for (int k = 0; k < K; k++) {
-        error_vectors.vectors[k] = csr_copy(mEt0_csr);
-        if (!error_vectors.vectors[k]) {
-            fprintf(stderr, "Failed to copy error vector for k=%d\n", k);
-            // Clean up and exit
-            for (int j = 0; j < k; j++) {
-                csr_free(error_vectors.vectors[j]);
-            }
-            free(error_vectors.vectors);
-            free(sum_e_minus_E);
-            free(sample_counts);
-            return;
-        }
-        // Apply mK transformations
-        for (int row = 0; row < mK_rows; row++) {
-            if (k & (1 << row)) {
-                csr_add_row_to_row(error_vectors.vectors[k], i, p->mK, row);
-            }
-        }
-    }
-
-    // Monte Carlo sampling for each ensemble
-    double temperature = 1e4;   // Adjust temperature as needed
-    for (int k = 0; k < K; k++) {
-        csr_t *state = csr_copy(error_vectors.vectors[k]);
-        if (!state) {
-            fprintf(stderr, "Failed to copy state for k=%d\n", k);
-            continue;
-        }
-        double sum_eE = 0.0;
-        int sample_count = 0;
-        int accepted = 0;
-        int check_interval = 1000;
-        double min_acceptance_rate = 0.002;
-
-        for (int iter = 0; iter < MAX_ITERATIONS; iter++) {
-            unsigned int seed = (unsigned int)time(NULL) + iter + k;
-
-            int num_rows = rand_r(&seed) % 5 + 1; // Random integer between 1 and 4
-            int rows_to_add[5];
-
-            // Generate non-redundant random rows
-            int indices[p->mG->rows];
-            for (int idx = 0; idx < p->mG->rows; idx++) {
-                indices[idx] = idx;
-            }
-
-            // Shuffle the indices
-            for (int idx = p->mG->rows - 1; idx > 0; idx--) {
-                int jdx = rand_r(&seed) % (idx + 1);
-                int temp = indices[idx];
-                indices[idx] = indices[jdx];
-                indices[jdx] = temp;
-            }
-
-            // Take the first num_rows indices as rows to add
-            for (int idx = 0; idx < num_rows; idx++) {
-                rows_to_add[idx] = indices[idx];
-            }
-
-            double delta_energy = csr_calculate_energy_change_multiple(p->vLLR, state, p->mG, i, rows_to_add, num_rows);
-
-            if (delta_energy < 0 || exp(-delta_energy / temperature) > (double)rand_r(&seed) / RAND_MAX) {
-                csr_add_rows_to_row(state, i, p->mG, rows_to_add, num_rows);
-                accepted++;
-            }
-
-            double energy = csr_row_energ(p->vLLR, state, i);
-            sum_eE += exp(-energy / temperature);
-            sample_count++;
-
-            if (iter % check_interval == check_interval - 1) {
-                double acceptance_rate = (double)accepted / check_interval;
-                if (acceptance_rate < min_acceptance_rate) {
-                    break;
-                }
-                accepted = 0;
-            }
-        }
-
-        sum_e_minus_E[k] = sum_eE;
-        sample_counts[k] = sample_count;
-
-        // Free the state since we have finished sampling for this ensemble
-        csr_free(state);
-    }
-
-    // Now, compute average e^{-E} for each ensemble
-    double *avg_e_minus_E = malloc(K * sizeof(double));
-    if (!avg_e_minus_E) {
-        fprintf(stderr, "Failed to allocate memory for avg_e_minus_E\n");
-        free(sum_e_minus_E);
-        free(sample_counts);
-        for (int k = 0; k < K; k++) {
-            csr_free(error_vectors.vectors[k]);
-        }
-        free(error_vectors.vectors);
-        return;
-    }
-
-    for (int k = 0; k < K; k++) {
-        if (sample_counts[k] > 0) {
-            avg_e_minus_E[k] = sum_e_minus_E[k] / sample_counts[k];
-        } else {
-            avg_e_minus_E[k] = 0.0;
-        }
-    }
-
-    // Find the ensemble with the largest average e^{-E}
-    int max_k = 0;
-    double max_avg = avg_e_minus_E[0];
-    for (int k = 1; k < K; k++) {
-        if (avg_e_minus_E[k] > max_avg) {
-            max_avg = avg_e_minus_E[k];
-            max_k = k;
-        }
-    }
-
-    // Update mEt_csr with the chosen ensemble
-    csr_replace_row(mEt_csr, error_vectors.vectors[max_k], i);
-
-    // Clean up
-    free(avg_e_minus_E);
-    free(sum_e_minus_E);
-    free(sample_counts);
-    for (int k = 0; k < K; k++) {
-        csr_free(error_vectors.vectors[k]);
-    }
-    free(error_vectors.vectors);
-}
-
-
-
-#define MAX_K 32
-#define MAX_ITERATIONS 100000
 
 
 // Helper function to find the state with the largest partition function
@@ -1923,7 +1725,6 @@ void sample_states(csr_t *state_k, csr_t *state_j, int k, int j, EnergyDifferenc
     int accepted_k = 0, accepted_j = 0;
     int check_interval = 1000;
     double min_acceptance_rate = 0.002;
-    double temperature = 1.0; // Adjusted temperature parameter
 
     // Seed random number generator once per function call
     unsigned int seed = (unsigned int)time(NULL) + i + k + j;
@@ -1931,13 +1732,14 @@ void sample_states(csr_t *state_k, csr_t *state_j, int k, int j, EnergyDifferenc
 
     int total_iterations = 0;
 
-    for (int iter = 0; iter < MAX_ITERATIONS; iter++) {
+    for (int iter = 0; iter <= MAX_ITERATIONS; iter++) {
         total_iterations++;
 
         // ---- Update State k ---- //
         // Propose a move for state k
-        int num_rows_k = rand() % 3 + 1; // Random integer between 1 and 3
-        int rows_to_add_k[3];
+        int num_rows_k = rand() % MAX_ROWS_IN_ONE_MOVE + 1; // Random integer between 1 and MAX_ROWS_IN_ONE_MOVE
+        //int num_rows_k = 1; 
+        int rows_to_add_k[MAX_ROWS_IN_ONE_MOVE];
 
         // **Modified: Allow duplicate rows for state k**
         for (int idx = 0; idx < num_rows_k; idx++) {
@@ -1948,7 +1750,7 @@ void sample_states(csr_t *state_k, csr_t *state_j, int k, int j, EnergyDifferenc
         double delta_energy_k = csr_calculate_energy_change_multiple(p->vLLR, state_k, p->mG, i, rows_to_add_k, num_rows_k);
 
         // Use Metropolis criterion for state k
-        double acceptance_threshold_k = -delta_energy_k / temperature;
+        double acceptance_threshold_k = -delta_energy_k;
         double rand_uniform_k = (double)rand() / RAND_MAX;
 
         if (log(rand_uniform_k) < acceptance_threshold_k) {
@@ -1973,8 +1775,9 @@ void sample_states(csr_t *state_k, csr_t *state_j, int k, int j, EnergyDifferenc
 
         // ---- Update State j ---- //
         // Propose a move for state j
-        int num_rows_j = rand() % 3 + 1; // Random integer between 1 and 3
-        int rows_to_add_j[3];
+        int num_rows_j = rand() % MAX_ROWS_IN_ONE_MOVE + 1; // Random integer between 1 and MAX_ROWS_IN_ONE_MOVE
+        //int num_rows_j = 1;
+        int rows_to_add_j[MAX_ROWS_IN_ONE_MOVE];
 
         // **Modified: Allow duplicate rows for state j**
         for (int idx = 0; idx < num_rows_j; idx++) {
@@ -1985,7 +1788,7 @@ void sample_states(csr_t *state_k, csr_t *state_j, int k, int j, EnergyDifferenc
         double delta_energy_j = csr_calculate_energy_change_multiple(p->vLLR, state_j, p->mG, i, rows_to_add_j, num_rows_j);
 
         // Use Metropolis criterion for state j
-        double acceptance_threshold_j = -delta_energy_j / temperature;
+        double acceptance_threshold_j = -delta_energy_j;
         double rand_uniform_j = (double)rand() / RAND_MAX;
 
         if (log(rand_uniform_j) < acceptance_threshold_j) {
@@ -2140,7 +1943,7 @@ mzd_t *do_decode_BAR(mzd_t *mS, params_t const * const p) {
     csr_compress(mEt_csr);
     
     for (int i = 0; i < mEt0_csr->rows; i++) {
-        simulate_annealing_mcmc(mEt_csr, p, i);
+        mcmc(mEt_csr, p, i);
     }
 
     mzd_t *mEt = mzd_from_csr(NULL, mEt_csr);
