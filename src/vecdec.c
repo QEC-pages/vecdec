@@ -29,7 +29,7 @@
 #include <stdbool.h>
 #include <float.h>
 #define MAX_K 32
-#define MAX_ITERATIONS 10^8
+#define MAX_ITERATIONS 100000
 #define MAX_ROWS_IN_ONE_MOVE 3
 
 params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50,
@@ -1477,7 +1477,7 @@ void generate_random_rows(int *rows_to_add, int num_rows, int total_rows) {
 
 
 void mcmc(csr_t *mEt0_csr, const params_t *p, int i) {
-    int check_interval = 1e4;
+    int check_interval = 1000;
     double min_acceptance_rate = 0.001;
     int iterations = 0;
     int accepted_updates = 0;
@@ -1625,9 +1625,10 @@ int find_max_partition_function(QRatios *Q_ratios, int K) {
 
 // Helper function for sampling states
 void sample_states(csr_t *state_k, csr_t *state_j, int k, int j, EnergyDifferences *U, const params_t *p, int i) {
-    int check_interval = 1e4;
+    int check_interval = 1000;
     double min_acceptance_rate = 0.002;
     int max_iterations = MAX_ITERATIONS;
+    int max_rows = MAX_ROWS_IN_ONE_MOVE;
     
     // ---- Sampling from State k ---- //
     int accepted_k = 0;
@@ -1636,7 +1637,7 @@ void sample_states(csr_t *state_k, csr_t *state_j, int k, int j, EnergyDifferenc
     
     for (int iter = 0; iter < max_iterations; iter++) {
         // Propose a move for state k
-        int num_rows_k = rand() % 3 + 1; // Random integer between 1 and 3
+        int num_rows_k = rand() % max_rows + 1; // Random integer between 1 and 3
         int *rows_to_add_k = malloc(num_rows_k * sizeof(int));
         generate_random_rows(rows_to_add_k, num_rows_k, p->mG->rows);
     
@@ -1682,7 +1683,7 @@ void sample_states(csr_t *state_k, csr_t *state_j, int k, int j, EnergyDifferenc
 
           if (acceptance_rate < min_acceptance_rate) {
                  break;
-                }
+            }
             accepted_k = 0;
         }
     }
@@ -1696,7 +1697,7 @@ void sample_states(csr_t *state_k, csr_t *state_j, int k, int j, EnergyDifferenc
     
     for (int iter = 0; iter < max_iterations; iter++) {
         // Propose a move for state j
-        int num_rows_j = rand() % 3 + 1; // Random integer between 1 and 3
+        int num_rows_j = rand() % max_rows + 1; // Random integer between 1 and 3
         int *rows_to_add_j = malloc(num_rows_j * sizeof(int));
         generate_random_rows(rows_to_add_j, num_rows_j, p->mG->rows);
     
@@ -1741,7 +1742,7 @@ void sample_states(csr_t *state_k, csr_t *state_j, int k, int j, EnergyDifferenc
           double acceptance_rate = (double)accepted_j / check_interval;
           if (acceptance_rate < min_acceptance_rate) {
                   break;
-                }
+            }
             accepted_j = 0;
         }
     }
