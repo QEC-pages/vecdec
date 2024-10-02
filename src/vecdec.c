@@ -29,7 +29,7 @@
 #include <stdbool.h>
 #include <float.h>
 #define MAX_K 32
-#define MAX_ITERATIONS 10^6
+#define MAX_ITERATIONS 10^8
 #define MAX_ROWS_IN_ONE_MOVE 3
 
 params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50,
@@ -1447,12 +1447,38 @@ void csr_replace_row(csr_t *dst, const csr_t *src, int row) {
 
 
 
+void generate_random_rows(int *rows_to_add, int num_rows, int total_rows) {
+    int *indices = malloc(total_rows * sizeof(int));
+    if (!indices) {
+        fprintf(stderr, "Memory allocation failed in generate_random_rows.\n");
+        exit(EXIT_FAILURE);
+    }
 
+    // Initialize indices from 0 to total_rows - 1
+    for (int idx = 0; idx < total_rows; idx++) {
+        indices[idx] = idx;
+    }
+
+    // Shuffle the indices
+    for (int idx = total_rows - 1; idx > 0; idx--) {
+        int jdx = rand() % (idx + 1);
+        int temp = indices[idx];
+        indices[idx] = indices[jdx];
+        indices[jdx] = temp;
+    }
+
+    // Select the first num_rows indices
+    for (int idx = 0; idx < num_rows; idx++) {
+        rows_to_add[idx] = indices[idx];
+    }
+
+    free(indices);
+}
 
 
 void mcmc(csr_t *mEt0_csr, const params_t *p, int i) {
-    int check_interval = 1000;
-    double min_acceptance_rate = 0.2;
+    int check_interval = 1e4;
+    double min_acceptance_rate = 0.001;
     int iterations = 0;
     int accepted_updates = 0;
 
@@ -1463,49 +1489,27 @@ void mcmc(csr_t *mEt0_csr, const params_t *p, int i) {
     while (iterations < max_iterations) {
         iterations++;
 
-        int num_rows = rand() % MAX_ROWS_IN_ONE_MOVE + 1; // Random integer between 1 and MAX_ROWS_IN_ONE_MOVE
-        int rows_to_add[MAX_ROWS_IN_ONE_MOVE];
-
-        // Generate non-redundant random rows
-        int indices[p->mG->rows];
-        for (int idx = 0; idx < p->mG->rows; idx++) {
-            indices[idx] = idx;
-        }
-
-        // Shuffle the indices
-        for (int idx = p->mG->rows - 1; idx > 0; idx--) {
-            int jdx = rand() % (idx + 1);
-            int temp = indices[idx];
-            indices[idx] = indices[jdx];
-            indices[jdx] = temp;
-        }
-
-        // Take the first num_rows indices as rows to add
-        for (int idx = 0; idx < num_rows; idx++) {
-            rows_to_add[idx] = indices[idx];
-        }
-
+        int num_rows = rand() % 3+ 1; // Random integer between 1 and MAX_ROWS_IN_ONE_MOVE
+        int *rows_to_add = malloc(num_rows * sizeof(int));
+        generate_random_rows(rows_to_add, num_rows, p->mG->rows);
         // Calculate delta_energy
         double delta_energy = csr_calculate_energy_change_multiple(p->vLLR, mEt0_csr, p->mG, i, rows_to_add, num_rows);
-
+        
        // Use logarithmic acceptance criterion
-       double acceptance_threshold = -delta_energy;
+        double acceptance_threshold_j = exp(-delta_energy);
+        double rand_uniform_j = (double)rand() / RAND_MAX;
 
-       // Ensure rand_uniform is in (0, 1)
-       double rand_uniform = ((double)rand() + 1.0) / ((double)RAND_MAX + 1.0);
-       double ln_rand = log(rand_uniform);
-
-       if (ln_rand < acceptance_threshold) {
-           csr_add_rows_to_row(mEt0_csr, i, p->mG, rows_to_add, num_rows);
-           accepted_updates++;
-       }
+        if (rand_uniform_j < acceptance_threshold_j) {
+            csr_add_rows_to_row(mEt0_csr, i, p->mG, rows_to_add, num_rows);
+            accepted_updates++;
+        }
+        free(rows_to_add);
 
         if (iterations % check_interval == 0) {
-            double acceptance_rate = (double)accepted_updates / check_interval;
+            double acceptance_rate = (double)accepted_updates / iterations;
             if (acceptance_rate < min_acceptance_rate) {
-                return;
+                break;
             }
-            accepted_updates = 0; // Reset accepted updates
         }
     }
 }
@@ -1552,7 +1556,7 @@ double BAR_equation(double ***U, int **N, int i, int j, double Q_ratio) {
 
 void solve_pairwise_BAR_ratio(double ***U, int **N, int K, double **Q_ratios) {
     double tolerance = 1e-6;
-    int max_iterations = 1000;
+    int max_iterations = 1e5;
 
     for (int i = 0; i < K; i++) {
         for (int j = i + 1; j < K; j++) {
@@ -1596,21 +1600,6 @@ void solve_pairwise_BAR_ratio(double ***U, int **N, int K, double **Q_ratios) {
 }
 
 
-
-typedef struct {
-    double ***data;
-    int **sizes;
-} EnergyDifferences;
-
-typedef struct {
-    double **data;
-} QRatios;
-
-typedef struct {
-    csr_t **vectors;
-} ErrorVectors;
-
-
 // Helper function to find the state with the largest partition function
 int find_max_partition_function(QRatios *Q_ratios, int K) {
     int max_Q_index = 0;
@@ -1630,144 +1619,137 @@ int find_max_partition_function(QRatios *Q_ratios, int K) {
     return max_Q_index;
 }
 
+
+
+
+
 // Helper function for sampling states
 void sample_states(csr_t *state_k, csr_t *state_j, int k, int j, EnergyDifferences *U, const params_t *p, int i) {
-    int accepted_k = 0, accepted_j = 0;
-    int check_interval = 1000;
-    double min_acceptance_rate = 0.02;
-
-    // Seed random number generator once per function call
-    // unsigned int seed = (unsigned int)time(NULL) + i + k + j;
-    // srand(seed);
+    int check_interval = 1e4;
+    double min_acceptance_rate = 0.002;
     int max_iterations = MAX_ITERATIONS;
-
+    
+    // ---- Sampling from State k ---- //
+    int accepted_k = 0;
+    // Create a copy of state_j for consistent configurations
+    csr_t *state_j_copy = csr_copy(state_j);
+    
     for (int iter = 0; iter < max_iterations; iter++) {
-        // ---- Update State k ---- //
         // Propose a move for state k
-        int num_rows_k = rand() % MAX_ROWS_IN_ONE_MOVE + 1; // Random integer between 1 and MAX_ROWS_IN_ONE_MOVE
-        //int num_rows_k = 1; 
-        int rows_to_add_k[MAX_ROWS_IN_ONE_MOVE];
-
-        // Generate non-redundant random rows
-        int indices_k[p->mG->rows];
-        for (int idx = 0; idx < p->mG->rows; idx++) {
-            indices_k[idx] = idx;
-        }
-
-        // Shuffle the indices
-        for (int idx = p->mG->rows - 1; idx > 0; idx--) {
-            int jdx = rand() % (idx + 1);
-            int temp = indices_k[idx];
-            indices_k[idx] = indices_k[jdx];
-            indices_k[jdx] = temp;
-        }
-
-        // Take the first num_rows indices as rows to add
-        for (int idx = 0; idx < num_rows_k; idx++) {
-            rows_to_add_k[idx] = indices_k[idx];
-        }
+        int num_rows_k = rand() % 3 + 1; // Random integer between 1 and 3
+        int *rows_to_add_k = malloc(num_rows_k * sizeof(int));
+        generate_random_rows(rows_to_add_k, num_rows_k, p->mG->rows);
+    
         // Calculate delta_energy for state k
         double delta_energy_k = csr_calculate_energy_change_multiple(p->vLLR, state_k, p->mG, i, rows_to_add_k, num_rows_k);
-
+    
         // Use Metropolis criterion for state k
-        double acceptance_threshold_k = -delta_energy_k;
-        // Ensure rand_uniform is in (0, 1)
-        double rand_uniform_k = ((double)rand() + 1.0) / ((double)RAND_MAX + 1.0);
-        double ln_rand_k = log(rand_uniform_k);
-
-        if (ln_rand_k < acceptance_threshold_k) {
+        double acceptance_threshold_k = exp(-delta_energy_k);
+        double rand_uniform_k = (double)rand() / RAND_MAX;
+    
+        // Variables to store energies
+        double U_k, U_j;
+    
+        if (rand_uniform_k < acceptance_threshold_k) {
+            // Move accepted in state k
             csr_add_rows_to_row(state_k, i, p->mG, rows_to_add_k, num_rows_k);
             accepted_k++;
+    
+            // Apply the same move to state_j_copy
+            csr_add_rows_to_row(state_j_copy, i, p->mG, rows_to_add_k, num_rows_k);
+    
+            // Compute energies in both states
+            U_k = csr_row_energ(p->vLLR, state_k, i);
+            U_j = csr_row_energ(p->vLLR, state_j_copy, i);
+    
+            // Revert state_j_copy to its previous state
+            //csr_add_rows_to_row(state_j_copy, i, p->mG, rows_to_add_k, num_rows_k); // Undo the move
+        } else {
+            // Move rejected; configurations remain unchanged
+            U_k = csr_row_energ(p->vLLR, state_k, i);
+            U_j = csr_row_energ(p->vLLR, state_j_copy, i);
         }
-
-        // ---- Calculate Energy Differences ---- //
-        // Compute energies for state k and state j
-        double U_k = csr_row_energ(p->vLLR, state_k, i);
-        double U_j = csr_row_energ(p->vLLR, state_j, i);
-
-        // Energy difference from configurations sampled from state k
+        free(rows_to_add_k);
+        // Compute energy difference and accumulate
         double energy_diff_kj = U_j - U_k;
         U->sizes[k][j]++;
         U->data[k][j] = realloc(U->data[k][j], U->sizes[k][j] * sizeof(double));
-        if (!U->data[k][j]) {
-            fprintf(stderr, "Memory reallocation failed for U->data[%d][%d]\n", k, j);
-            return;
-        }
         U->data[k][j][U->sizes[k][j] - 1] = energy_diff_kj;
+        //printf("num of sample: %d\n",U->sizes[k][j]);
+        // Check acceptance rate
+        if ((iter + 1) % check_interval == 0) {
+          double acceptance_rate = (double)accepted_k / check_interval;
 
-        // ---- Update State j ---- //
+          if (acceptance_rate < min_acceptance_rate) {
+                 break;
+                }
+            accepted_k = 0;
+        }
+    }
+    
+    csr_free(state_j_copy);
+    
+    // ---- Sampling from State j ---- //
+    int accepted_j = 0;
+    // Create a copy of state_k for consistent configurations
+    csr_t *state_k_copy = csr_copy(state_k);
+    
+    for (int iter = 0; iter < max_iterations; iter++) {
         // Propose a move for state j
-        int num_rows_j = rand() % MAX_ROWS_IN_ONE_MOVE + 1; // Random integer between 1 and MAX_ROWS_IN_ONE_MOVE
-        //int num_rows_j = 1;
-        int rows_to_add_j[MAX_ROWS_IN_ONE_MOVE];
-
-        // Generate non-redundant random rows
-        int indices_j[p->mG->rows];
-        for (int idx = 0; idx < p->mG->rows; idx++) {
-            indices_j[idx] = idx;
-        }
-
-        // Shuffle the indices
-        for (int idx = p->mG->rows - 1; idx > 0; idx--) {
-            int jdx = rand() % (idx + 1);
-            int temp = indices_j[idx];
-            indices_j[idx] = indices_j[jdx];
-            indices_j[jdx] = temp;
-        }
-
-        // Take the first num_rows indices as rows to add
-        for (int idx = 0; idx < num_rows_j; idx++) {
-            rows_to_add_j[idx] = indices_j[idx];
-        }
-
+        int num_rows_j = rand() % 3 + 1; // Random integer between 1 and 3
+        int *rows_to_add_j = malloc(num_rows_j * sizeof(int));
+        generate_random_rows(rows_to_add_j, num_rows_j, p->mG->rows);
+    
         // Calculate delta_energy for state j
         double delta_energy_j = csr_calculate_energy_change_multiple(p->vLLR, state_j, p->mG, i, rows_to_add_j, num_rows_j);
-
+    
         // Use Metropolis criterion for state j
-        double acceptance_threshold_j = -delta_energy_j;
-       // Ensure rand_uniform is in (0, 1)
-        double rand_uniform_j = ((double)rand() + 1.0) / ((double)RAND_MAX + 1.0);
-        double ln_rand_j = log(rand_uniform_j);
-
-        if (ln_rand_j < acceptance_threshold_j) {
+        double acceptance_threshold_j = exp(-delta_energy_j);
+        double rand_uniform_j = (double)rand() / RAND_MAX;
+    
+        // Variables to store energies
+        double U_j, U_k;
+    
+        if (rand_uniform_j < acceptance_threshold_j) {
+            // Move accepted in state j
             csr_add_rows_to_row(state_j, i, p->mG, rows_to_add_j, num_rows_j);
             accepted_j++;
+    
+            // Apply the same move to state_k_copy
+            csr_add_rows_to_row(state_k_copy, i, p->mG, rows_to_add_j, num_rows_j);
+    
+            // Compute energies in both states
+            U_j = csr_row_energ(p->vLLR, state_j, i);
+            U_k = csr_row_energ(p->vLLR, state_k_copy, i);
+    
+            // Revert state_k_copy to its previous state
+            //csr_add_rows_to_row(state_k_copy, i, p->mG, rows_to_add_j, num_rows_j); // Undo the move
+        } else {
+            // Move rejected; configurations remain unchanged
+            U_j = csr_row_energ(p->vLLR, state_j, i);
+            U_k = csr_row_energ(p->vLLR, state_k_copy, i);
         }
-
-        // ---- Calculate Energy Differences ---- //
-        // Compute energies for state k and state j
-        U_k = csr_row_energ(p->vLLR, state_k, i);
-        U_j = csr_row_energ(p->vLLR, state_j, i);
-
-        // Energy difference from configurations sampled from state j
+        free(rows_to_add_j);
+        // Compute energy difference and accumulate
         double energy_diff_jk = U_k - U_j;
         U->sizes[j][k]++;
         U->data[j][k] = realloc(U->data[j][k], U->sizes[j][k] * sizeof(double));
-        if (!U->data[j][k]) {
-            fprintf(stderr, "Memory reallocation failed for U->data[%d][%d]\n", j, k);
-            return;
-        }
         U->data[j][k][U->sizes[j][k] - 1] = energy_diff_jk;
-
-        // ---- Check Acceptance Rates ---- //
+    
+        // Check acceptance rate
         if ((iter + 1) % check_interval == 0) {
-            double acceptance_rate_k = (double)accepted_k / check_interval;
-            double acceptance_rate_j = (double)accepted_j / check_interval;
-
-            if (acceptance_rate_k < min_acceptance_rate || acceptance_rate_j < min_acceptance_rate) {
-                break;
-            }
-
-            accepted_k = 0;
+          double acceptance_rate = (double)accepted_j / check_interval;
+          if (acceptance_rate < min_acceptance_rate) {
+                  break;
+                }
             accepted_j = 0;
         }
     }
-
-    // Ensure there are enough samples
-    if (U->sizes[k][j] == 0 || U->sizes[j][k] == 0) {
-        fprintf(stderr, "Warning: No energy differences recorded between states %d and %d\n", k, j);
-    }
+    
+    csr_free(state_k_copy);
 }
+
+
 
 void BAR_MCMC(csr_t *mEt0_csr, csr_t *mEt_csr, const params_t *p, int i) {
     int mK_rows = p->mK->rows;
@@ -1994,6 +1976,12 @@ mzd_t *do_decode_BAR(mzd_t *mS, params_t const * const p) {
         csr_free(mEt_csr);
         return NULL;
     }
+    mzd_free(mHx_dense);
+    mzd_free(mE_dense);
+    mzd_free(mEt_dense);
+    csr_free(mE0_csr);
+    csr_free(mEt0_csr);
+    csr_free(mEt_csr);
 
     return mEt;
 }

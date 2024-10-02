@@ -238,6 +238,19 @@ typedef struct UFL_T {
   /** @bried helper structure to sort by probabilities (inv by LLR) */
   typedef struct IPPAIR_T {int index; qllr_t llr; } ippair_t;
 
+  typedef struct {
+    double ***data;
+    int **sizes;
+} EnergyDifferences;
+
+typedef struct {
+    double **data;
+} QRatios;
+
+typedef struct {
+    csr_t **vectors;
+} ErrorVectors;
+
   /** @brief helper function to sort `ippair_t`
    *  use `qsort(array, len, sizeof(ippair_t), cmp_ippairs);`
    */
