@@ -29,7 +29,7 @@
 #include <stdbool.h>
 #include <float.h>
 #define MAX_K 32
-#define MAX_ITERATIONS 100000
+#define MAX_ITERATIONS 1000000
 #define MAX_ROWS_IN_ONE_MOVE 3
 
 params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50,
@@ -1093,58 +1093,60 @@ void csr_add_rows_to_row(csr_t *A, int i, const csr_t *B, const int *rows_to_add
 
 
 /**
- * @brief Calculate the energy of row `i` in CSR matrix.
+ * @brief Calculate the energy of row `i` in CSR matrix under a given potential.
  * @param coeff Coefficients array for energy calculation.
- * @param csr The CSR matrix.
+ * @param e_csr The CSR matrix representing the error vector.
  * @param i The row index.
- * @return The energy of the row, or 0 if an error occurs.
+ * @param potential_rows Array of row indices in mK representing the potential.
+ * @param num_potential_rows Number of potential rows.
+ * @param mK The CSR matrix containing potential rows.
+ * @return The energy of the row.
  */
-qllr_t csr_row_energ(qllr_t *coeff, const csr_t *csr, const int i) {
-    // Initial parameter checks
-    if (coeff == NULL || csr == NULL || csr->p == NULL || csr->i == NULL) {
-        ERROR("Invalid input parameters in csr_row_energ: coeff=%p, csr=%p\n", coeff, csr);
+qllr_t csr_row_energ_with_potential(qllr_t *coeff, const csr_t *e_csr, const int i,
+                                    const int *potential_rows, int num_potential_rows, const csr_t *mK) {
+    if (!coeff || !e_csr || !mK) {
+        ERROR("Invalid input parameters in csr_row_energ_with_potential.\n");
         return 0;
     }
 
-    if (i < 0 || i >= csr->rows) {
-        ERROR("Invalid row index in csr_row_energ: i=%d, rows=%d\n", i, csr->rows);
+    int num_cols = e_csr->cols;
+    int *toggle_columns = calloc(num_cols, sizeof(int));
+    if (!toggle_columns) {
+        ERROR("Memory allocation failed in csr_row_energ_with_potential.\n");
         return 0;
     }
 
-    // Check if the matrix is in compressed form
-    if (csr->nz != -1) {
-        ERROR("Matrix must be in compressed form for csr_row_energ.\n");
-        return 0;
+    // Process e_csr row i
+    int start_e = e_csr->p[i];
+    int end_e = e_csr->p[i + 1];
+    for (int idx = start_e; idx < end_e; ++idx) {
+        int col_idx = e_csr->i[idx];
+        toggle_columns[col_idx] ^= 1;
     }
 
-    qllr_t ans = 0;
-    int start = csr->p[i];
-    int end = csr->p[i + 1];
-
-    // Check row pointer range
-    if (start < 0 || end > csr->nzmax || start > end) {
-        ERROR("Invalid row pointer range in csr_row_energ: start=%d, end=%d, nzmax=%d\n", start, end, csr->nzmax);
-        return 0;
-    }
-
-    for (int j = start; j < end; ++j) {
-        // Check if j is within valid range
-        if (j < 0 || j >= csr->nzmax) {
-            ERROR("Index j (%d) out of bounds in csr_row_energ. nzmax: %d\n", j, csr->nzmax);
-            return 0;
+    // Add potential rows from mK
+    for (int pr_idx = 0; pr_idx < num_potential_rows; ++pr_idx) {
+        int potential_row = potential_rows[pr_idx];
+        int start_pot = mK->p[potential_row];
+        int end_pot = mK->p[potential_row + 1];
+        for (int idx = start_pot; idx < end_pot; ++idx) {
+            int col_idx = mK->i[idx];
+            toggle_columns[col_idx] ^= 1;
         }
-
-        int col = csr->i[j];
-        if (col < 0 || col >= csr->cols) {
-            ERROR("Invalid column index in csr_row_energ: col=%d, cols=%d\n", col, csr->cols);
-            return 0;
-        }
-
-        ans += coeff[col];
     }
 
-    return ans;
+    // Now compute the energy
+    qllr_t energy = 0;
+    for (int col = 0; col < num_cols; ++col) {
+        if (toggle_columns[col]) {
+            energy += coeff[col];
+        }
+    }
+
+    free(toggle_columns);
+    return energy;
 }
+
 
 
 
@@ -1478,7 +1480,7 @@ void generate_random_rows(int *rows_to_add, int num_rows, int total_rows) {
 
 void mcmc(csr_t *mEt0_csr, const params_t *p, int i) {
     int check_interval = 1000;
-    double min_acceptance_rate = 0.001;
+    double min_acceptance_rate = 0.002;
     int iterations = 0;
     int accepted_updates = 0;
 
@@ -1515,36 +1517,38 @@ void mcmc(csr_t *mEt0_csr, const params_t *p, int i) {
 }
 
 
-double BAR_equation(double ***U, int **N, int i, int j, double Q_ratio) {
+/**
+ * @brief Compute the BAR equation value based on accumulated energy differences.
+ * @param delta_U_A Array of energy differences ΔU_{AB} from potential A.
+ * @param delta_U_B Array of energy differences ΔU_{BA} from potential B.
+ * @param N_A Number of samples from potential A.
+ * @param N_B Number of samples from potential B.
+ * @param Q_ratio Current estimate of Q = Z_B / Z_A.
+ * @return The value of the BAR equation (should be zero when solved), or NAN if invalid.
+ */
+double BAR_equation(double *delta_U_A, double *delta_U_B, int N_A, int N_B, double Q_ratio) {
     // Check input validity
-    if (!U || !N || i < 0 || j < 0 || !isfinite(Q_ratio)) {
-        fprintf(stderr, "Error: Invalid input in BAR_equation\n");
-        return NAN;
-    }
-
-    // Ensure there are samples
-    if (N[i][j] <= 0 || N[j][i] <= 0) {
-        fprintf(stderr, "Error: No samples available for BAR equation between states %d and %d\n", i, j);
+    if (!delta_U_A || !delta_U_B || N_A <= 0 || N_B <= 0 || Q_ratio <= 0.0) {
+        // Return NAN to indicate that the equation cannot be computed
         return NAN;
     }
 
     double beta = 1.0;
-    double f = 0.0;
-
-    // Compute the numerator and denominator
-    double sum_i = 0.0;
-    for (int n = 0; n < N[i][j]; n++) {
-        double delta_u = U[i][j][n];
-        sum_i += 1.0 / (1.0 + Q_ratio * exp(beta * delta_u));
+    double sum_A = 0.0;
+    for (int n = 0; n < N_A; n++) {
+        double exponent = beta * delta_U_A[n];
+        sum_A += 1.0 / (1.0 + Q_ratio * exp(exponent));
     }
+    double lhs = sum_A / N_A;
 
-    double sum_j = 0.0;
-    for (int n = 0; n < N[j][i]; n++) {
-        double delta_u = U[j][i][n];
-        sum_j += 1.0 / (1.0 + (1.0 / Q_ratio) * exp(beta * delta_u));
+    double sum_B = 0.0;
+    for (int n = 0; n < N_B; n++) {
+        double exponent = beta * delta_U_B[n];
+        sum_B += 1.0 / (1.0 + (1.0 / Q_ratio) * exp(exponent));
     }
+    double rhs = sum_B / N_B;
 
-    f = sum_i / N[i][j] - sum_j / N[j][i];
+    double f = lhs - rhs;
 
     return f;
 }
@@ -1554,25 +1558,72 @@ double BAR_equation(double ***U, int **N, int i, int j, double Q_ratio) {
 
 
 
-void solve_pairwise_BAR_ratio(double ***U, int **N, int K, double **Q_ratios) {
+
+
+
+
+/**
+ * @brief Solve the BAR equations to find the ratio of partition functions Q = Z_B / Z_A.
+ *        Handles cases where N_A or N_B is zero.
+ * @param U Structure containing accumulated energy differences.
+ * @param K Number of potentials.
+ * @param Q_ratios Matrix to store computed Q ratios (Q_ratios[i][j]).
+ */
+void solve_pairwise_BAR_ratio(EnergyDifferences *U, int K, double **Q_ratios) {
     double tolerance = 1e-6;
-    int max_iterations = 1e5;
+    int max_iterations = 1000;
 
     for (int i = 0; i < K; i++) {
         for (int j = i + 1; j < K; j++) {
-            double Q_low = 0.001;  // Lower bound for Q_ratio
-            double Q_high = 1000.0; // Upper bound for Q_ratio
-            double Q_mid;
+            double *delta_U_A = U->data[i][j]; // ΔU_{AB}
+            double *delta_U_B = U->data[j][i]; // ΔU_{BA}
+            int N_A = U->sizes[i][j];
+            int N_B = U->sizes[j][i];
+            //printf("N_A = %d, N_B = %d\n", N_A, N_B);
 
+            // Handle cases where N_A or N_B is zero
+            if (N_A == 0 && N_B == 0) {
+                // No data available; cannot determine preference
+                Q_ratios[i][j] = 1.0;
+                Q_ratios[j][i] = 1.0;
+                continue;
+            } else if (N_A == 0) {
+                // No samples from potential A; potential B is preferred
+                Q_ratios[i][j] = 1e-6; // Very small Q_ratio (Z_B << Z_A)
+                Q_ratios[j][i] = 1e6;  // Reciprocal
+                continue;
+            } else if (N_B == 0) {
+                // No samples from potential B; potential A is preferred
+                Q_ratios[i][j] = 1e6;  // Very large Q_ratio (Z_B >> Z_A)
+                Q_ratios[j][i] = 1e-6; // Reciprocal
+                continue;
+            }
+
+            // Initial guess for Q_ratio
+            double Q_low = 1e-6;  // Lower bound (avoid zero)
+            double Q_high = 1e6;  // Upper bound
+            double Q_mid = 1.0;
+
+            // Bisection method to solve the BAR equation
             for (int iter = 0; iter < max_iterations; iter++) {
-                Q_mid = (Q_low + Q_high) / 2.0;
-                double f_mid = BAR_equation(U, N, i, j, Q_mid);
+                Q_mid = sqrt(Q_low * Q_high);
+                double f_mid = BAR_equation(delta_U_A, delta_U_B, N_A, N_B, Q_mid);
+
+                if (isnan(f_mid)) {
+                    // Invalid computation; break out of the loop
+                    break;
+                }
 
                 if (fabs(f_mid) < tolerance) {
                     break;
                 }
 
-                double f_low = BAR_equation(U, N, i, j, Q_low);
+                double f_low = BAR_equation(delta_U_A, delta_U_B, N_A, N_B, Q_low);
+
+                if (isnan(f_low)) {
+                    // Invalid computation; break out of the loop
+                    break;
+                }
 
                 if (f_low * f_mid < 0) {
                     Q_high = Q_mid;
@@ -1580,252 +1631,323 @@ void solve_pairwise_BAR_ratio(double ***U, int **N, int K, double **Q_ratios) {
                     Q_low = Q_mid;
                 }
 
-                if (fabs(Q_high - Q_low) < tolerance * fabs(Q_mid)) {
+                if (fabs(Q_high - Q_low) < tolerance * Q_mid) {
                     break;
                 }
             }
 
+            // Assign the computed Q_ratio
             Q_ratios[i][j] = Q_mid;
             Q_ratios[j][i] = 1.0 / Q_mid;
         }
     }
-
-    // // Print the Q_ratios matrix after calculations
-    // printf("Q_ratios matrix:\n");
-    // for (int i = 0; i < K; i++) {
-    //     for (int j = 0; j < K; j++) {
-    //         printf("Q_ratios[%d][%d] = %f\n", i, j, Q_ratios[i][j]);
-    //     }
-    // }
 }
 
 
-// Helper function to find the state with the largest partition function
-int find_max_partition_function(QRatios *Q_ratios, int K) {
-    int max_Q_index = 0;
-    double max_Q = -INFINITY;
-    for (int k = 0; k < K; k++) {
-        double Q_k = 0.0;
-        for (int j = 0; j < K; j++) {
-            if (j != k) {
-                Q_k += log(Q_ratios->data[k][j]);
+
+
+
+
+/**
+ * @brief Find the potential with the maximum partition function (largest Z, smallest free energy).
+ *        Handles extreme Q_ratios appropriately.
+ * @param Q_ratios Matrix containing Q ratios between potentials.
+ * @param K Number of potentials.
+ * @return Index of the potential with the maximum partition function.
+ */
+int find_max_partition_function(double **Q_ratios, int K) {
+    double *log_Z = malloc(K * sizeof(double));
+    if (!log_Z) {
+        fprintf(stderr, "Memory allocation failed in find_max_partition_function\n");
+        return 0;
+    }
+
+    // Initialize log_Z[0] = 0 (reference potential)
+    log_Z[0] = 0.0;
+
+    // Compute log_Z for other potentials
+    for (int k = 1; k < K; k++) {
+        // Compute log_Z[k] relative to log_Z[0]
+        double sum_log_Q = 0.0;
+        for (int j = 0; j < k; j++) {
+            double Q_kj = Q_ratios[j][k];
+            if (Q_kj <= 0.0) {
+                // Handle zero or negative Q_ratios
+                sum_log_Q += log(1e-6); // Use a small value to represent unfavorable potentials
+            } else {
+                sum_log_Q += log(Q_kj);
             }
         }
-        if (Q_k > max_Q) {
-            max_Q = Q_k;
-            max_Q_index = k;
+        log_Z[k] = log_Z[0] + sum_log_Q;
+    }
+
+    // Find the potential with the maximum log_Z
+    int max_index = 0;
+    double max_log_Z = log_Z[0];
+    for (int k = 1; k < K; k++) {
+        if (log_Z[k] > max_log_Z) {
+            max_log_Z = log_Z[k];
+            max_index = k;
         }
     }
-    return max_Q_index;
+
+    free(log_Z);
+    return max_index;
 }
 
 
 
 
 
-// Helper function for sampling states
-void sample_states(csr_t *state_k, csr_t *state_j, int k, int j, EnergyDifferences *U, const params_t *p, int i) {
-    int check_interval = 1000;
-    double min_acceptance_rate = 0.002;
+
+
+/**
+ * @brief Sample states between two potentials and accumulate energy differences.
+ *        Sampling is performed starting from both potential A and potential B.
+ * @param e_initial The initial error vector matrix (CSR format).
+ * @param potential_rows_A Array of row indices representing potential A.
+ * @param num_potential_rows_A Number of rows in potential A.
+ * @param potential_rows_B Array of row indices representing potential B.
+ * @param num_potential_rows_B Number of rows in potential B.
+ * @param U Structure to accumulate energy differences.
+ * @param potential_index_A Index of potential A.
+ * @param potential_index_B Index of potential B.
+ * @param p Parameters containing matrices and coefficients.
+ * @param i The row index in the error vector matrix to process.
+ */
+void sample_states(csr_t *e_initial,
+                   const int *potential_rows_A, int num_potential_rows_A,
+                   const int *potential_rows_B, int num_potential_rows_B,
+                   EnergyDifferences *U, int potential_index_A, int potential_index_B,
+                   const params_t *p, int i) {
     int max_iterations = MAX_ITERATIONS;
-    int max_rows = MAX_ROWS_IN_ONE_MOVE;
+    int check_interval = 5; // Attempt to switch potentials every 10 steps
+    int accepted = 0;
     
-    // ---- Sampling from State k ---- //
-    int accepted_k = 0;
-    // Create a copy of state_j for consistent configurations
-    csr_t *state_j_copy = csr_copy(state_j);
+    // Arrays to store potential indices and rows
+    int potential_indices[2] = { potential_index_A, potential_index_B };
+    const int *potential_rows[2] = { potential_rows_A, potential_rows_B };
+    int num_potential_rows[2] = { num_potential_rows_A, num_potential_rows_B };
     
-    for (int iter = 0; iter < max_iterations; iter++) {
-        // Propose a move for state k
-        int num_rows_k = rand() % max_rows + 1; // Random integer between 1 and 3
-        int *rows_to_add_k = malloc(num_rows_k * sizeof(int));
-        generate_random_rows(rows_to_add_k, num_rows_k, p->mG->rows);
-    
-        // Calculate delta_energy for state k
-        double delta_energy_k = csr_calculate_energy_change_multiple(p->vLLR, state_k, p->mG, i, rows_to_add_k, num_rows_k);
-    
-        // Use Metropolis criterion for state k
-        double acceptance_threshold_k = exp(-delta_energy_k);
-        double rand_uniform_k = (double)rand() / RAND_MAX;
-    
-        // Variables to store energies
-        double U_k, U_j;
-    
-        if (rand_uniform_k < acceptance_threshold_k) {
-            // Move accepted in state k
-            csr_add_rows_to_row(state_k, i, p->mG, rows_to_add_k, num_rows_k);
-            accepted_k++;
-    
-            // Apply the same move to state_j_copy
-            csr_add_rows_to_row(state_j_copy, i, p->mG, rows_to_add_k, num_rows_k);
-    
-            // Compute energies in both states
-            U_k = csr_row_energ(p->vLLR, state_k, i);
-            U_j = csr_row_energ(p->vLLR, state_j_copy, i);
-    
-            // Revert state_j_copy to its previous state
-            //csr_add_rows_to_row(state_j_copy, i, p->mG, rows_to_add_k, num_rows_k); // Undo the move
-        } else {
-            // Move rejected; configurations remain unchanged
-            U_k = csr_row_energ(p->vLLR, state_k, i);
-            U_j = csr_row_energ(p->vLLR, state_j_copy, i);
+    // Perform sampling starting from both potentials
+    for (int run = 0; run < 2; run++) {
+        // Copy e_initial to e_current for each run
+        csr_t *e_current = csr_copy(e_initial);
+        if (!e_current) {
+            fprintf(stderr, "Failed to copy e_initial\n");
+            return;
         }
-        free(rows_to_add_k);
-        // Compute energy difference and accumulate
-        double energy_diff_kj = U_j - U_k;
-        U->sizes[k][j]++;
-        U->data[k][j] = realloc(U->data[k][j], U->sizes[k][j] * sizeof(double));
-        U->data[k][j][U->sizes[k][j] - 1] = energy_diff_kj;
-        //printf("num of sample: %d\n",U->sizes[k][j]);
-        // Check acceptance rate
-        if ((iter + 1) % check_interval == 0) {
-          double acceptance_rate = (double)accepted_k / check_interval;
-
-          if (acceptance_rate < min_acceptance_rate) {
-                 break;
+        // Ensure e_current is compressed
+        if (e_current->nz != -1) {
+            csr_compress(e_current);
+        }
+        
+        // Initialize current potential index and potential rows
+        int current_potential_index = potential_indices[run];
+        const int *current_potential_rows = potential_rows[run];
+        int num_current_potential_rows = num_potential_rows[run];
+        
+        int other_potential_index = potential_indices[1 - run];
+        const int *other_potential_rows = potential_rows[1 - run];
+        int num_other_potential_rows = num_potential_rows[1 - run];
+        
+        int N_current = 0; // Number of samples under current potential
+        
+        // Start MCMC sampling
+        for (int iter = 0; iter < (int)max_iterations/2; iter++) {
+            // Perform MCMC under current potential
+            int num_rows = rand() % MAX_ROWS_IN_ONE_MOVE + 1;
+            int *rows_to_add = malloc(num_rows * sizeof(int));
+            if (!rows_to_add) {
+                ERROR("Memory allocation failed in sample_states.\n");
+                csr_free(e_current);
+                return;
             }
-            accepted_k = 0;
-        }
-    }
-    
-    csr_free(state_j_copy);
-    
-    // ---- Sampling from State j ---- //
-    int accepted_j = 0;
-    // Create a copy of state_k for consistent configurations
-    csr_t *state_k_copy = csr_copy(state_k);
-    
-    for (int iter = 0; iter < max_iterations; iter++) {
-        // Propose a move for state j
-        int num_rows_j = rand() % max_rows + 1; // Random integer between 1 and 3
-        int *rows_to_add_j = malloc(num_rows_j * sizeof(int));
-        generate_random_rows(rows_to_add_j, num_rows_j, p->mG->rows);
-    
-        // Calculate delta_energy for state j
-        double delta_energy_j = csr_calculate_energy_change_multiple(p->vLLR, state_j, p->mG, i, rows_to_add_j, num_rows_j);
-    
-        // Use Metropolis criterion for state j
-        double acceptance_threshold_j = exp(-delta_energy_j);
-        double rand_uniform_j = (double)rand() / RAND_MAX;
-    
-        // Variables to store energies
-        double U_j, U_k;
-    
-        if (rand_uniform_j < acceptance_threshold_j) {
-            // Move accepted in state j
-            csr_add_rows_to_row(state_j, i, p->mG, rows_to_add_j, num_rows_j);
-            accepted_j++;
-    
-            // Apply the same move to state_k_copy
-            csr_add_rows_to_row(state_k_copy, i, p->mG, rows_to_add_j, num_rows_j);
-    
-            // Compute energies in both states
-            U_j = csr_row_energ(p->vLLR, state_j, i);
-            U_k = csr_row_energ(p->vLLR, state_k_copy, i);
-    
-            // Revert state_k_copy to its previous state
-            //csr_add_rows_to_row(state_k_copy, i, p->mG, rows_to_add_j, num_rows_j); // Undo the move
-        } else {
-            // Move rejected; configurations remain unchanged
-            U_j = csr_row_energ(p->vLLR, state_j, i);
-            U_k = csr_row_energ(p->vLLR, state_k_copy, i);
-        }
-        free(rows_to_add_j);
-        // Compute energy difference and accumulate
-        double energy_diff_jk = U_k - U_j;
-        U->sizes[j][k]++;
-        U->data[j][k] = realloc(U->data[j][k], U->sizes[j][k] * sizeof(double));
-        U->data[j][k][U->sizes[j][k] - 1] = energy_diff_jk;
-    
-        // Check acceptance rate
-        if ((iter + 1) % check_interval == 0) {
-          double acceptance_rate = (double)accepted_j / check_interval;
-          if (acceptance_rate < min_acceptance_rate) {
-                  break;
+            generate_random_rows(rows_to_add, num_rows, p->mG->rows);
+            
+            // Create a copy of e_current to propose changes
+            csr_t *e_proposed = csr_copy(e_current);
+            if (!e_proposed) {
+                ERROR("Failed to copy e_current in sample_states.\n");
+                free(rows_to_add);
+                csr_free(e_current);
+                return;
             }
-            accepted_j = 0;
+            // Ensure e_proposed is compressed
+            if (e_proposed->nz != -1) {
+                csr_compress(e_proposed);
+            }
+            
+            // Apply proposed changes to row i
+            csr_add_rows_to_row(e_proposed, i, p->mG, rows_to_add, num_rows);
+            free(rows_to_add);
+            
+            // Compute energies under current potential
+            qllr_t U_current_e = csr_row_energ_with_potential(p->vLLR, e_current, i,
+                                                              current_potential_rows, num_current_potential_rows, p->mK);
+            qllr_t U_current_e_proposed = csr_row_energ_with_potential(p->vLLR, e_proposed, i,
+                                                                       current_potential_rows, num_current_potential_rows, p->mK);
+            qllr_t delta_energy = U_current_e_proposed - U_current_e;
+            
+            // Metropolis criterion under current potential
+            double acceptance_threshold = exp(-delta_energy);
+            double rand_uniform = (double)rand() / RAND_MAX;
+            
+            if (rand_uniform < acceptance_threshold) {
+                // Move accepted
+                csr_free(e_current);
+                e_current = e_proposed;
+                U_current_e = U_current_e_proposed;
+                accepted++;
+            } else {
+                // Move rejected
+                csr_free(e_proposed);
+            }
+            
+            // Compute energies under both potentials
+            qllr_t U_other_e = csr_row_energ_with_potential(p->vLLR, e_current, i,
+                                                            other_potential_rows, num_other_potential_rows, p->mK);
+            double delta_U = U_other_e - U_current_e; // ΔU = U_other - U_current
+            
+            // Accumulate energy differences
+            U->sizes[current_potential_index][other_potential_index]++;
+            U->data[current_potential_index][other_potential_index] = realloc(
+                U->data[current_potential_index][other_potential_index],
+                U->sizes[current_potential_index][other_potential_index] * sizeof(double));
+            if (!U->data[current_potential_index][other_potential_index]) {
+                ERROR("Memory allocation failed in sample_states.\n");
+                csr_free(e_current);
+                return;
+            }
+            // Store ΔU
+            if (current_potential_index == potential_index_A) {
+                // ΔU_{AB} = U_B - U_A
+                U->data[current_potential_index][other_potential_index][U->sizes[current_potential_index][other_potential_index] - 1] = delta_U;
+            } else {
+                // ΔU_{BA} = U_A - U_B
+                U->data[current_potential_index][other_potential_index][U->sizes[current_potential_index][other_potential_index] - 1] = -delta_U;
+            }
+            
+            N_current++;
+            
+            // Attempt to switch potentials every 'check_interval' steps
+            if ((iter + 1) % check_interval == 0) {
+                // Metropolis criterion for potential switch
+                double switch_prob = fmin(1.0, exp(-delta_U));
+                double rand_uniform_switch = (double)rand() / RAND_MAX;
+                
+                // Decide whether to switch potentials
+                if (rand_uniform_switch < switch_prob) {
+                    // Swap potentials
+                    int temp_potential_index = current_potential_index;
+                    const int *temp_potential_rows = current_potential_rows;
+                    int temp_num_potential_rows = num_current_potential_rows;
+                    
+                    current_potential_index = other_potential_index;
+                    current_potential_rows = other_potential_rows;
+                    num_current_potential_rows = num_other_potential_rows;
+                    
+                    other_potential_index = temp_potential_index;
+                    other_potential_rows = temp_potential_rows;
+                    num_other_potential_rows = temp_num_potential_rows;
+                }
+            }
         }
+        
+        // Free e_current for this run
+        csr_free(e_current);
     }
-    
-    csr_free(state_k_copy);
 }
+
+
+
+
+
+
 
 
 
 void BAR_MCMC(csr_t *mEt0_csr, csr_t *mEt_csr, const params_t *p, int i) {
     int mK_rows = p->mK->rows;
-    int K = 1 << mK_rows;  // 2^mK_rows
-    
+    int K = 1 << mK_rows;  // Total number of potentials (2^mK_rows)
+
     if (K > MAX_K) {
         fprintf(stderr, "Error: K exceeds MAX_K in BAR_MCMC\n");
         return;
     }
-    
 
     EnergyDifferences U = {0};
-    QRatios Q_ratios = {0};
-    csr_t **states = malloc(K * sizeof(csr_t *));
-    if (!states) {
-        fprintf(stderr, "Failed to allocate memory for states\n");
-        return; // or handle the error appropriately
+    // Matrix to store Q ratios
+    double **Q_ratios = malloc(K * sizeof(double *));
+    for (int k = 0; k < K; k++) {
+        Q_ratios[k] = calloc(K, sizeof(double));
     }
 
-    // Allocate memory
+    // Allocate memory for U
     U.data = malloc(K * sizeof(double **));
     U.sizes = malloc(K * sizeof(int *));
-    Q_ratios.data = malloc(K * sizeof(double *));
     for (int k = 0; k < K; k++) {
         U.data[k] = malloc(K * sizeof(double *));
         U.sizes[k] = calloc(K, sizeof(int));
-        Q_ratios.data[k] = malloc(K * sizeof(double));
         for (int j = 0; j < K; j++) {
             U.data[k][j] = NULL;
-            Q_ratios.data[k][j] = 1.0;
         }
     }
 
-    // Initialize states
+    // Generate all potentials (combinations of rows from mK)
+    int **potential_rows = malloc(K * sizeof(int *));
+    int *num_potential_rows = malloc(K * sizeof(int));
     for (int k = 0; k < K; k++) {
-        states[k] = csr_copy(mEt0_csr);
-        if (!states[k]) {
-            fprintf(stderr, "Failed to copy state for k=%d\n", k);
-            goto cleanup;
-        }
-        // Apply mK transformations
+        potential_rows[k] = malloc(mK_rows * sizeof(int));
+        num_potential_rows[k] = 0;
         for (int row = 0; row < mK_rows; row++) {
             if (k & (1 << row)) {
-                csr_add_row_to_row(states[k], i, p->mK, row);
+                potential_rows[k][num_potential_rows[k]++] = row;
             }
         }
     }
 
-    // Monte Carlo sampling
+    // Loop over all pairs of potentials
     for (int k = 0; k < K; k++) {
         for (int j = k + 1; j < K; j++) {
-            // Sample states k and j
-            sample_states(states[k], states[j], k, j, &U, p, i);
+            // Reset the initial state e for each pair
+            csr_t *e_initial = csr_copy(mEt0_csr);
+            if (!e_initial) {
+                fprintf(stderr, "Failed to copy mEt0_csr\n");
+                goto cleanup;
+            }
+
+            // Ensure e_initial is compressed
+            if (e_initial->nz != -1) {
+                csr_compress(e_initial);
+            }
+
+            // Sample states between potentials k and j
+            sample_states(e_initial,
+                          potential_rows[k], num_potential_rows[k],
+                          potential_rows[j], num_potential_rows[j],
+                          &U, k, j, p, i); // Pass the row index i
+
+            csr_free(e_initial);
         }
     }
 
-    // Solve BAR equations
-    solve_pairwise_BAR_ratio(U.data, U.sizes, K, Q_ratios.data);
+    // Solve BAR equations to compute Q ratios
+    solve_pairwise_BAR_ratio(&U, K, Q_ratios);
 
-    // Find the state with the largest partition function
-    int max_Q_index = find_max_partition_function(&Q_ratios, K);
+    // Find the potential with the maximum partition function
+    int max_Z_index = find_max_partition_function(Q_ratios, K);
 
-    // // Print the label of the chosen ensemble
-    // printf("Chosen ensemble is state %d\n", max_Q_index);
+    // Update mEt_csr with the chosen potential
+    // Copy the initial state
+    csr_replace_row(mEt_csr, mEt0_csr, i);
+    csr_compress(mEt_csr);
 
-    // // Optional: print a more detailed label (if applicable)
-    // // For example, you can print the binary representation of `max_Q_index`
-    // printf("Chosen ensemble label: ");
-    // for (int row = 0; row < mK_rows; row++) {
-    //     printf("%d", (max_Q_index >> row) & 1);
-    // }
-    // printf("\n");
-
-    // Update mEt_csr with the chosen ensemble
-    csr_replace_row(mEt_csr, states[max_Q_index], i);
+    // Apply the potential corresponding to max_Z_index
+    for (int pr_idx = 0; pr_idx < num_potential_rows[max_Z_index]; pr_idx++) {
+        int potential_row = potential_rows[max_Z_index][pr_idx];
+        csr_add_row_to_row(mEt_csr, i, p->mK, potential_row);
+    }
 
 cleanup:
     // Clean up
@@ -1835,13 +1957,14 @@ cleanup:
         }
         free(U.data[k]);
         free(U.sizes[k]);
-        free(Q_ratios.data[k]);
-        csr_free(states[k]);
+        free(potential_rows[k]);
+        free(Q_ratios[k]);
     }
     free(U.data);
     free(U.sizes);
-    free(Q_ratios.data);
-    free(states);
+    free(potential_rows);
+    free(num_potential_rows);
+    free(Q_ratios);
 }
 
 
@@ -1857,12 +1980,12 @@ cleanup:
 
 
 /**
- * @brief Simulated Annealing-based syndrome decoding routine with improved stopping mechanism. (CSR form)
+ * @brief Syndrome decoding routine using BAR-based MCMC (CSR form).
  * @param mS Matrix with syndromes (each column).
  * @param p Structure with error model information.
  * @return Binary matrix of min weight errors for each syndrome.
  */
-mzd_t *do_decode_BAR(mzd_t *mS, params_t const * const p) {
+mzd_t *do_decode_BAR(mzd_t *mS, params_t const *const p) {
     mzd_t *mHx_dense = mzd_from_csr(NULL, p->mH);
     if (!mHx_dense) {
         fprintf(stderr, "Failed to create dense matrix from CSR\n");
@@ -1947,22 +2070,20 @@ mzd_t *do_decode_BAR(mzd_t *mS, params_t const * const p) {
         csr_free(mEt0_csr);
         return NULL;
     }
-   // Check and resize if necessary
+    // Check and resize if necessary
     int desired_nzmax = mS->ncols * mHx_dense->ncols / 4;
 
-    if(desired_nzmax > mEt_csr->nzmax){
-       csr_resize(mEt_csr, desired_nzmax);
+    if (desired_nzmax > mEt_csr->nzmax) {
+        csr_resize(mEt_csr, desired_nzmax);
     }
 
-
-    // BAR_MCMC and simulated annealing
+    // BAR_MCMC for each row
     for (int i = 0; i < mEt0_csr->rows; i++) {
         BAR_MCMC(mEt0_csr, mEt_csr, p, i);
     }
-
-    csr_compress(mEt_csr);
     
-    for (int i = 0; i < mEt0_csr->rows; i++) {
+    // MCMC for each row
+    for (int i = 0; i < mEt_csr->rows; i++) {
         mcmc(mEt_csr, p, i);
     }
 
@@ -1986,6 +2107,7 @@ mzd_t *do_decode_BAR(mzd_t *mS, params_t const * const p) {
 
     return mEt;
 }
+
 
 /** @brief one more matrix initialization routine 
  */
