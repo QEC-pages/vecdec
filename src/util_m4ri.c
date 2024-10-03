@@ -15,6 +15,7 @@
 #include "util_m4ri.h"
 
 
+
 size_t mzd_weight_naive(const mzd_t *A){
   size_t count = 0;
   for(rci_t i = 0; i < A->nrows; ++i)
