@@ -1600,8 +1600,8 @@ void solve_pairwise_BAR_ratio(EnergyDifferences *U, int K, double **Q_ratios) {
             }
 
             // Initial guess for Q_ratio
-            double Q_low = 1e-6;  // Lower bound (avoid zero)
-            double Q_high = 1e6;  // Upper bound
+            double Q_low = 1e-2;  // Lower bound (avoid zero)
+            double Q_high = 1e2;  // Upper bound
             double Q_mid = 1.0;
 
             // Bisection method to solve the BAR equation
@@ -1754,7 +1754,7 @@ void sample_states(csr_t *e_initial,
         int N_current = 0; // Number of samples under current potential
         
         // Start MCMC sampling
-        for (int iter = 0; iter < (int)max_iterations/2; iter++) {
+        for (int iter = 0; iter < max_iterations; iter++) {
             // Perform MCMC under current potential
             int num_rows = rand() % MAX_ROWS_IN_ONE_MOVE + 1;
             int *rows_to_add = malloc(num_rows * sizeof(int));
