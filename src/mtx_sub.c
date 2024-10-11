@@ -57,21 +57,28 @@ par_t var={
 };
 
 int var_init(int argc, char **argv, par_t *p){
-  int dbg=0;
+  int dbg=0; 
+  int cnt=0;
+
+  for(int i=1; i<argc; i++){
+    if(sscanf(argv[i],"debug=%d",& dbg)==1){/** `debug` */
+      cnt++;
+      if(cnt==1)
+	p->debug = dbg; /** just assign if encountered once */
+      else
+	p->debug ^= dbg; /** otherwise `XOR` */
+      if(p->debug &4)
+	printf("# read %s, debug=%d octal=%o\n",argv[i],p->debug,p->debug);      
+    }
+  };
+
+  if (argc==1)
+    ERROR("try '%s --help'\n",argv[0]);
   
   for(int i=1; i<argc; i++){
     int pos=0;
-    if(sscanf(argv[i],"debug=%d",& dbg)==1){/** `debug` */
-      if(dbg==0)
-	p->debug = 0;
-      else{
-        if(i==1)
-          p->debug = dbg; /** just assign if in the `1st position` */
-        else
-          p->debug ^= dbg; /** otherwise `XOR` */
-        if(p->debug &4)
-	  printf("# read %s, debug=%d octal=%o\n",argv[i],p->debug,p->debug);
-      }
+    if(sscanf(argv[i],"debug=%d",& dbg)==1){
+      /** `debug` - do nothing - already processed */
     }
     else if (0==strncmp(argv[i],"fin=",4)){ /** `fin` */
       if(strlen(argv[i])>4)

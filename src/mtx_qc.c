@@ -15,8 +15,8 @@
 #include "utils.h"
 #include "util_m4ri.h"
 
-#define MAX_ROWS 2
-#define MAX_COLS 5
+#define MAX_ROWS 10
+#define MAX_COLS 10
 #define MAX_W 10
 #define WGHT(i,j) p->wght[p->rows*(i)+(j)]
 #define COEF(i,j,k) p->poly[MAX_W*(p->cols*(i)+(j))+k]
@@ -57,35 +57,80 @@ par_t *p = &params;
   "\t ell=int\t: cize of a circulant (no default)\n"			\
   "\t a_#=[int,int,...]\t degrees of 0th row polynomial in column '#' (same as 'a0_#')\n" \
   "\t a#_#=[int,int,...]\t degrees of polynomial (row,col)\n" \
+  "\t b_#=... b#_#=...\t same but also revert the polynomial\n" \
   "\t r#=int\t: number of rows in row block '#' (cannot exceed ell, the default value)\n" \
   "\t\t Specify polynomials only for non-zero blocks\n" \
   "\t\t List polynomial deegrees in increasing order from 0 to (ell-1)\n" \
   "\t debug=[integer]\t: bitmap for aux information to output (default: 1)\n" \
+  "\t .1 (bit 0) output helpful information, e.g. ranks and code params\n" \
+  "\t .2 (bit 1) output skeleton map of the code\n"                     \
+  "\t .4 (bit 2) echo input parameters being read\n"                   \
+  "\t .8 (bit 3) print out the constructed matrix\n"			\
+  "\t .16 (bit 4) extra processing information\n"			\
   "\t Multiple 'debug' parameters are XOR combined except for 0.\n"	\
-  "\t Space is allowed between 'out=' and the file name string.\n"	\
-  "\t Output file name 'out' must be the last argument.\n"
+  "\t Space is allowed between 'out=' and the file name string.\n"
+
+void do_scan_a(int i, const char argvi[], int p1, int p2, int val, int pos, int reverse){
+
+  int w=0, dbg=val;
+  const char *c = argvi;
+  if((p1<0)||(p1>=p->rows)||(p2<0)||(p2>=p->cols))
+    ERROR("arg[%d]='%s' : a(%d,%d)=... invalid position rows=%d cols=%d\n",
+	  i,argvi,p1,p2,p->rows,p->cols);
+  do{
+    if((dbg<0)||(dbg>=p->ell))
+      ERROR("arg[%d]='%s' : invalid degree(%d)=%d , ell=%d\n",
+	    i,argvi,w,dbg,p->ell);
+    if((w>0)&&(dbg<=COEF(p1,p2,w-1)))
+      ERROR("arg[%d]='%s' deg(%d)=%d deg(%d)=%d :"
+	    " must be an increasing sequence! ",
+	    i,argvi,w-1,COEF(p1,p2,w-1),w,dbg);
+    COEF(p1,p2,w++)=dbg;
+    if(w>MAX_W)
+      ERROR("arg[%d]='%s' : too large polynomial weight>=%d MAX_W=%d\n", i,argvi,w,MAX_W);
+    c+=pos;
+  }
+  while (sscanf(c,",%d%n",& dbg, &pos)==1);
+
+  if (reverse)
+    for(int i=0; i< w; i++)
+      COEF(p1,p2,i) = (p->ell - COEF(p1,p2,i)) % p->ell;        
+	
+  WGHT(p1,p2)=w;
+  if(p->debug&4){
+    printf("# read %spolynomial a(%d,%d)=[ ",reverse? "reverse ":"",p1,p2);
+    for(int ii=0; ii< w; ii++)
+      printf("%s%d%s", COEF(p1,p2,ii)==0 ? "":"x^",
+	     COEF(p1,p2,ii)==0 ? 1:COEF(p1,p2,ii),
+	     ii+1==w ? " ] ":", ");
+    printf(" wght=%d\n",w);
+  }
+
+}
+
 
 int var_init(int argc, char **argv, par_t *p){
   
+  if (argc==1)
+    ERROR("try '%s --help'\n",argv[0]);
+
   memset(p->r,    '\0', sizeof(p->r));
   memset(p->poly, '\0', sizeof(p->poly));
   memset(p->wght, '\0', sizeof(p->wght));
+  int cnt=0;
 
-  for(int i=1; i<argc; i++){   /** scan for debug first */
-    int dbg;
+  for(int i=1; i<argc; i++){
+    int dbg=0;
     if(sscanf(argv[i],"debug=%d",& dbg)==1){/** `debug` */
-      if(dbg==0)
-	p->debug = 0;
-      else{
-	if(i==1)
-	  p->debug = dbg; /** just assign if in the `1st position` */
-	else
-	  p->debug ^= dbg; /** otherwise `XOR` */
-	if(p->debug &4)
-	  printf("# read %s, debug=%d octal=%o\n",argv[i],p->debug,p->debug);
-      }
+      cnt++;
+      if(cnt==1)
+	p->debug = dbg; /** just assign if encountered once */
+      else
+	p->debug ^= dbg; /** otherwise `XOR` */
+      if(p->debug &4)
+	printf("# read %s, debug=%d octal=%o\n",argv[i],p->debug,p->debug);      
     }
-  }
+  };
 
   for(int i=1; i<argc; i++){   /** scan for rows, cols, ell second */
     int dbg;
@@ -95,25 +140,32 @@ int var_init(int argc, char **argv, par_t *p){
 	printf("# read %s, setting ell=%d\n",argv[i],p->ell);
     }
     else if (sscanf(argv[i],"rows=%d",& dbg)==1){ /** `rows` */
-      if(dbg>=MAX_ROWS)
-	ERROR("parameter rows=%d must be < MAX_ROWS=%d",dbg,MAX_ROWS);
+      if(dbg>MAX_ROWS)
+	ERROR("parameter rows=%d must be <= MAX_ROWS=%d",dbg,MAX_ROWS);
       p -> rows = dbg;
       if (p->debug&4)
 	printf("# read %s, setting rows=%d\n",argv[i],p->rows);
     }
     else if (sscanf(argv[i],"cols=%d",& dbg)==1){ /** `cols` */
-      if(dbg>=MAX_COLS)
-	ERROR("parameter cols=%d must be < MAX_COLS=%d",dbg,MAX_COLS);
+      if(dbg>MAX_COLS)
+	ERROR("parameter cols=%d must be <= MAX_COLS=%d",dbg,MAX_COLS);
       p -> cols = dbg;
       if (p->debug&4)
 	printf("# read %s, setting cols=%d\n",argv[i],p->cols);
     }
+    else if((strcmp(argv[i],"--help")==0)
+            ||(strcmp(argv[i],"-h")==0)
+            ||(strcmp(argv[i],"help")==0)){
+      printf( USAGE , argv[0],argv[0]);
+      exit (-1);
+    }
   }
   
-  if((p->ell==0) || (p->rows==0) || (p->cols==0))
-    ERROR("must specify non-zero block rows=%d block cols=%d and"
-	  " circulant size ell=%d",p->rows,p->cols,p->ell);
-
+  if((p->ell==0) || (p->rows==0) || (p->cols==0)){
+    printf("must specify non-zero block rows=%d block cols=%d and"
+	  " circulant size ell=%d\n",p->rows,p->cols,p->ell);
+    ERROR("run '%s -h' for help",argv[0]);
+  }
   for(int i=0; i< p->rows; i++)
     p->r[i]=p->ell; /** default values */
   
@@ -148,34 +200,16 @@ int var_init(int argc, char **argv, par_t *p){
     else if ((sscanf(argv[i],"a_%d=%d%n",&p2, & dbg, &pos)==2)||
 	     (sscanf(argv[i],"a%d_%d=%d%n",&p1, &p2, &dbg, &pos)==3)){
       /* a[p1,p2]=... */
-      int w=0;
-      char *c = argv[i];
-      if((p1<0)||(p1>=p->rows)||(p2<0)||(p2>=p->cols))
-	ERROR("arg[%d]='%s' : a(%d,%d)=... invalid position rows=%d cols=%d\n",
-	      i,argv[i],p1,p2,p->rows,p->cols);
-      do{
-	if((dbg<0)||(dbg>=p->ell))
-	  ERROR("arg[%d]=%s : invalid degree(%d)=%d , ell=%d\n",
-		i,argv[i],w,dbg,p->ell);
-	if((w>0)&&(dbg<=COEF(p1,p2,w-1)))
-	  ERROR("arg[%d]='%s' deg(%d)=%d deg(%d)=%d :"
-		" must be an increasing sequence! ",
-		i,argv[i],w-1,COEF(p1,p2,w-1),w,dbg);
-
-	COEF(p1,p2,w++)=dbg;
-	c+=pos;
-      }
-      while (sscanf(c,",%d%n",& dbg, &pos)==1);
-	
-      WGHT(p1,p2)=w;
-      if(p->debug&4){
-	printf("# read polynomial a(%d,%d)=[ ",p1,p2);
-	for(int ii=0; ii< w; ii++)
-	  printf("%s%d%s", COEF(p1,p2,ii)==0 ? "":"x^",
-		 COEF(p1,p2,ii)==0 ? 1:COEF(p1,p2,ii),
-		 ii+1==w ? " ] ":", ");
-	printf(" wght=%d\n",w);
-      }
+      do_scan_a(i,argv[i],p1,p2,dbg,pos,0);
+    }
+    else if ((sscanf(argv[i],"b_%d=%d%n",&p2, & dbg, &pos)==2)||
+	     (sscanf(argv[i],"b%d_%d=%d%n",&p1, &p2, &dbg, &pos)==3)){
+      /* a[p1,p2]=... */
+      do_scan_a(i,argv[i],p1,p2,dbg,pos,1); /** reverse polynomial */
+    }
+    else{
+      printf("unrecognized parameter argv[%d]=%s\n",i,argv[i]);
+      ERROR("try '%s --help'\n",argv[0]);	   
     }
   }
   return 0;
@@ -194,6 +228,21 @@ int main(int argc, char **argv){
       nz+= WGHT(i,j) * ri;
     }
   }
+  if(p->debug&1)
+    printf("# generating %d x %d QC matrix from %d x %d blocks of size ell=%d nz=%d\n",
+	   rc,n,p->rows,p->cols,p->ell,nz);
+  if(p->debug&2){ /** skeleton */
+    for (int br=0; br< p->rows; br++){ /** block row index  */
+      printf("# ");
+      for (int bc=0; bc < p->cols; bc++){ /** block columns */
+	if(WGHT(br,bc))
+	  printf(" M[%d,%d]",br,bc);
+	else
+	  printf(" .     " );
+      }
+      printf("  # rows=%d\n",p->r[br]);
+    }
+  }
   p->mat = csr_init(NULL, rc, n, nz);
   int gr=0; /** global row */
   int ge=0;     /** global element index */
@@ -206,7 +255,7 @@ int main(int argc, char **argv){
 	  int i_shift = (ii+wei-idx)%wei; /* shifted element index */
 	  //	  int c_shift = (ii+p->ell+COEF(br,bc,i_shift))%(p->ell);
 	  int c_shift = (ii + p->ell - COEF(br,bc,i_shift)) % (p->ell);
-	  if(p->debug&32)
+	  if(p->debug&16)
 	    printf("br=%d ii=%d bc=%d idx=%d i_s=%d c_beg=%d c_s=%d  ge=%d COEF=%d\n",
 		   br,ii,bc,idx,i_shift,cbeg,c_shift,ge,COEF(br,bc,i_shift));
 	  /** write a list of pairs */
@@ -220,16 +269,18 @@ int main(int argc, char **argv){
     ERROR("this should not happen: nz=%d ge=%d  rc=%d gr=%d\n",nz,ge,rc,gr);
   p->mat->nz=nz; /* non-zero elements */
 
-  if(p->debug&64)
-    csr_out(p->mat);
+  //  if(p->debug&64)    csr_out(p->mat);
   csr_compress(p->mat);
 
 
-  if(p->debug&128){
-    mzd_t *dmat = mzd_from_csr(NULL,p->mat);
-    mzd_print(dmat);
-    mzd_free(dmat);
-    
+  if(p->debug&8){
+    if(p->mat->cols<80){
+      mzd_t *dmat = mzd_from_csr(NULL,p->mat);
+      mzd_print(dmat);
+      mzd_free(dmat);
+    }
+    else
+      csr_out(p->mat);    
   }
 
   const size_t siz=1000;
