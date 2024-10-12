@@ -2178,9 +2178,9 @@ int main(int argc, char **argv){
 	  }
 	}
 	//	mzd_free(srow);
-	if((p->nfail) && cnt[TOTAL]-cnt[SUCC_TOT] >= p->nfail)	  
-	  break;
       }
+      if((p->nfail) && cnt[TOTAL]-cnt[SUCC_TOT] >= p->nfail)	  
+	break;
     }    
     if(p->debug&1)
       ufl_cnt_print(p);
