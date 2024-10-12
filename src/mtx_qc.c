@@ -189,7 +189,7 @@ int var_init(int argc, char **argv, par_t *p){
       if((p1<0) || (p1>=p->rows))
 	ERROR("arg[%d]='%s' : invalid row index %d, must be from 0 to rows-1 = %d\n",
 	      i,argv[i],p1,p->rows -1);
-      if((dbg<0) || (dbg>= p->ell))
+      if((dbg<0) || (dbg> p->ell))
 	ERROR("arg[%d]='%s' invalid row num=%d in row block %d, "
 	      "must be from 1 to ell-1 = %d",
 	      i,argv[i],dbg,p1,p->ell -1);
