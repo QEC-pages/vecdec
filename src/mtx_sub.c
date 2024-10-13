@@ -113,7 +113,7 @@ int var_init(int argc, char **argv, par_t *p){
       if(i+1 != argc)
 	ERROR("out=%s must be the last argument\n",p->out);
       if(!p->mat)
-	ERROR("must provide the matrix first, use fin=file_name\n");
+	ERROR("must provide the matrix, use fin=file_name\n");
       if (p->minR == -1)
 	p->minR = 0;
       if (p->maxR == -1)
@@ -142,7 +142,7 @@ int var_init(int argc, char **argv, par_t *p){
 	ERROR("memory allocation");
       snprintf(comment,size, "submatrix of %s minR=%d maxR=%d minC=%d maxC=%d\n", p->fin, p->minR, p->maxR, p->minC, p->maxC);
       printf("%s\n", comment);
-      csr_mm_write(p->out,".mtx",sub, comment);
+      csr_mm_write(p->out,"",sub, comment);
       free(comment);
       csr_free(sub);      
     }    
