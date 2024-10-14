@@ -1471,8 +1471,8 @@ int var_init(int argc, char **argv, params_t *p){
   
   switch(p->mode){
   case 1: /** both `mode=1` (BP) and `mode=0` */
-    if(p->debug&2)
-            out_LLR_params(LLR_table);
+    if(p->debug&1)
+      out_LLR_params(LLR_table, p->debug&4 ? 0 : 1);
     if(p->debug&1){
       printf("# submode=%d, %s BP using %s LLR\n",
 	     p->submode,
@@ -1769,8 +1769,8 @@ int do_err_vecs(params_t * const p){
     if(p->fer0){
       il2=read_01(p->mE0,p->file_er0, &p->line_er0, p->fer0, 1, p->debug);
       if(il1!=il2)
-	ERROR("mismatched DET %s (line %lld) and ER0 %s (line %lld) files!",
-	      p->fdet,p->line_det,p->fer0,p->line_er0);
+	ERROR("mismatched DET %s ( line %lld, %d read now) and ER0 %s ( %lld lines, %d read) files!",
+	      p->fdet,p->line_det,il1, p->fer0,p->line_er0,il2);
       csr_mzd_mul(p->mHe,p->mA,p->mE0,0);
       if(p->debug&1)
 	printf("# updated %d det += A*e0 events\n",il1);
@@ -1845,12 +1845,14 @@ int main(int argc, char **argv){
 
     for(long long int iround=1; iround <= rounds; iround++){
       if(p->debug &1){
-	printf("# starting round %lld of %lld",   iround, rounds);
-	if(cnt[TOTAL])
-	  printf(" pfail=%g fail=%lld out of total=%lld\n",
-		 (double) (cnt[TOTAL]-cnt[SUCC_TOT])/cnt[TOTAL],  cnt[TOTAL]-cnt[SUCC_TOT], cnt[TOTAL]);
-	else
-	  printf("\n");
+	if (iround >1){
+	  printf("# starting round %lld of %lld",   iround, rounds);
+	  if(cnt[TOTAL])
+	    printf(" pfail=%g fail=%lld out of total=%lld\n",
+		   (double) (cnt[TOTAL]-cnt[SUCC_TOT])/cnt[TOTAL],  cnt[TOTAL]-cnt[SUCC_TOT], cnt[TOTAL]);
+	  else
+	    printf("\n");
+	}
       }
     
       if( !(ierr_tot = do_err_vecs(p)))
@@ -2181,10 +2183,18 @@ int main(int argc, char **argv){
       }
       if((p->nfail) && cnt[TOTAL]-cnt[SUCC_TOT] >= p->nfail)	  
 	break;
-    }    
+    }
+
     if(p->debug&1)
       ufl_cnt_print(p);
-    cnt_out(p->debug&1,p);
+    if (!((p->fdet)&&(p->fobs==NULL)&&(p->perr))){ /** except in the case of partial decoding */
+      if(p->steps > 0){  /** otherwise results are invalid as we assume syndromes to match */
+	cnt_out(p->debug&1,p);
+      }   
+    }
+    else if(p->debug&1)
+      printf("# all finished\n");
+
     if(srow)
       mzd_free(srow);
     if(pErr)

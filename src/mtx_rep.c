@@ -154,11 +154,11 @@ int var_init(int argc, char **argv, par_t *p){
       p->k=p->matL->rows;
       int rkL=rank_csr(p->matL);
       if(p->debug&1){
-	printf("# read matrix H %d by %d , rank=%d\n",
+	printf("# read matrix L %d by %d , rank=%d\n",
 	       p->k,p->matL->cols, rkL);
 	if(p->debug&8){
 	  if (p->n < 80){
-	    printf("# matrix H:\n");
+	    printf("# matrix L:\n");
 	    mzd_t *mmat = mzd_from_csr(NULL,p->matL);
 	    mzd_print(mmat);
 	    mzd_free(mmat);
