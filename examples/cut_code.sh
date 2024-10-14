@@ -26,11 +26,11 @@ $mtx_sub debug=0  fin= tmp/tmpH.mmx rows=0,3 rows=4,11 rows=12,19 rows=20,23
 # cut two matrices: A0, A1 (diagonal blocks)
 # 
 # A0: rows=0,11 cols=0,267
-$mtx_sub debug=0 fin=tmp/tmpH.mmx minR=0 maxR=11 minC=0 maxC=267 out=tmp/mA0
+$mtx_sub debug=0 fin=tmp/tmpH.mmx minR=0 maxR=11 minC=0 maxC=267 out=tmp/mA0.mtx
 # B1: rows=12,23 cols=0,38 -- this matrix is empty 
-$mtx_sub debug=0 fin=tmp/tmpH.mmx minR=12 maxC=38 out=tmp/mB1
+$mtx_sub debug=0 fin=tmp/tmpH.mmx minR=12 maxC=38 out=tmp/mB1.mtx
 # A1: rows=12,23 cols=39,290
-$mtx_sub debug=0 fin=tmp/tmpH.mmx minR=12 minC=39 out=tmp/mA1
+$mtx_sub debug=0 fin=tmp/tmpH.mmx minR=12 minC=39 out=tmp/mA1.mtx
 
 # prepare the first slice for decoding with A0 (cols from 1):
 cut -c 1-12 tmp/bigD.01 > tmp/oneD.01

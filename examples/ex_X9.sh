@@ -1,8 +1,8 @@
 num=1000
 # prepare the matrices end probability vectors (extension '.mtx' added)
-src/mtx_sub fin=bigH.mmx maxR=83 maxC=1401 out=tryA1
-src/mtx_sub fin=bigH.mmx minR=36 maxC=585  out=tryB2
-src/mtx_sub fin=bigH.mmx minR=36 minC=586  out=tryA2
+src/mtx_sub fin=bigH.mmx maxR=83 maxC=1401 out=tryA1.mtx
+src/mtx_sub fin=bigH.mmx minR=36 maxC=585  out=tryB2.mtx
+src/mtx_sub fin=bigH.mmx minR=36 minC=586  out=tryA2.mtx
 # split the probability vector (this is a hack)
 # P1
 grep %% bigP.mmx > tryP1.mmx # Matrix Market header

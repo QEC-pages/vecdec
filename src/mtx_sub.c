@@ -57,21 +57,28 @@ par_t var={
 };
 
 int var_init(int argc, char **argv, par_t *p){
-  int dbg=0;
+  int dbg=0; 
+  int cnt=0;
+
+  for(int i=1; i<argc; i++){
+    if(sscanf(argv[i],"debug=%d",& dbg)==1){/** `debug` */
+      cnt++;
+      if(cnt==1)
+	p->debug = dbg; /** just assign if encountered once */
+      else
+	p->debug ^= dbg; /** otherwise `XOR` */
+      if(p->debug &4)
+	printf("# read %s, debug=%d octal=%o\n",argv[i],p->debug,p->debug);      
+    }
+  };
+
+  if (argc==1)
+    ERROR("try '%s --help'\n",argv[0]);
   
   for(int i=1; i<argc; i++){
     int pos=0;
-    if(sscanf(argv[i],"debug=%d",& dbg)==1){/** `debug` */
-      if(dbg==0)
-	p->debug = 0;
-      else{
-        if(i==1)
-          p->debug = dbg; /** just assign if in the `1st position` */
-        else
-          p->debug ^= dbg; /** otherwise `XOR` */
-        if(p->debug &4)
-	  printf("# read %s, debug=%d octal=%o\n",argv[i],p->debug,p->debug);
-      }
+    if(sscanf(argv[i],"debug=%d",& dbg)==1){
+      /** `debug` - do nothing - already processed */
     }
     else if (0==strncmp(argv[i],"fin=",4)){ /** `fin` */
       if(strlen(argv[i])>4)
@@ -87,7 +94,7 @@ int var_init(int argc, char **argv, par_t *p){
       if(p->debug&128){
 	if(p->debug&1)
 	  printf("# original matrix:\n");
-	if (p->mat->cols < 50){
+	if (p->mat->cols < 100){
 	  mzd_t *mmat = mzd_from_csr(NULL,p->mat);
 	  mzd_print(mmat);
 	  mzd_free(mmat);
@@ -106,7 +113,7 @@ int var_init(int argc, char **argv, par_t *p){
       if(i+1 != argc)
 	ERROR("out=%s must be the last argument\n",p->out);
       if(!p->mat)
-	ERROR("must provide the matrix first, use fin=file_name\n");
+	ERROR("must provide the matrix, use fin=file_name\n");
       if (p->minR == -1)
 	p->minR = 0;
       if (p->maxR == -1)
@@ -121,7 +128,7 @@ int var_init(int argc, char **argv, par_t *p){
       //      if(p->debug&128)	csr_out(sub);
       if(p->debug&128){
 	printf("# created submatrix:\n");
-	if(sub->cols < 50){
+	if(sub->cols <100){
 	  mzd_t *msub = mzd_from_csr(NULL,sub);
 	  mzd_print(msub);
 	  mzd_free(msub);
@@ -134,8 +141,8 @@ int var_init(int argc, char **argv, par_t *p){
       if(!(comment = malloc(size + 1)))
 	ERROR("memory allocation");
       snprintf(comment,size, "submatrix of %s minR=%d maxR=%d minC=%d maxC=%d\n", p->fin, p->minR, p->maxR, p->minC, p->maxC);
-      printf("%s\n", comment);
-      csr_mm_write(p->out,".mtx",sub, comment);
+      //      printf("%s\n", comment);
+      csr_mm_write(p->out,"",sub, comment);
       free(comment);
       csr_free(sub);      
     }    
@@ -146,7 +153,7 @@ int var_init(int argc, char **argv, par_t *p){
       if(!p->mat)
 	ERROR("must provide the matrix first, use fin=file_name\n");
       if((dbg<0) || (dbg>= p->mat->rows))
-	ERROR("minR must be in the range from 0 to rows-1=%d\n", p->mat->rows-1);
+	ERROR("minR=%d must be in the range from 0 to rows-1=%d\n", dbg,p->mat->rows-1);
       if((p->maxR !=-1) && (dbg > p->maxR))
 	ERROR("minR must not exceed maxR=%d\n", p->maxR);
     }
@@ -157,7 +164,7 @@ int var_init(int argc, char **argv, par_t *p){
       if(!p->mat)
 	ERROR("must provide the matrix first, use fin=file_name\n");
       if((dbg<0) || (dbg>= p->mat->rows))
-	ERROR("maxR must be in the range from 0 to rows-1=%d\n", p->mat->rows-1);
+	ERROR("maxR=%d must be in the range from 0 to rows-1=%d\n", dbg, p->mat->rows-1);
       if((p->minR !=-1) && (dbg < p->minR))
 	ERROR("maxR must not be smaller than minR=%d\n", p->minR);
     }
@@ -168,7 +175,7 @@ int var_init(int argc, char **argv, par_t *p){
       if(!p->mat)
 	ERROR("must provide the matrix first, use fin=file_name\n");
       if((dbg<0) || (dbg>= p->mat->cols))
-	ERROR("minC must be in the range from 0 to cols-1=%d\n", p->mat->cols-1);
+	ERROR("minC=%d must be in the range from 0 to cols-1=%d\n",dbg, p->mat->cols-1);
       if((p->maxC !=-1) && (dbg>p->maxC))
 	ERROR("minC must not exceed maxC=%d\n", p->maxC);
     }
@@ -179,7 +186,7 @@ int var_init(int argc, char **argv, par_t *p){
       if(!p->mat)
 	ERROR("must provide the matrix first, use fin=file_name\n");
       if((dbg<0) || (dbg>= p->mat->cols))
-	ERROR("maxC must be in the range from 0 to cols-1=%d\n", p->mat->cols-1);
+	ERROR("maxC=%d must be in the range from 0 to cols-1=%d\n", dbg,p->mat->cols-1);
       if((p->minC !=-1) && (dbg < p->minC))
 	ERROR("maxC must not be smaller than minC=%d\n", p->minC);
     }

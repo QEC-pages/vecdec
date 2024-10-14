@@ -81,21 +81,25 @@ extern "C"{
     return result;
 }
 
-  void out_LLR_params(qllr_params_t *lcu){
-    printf( "---------- LLR calculation unit -----------------\n");
-    printf( "LLR_calc_unit table properties:\n");
-    printf( "The granularity in the LLR representation is %g \n", pow2i(- lcu->Dint1));
-    printf( "The LLR scale factor is %d\n", 1 << lcu->Dint1);
-    printf( "The largest LLR that can be represented is %g\n", dbl_from_llr(QLLR_MAX));
-    printf( "The table resolution is %g\n", pow2i(lcu->Dint3 - lcu->Dint1));
-    printf( "The number of entries in the table is %d\n", lcu->Dint2);
-    printf( "The tables truncates at the LLR value %g\n",pow2i(lcu->Dint3 - lcu->Dint1) * lcu->Dint2);
-    printf( "-------------------------------------------------\n");
+  void out_LLR_params(qllr_params_t *lcu, int brief){
+    if (brief)
+      printf("# LLR calculation unit uses quantized LLR\n");
+    else{
+      printf( "# ---------- LLR calculation unit -----------------\n");
+      printf( "# LLR_calc_unit table properties:\n");
+      printf( "# The granularity in the LLR representation is %g \n", pow2i(- lcu->Dint1));
+      printf( "# The LLR scale factor is %d\n", 1 << lcu->Dint1);
+      printf( "# The largest LLR that can be represented is %g\n", dbl_from_llr(QLLR_MAX));
+      printf( "# The table resolution is %g\n", pow2i(lcu->Dint3 - lcu->Dint1));
+      printf( "# The number of entries in the table is %d\n", lcu->Dint2);
+      printf( "# The tables truncates at the LLR value %g\n",pow2i(lcu->Dint3 - lcu->Dint1) * lcu->Dint2);
+      printf( "# -------------------------------------------------\n");
+    }
 }
 
 #else /* not USE_QLLR */
-  void out_LLR_params(_maybe_unused qllr_params_t *lcu){
-    printf( "---------- LLR calculation unit uses exact double arithmetic ------------\n");
+  void out_LLR_params(_maybe_unused qllr_params_t *lcu, _maybe_unused brief){
+    printf( "# LLR calculation unit uses double precision arithmetic\n");
   }
 
   qllr_params_t * init_LLR_tables (const int d1, const int d2, const int d3){
