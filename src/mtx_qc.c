@@ -17,7 +17,7 @@
 
 #define MAX_ROWS 10
 #define MAX_COLS 10
-#define MAX_W 10
+#define MAX_W 20
 #define WGHT(i,j) p->wght[p->rows*(i)+(j)]
 #define COEF(i,j,k) p->poly[MAX_W*(p->cols*(i)+(j))+k]
 
