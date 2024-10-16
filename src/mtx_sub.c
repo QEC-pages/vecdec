@@ -140,8 +140,8 @@ int var_init(int argc, char **argv, par_t *p){
       size_t size = snprintf(NULL, 0, "submatrix of %s minR=%d maxR=%d minC=%d maxC=%d\n", p->fin, p->minR, p->maxR, p->minC, p->maxC);
       if(!(comment = malloc(size + 1)))
 	ERROR("memory allocation");
-      snprintf(comment,size, "submatrix of %s minR=%d maxR=%d minC=%d maxC=%d\n", p->fin, p->minR, p->maxR, p->minC, p->maxC);
-      //      printf("%s\n", comment);
+      snprintf(comment,size, "submatrix of %s minR=%d maxR=%d minC=%d maxC=%d",
+	       p->fin, p->minR, p->maxR, p->minC, p->maxC);
       csr_mm_write(p->out,"",sub, comment);
       free(comment);
       csr_free(sub);      

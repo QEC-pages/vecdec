@@ -15,9 +15,9 @@
 #include "utils.h"
 #include "util_m4ri.h"
 
-#define MAX_ROWS 10
-#define MAX_COLS 10
-#define MAX_W 10
+#define MAX_ROWS 20
+#define MAX_COLS 20
+#define MAX_W 40
 #define WGHT(i,j) p->wght[p->rows*(i)+(j)]
 #define COEF(i,j,k) p->poly[MAX_W*(p->cols*(i)+(j))+k]
 
@@ -26,10 +26,11 @@ typedef struct PAR_T {
   int cols; /** how many circulant cols, default 1 */
   int ell; /** size of a circulant (must be set), default `0` */
   int r[MAX_ROWS]; /** num rows in each row block (values can't exceed `n`) */
+  int c[MAX_COLS]; /** num cols in each column block (values can't exceed `n`) */
   int poly[(MAX_ROWS)*(MAX_COLS)*(MAX_W)]; /** coefficients of polynomials */
   int wght[(MAX_ROWS)*(MAX_COLS)]; /** polynomial weight (number of non-zero terms) */
   char *out; /** name of the output file */
-  int tot_cols,tot_rows; /** actual size of the matrix: `n=cols*ell`, `r=r[0]+r[1]+... r[rows]` */
+  int tot_cols,tot_rows; /** actual size of the matrix: `n=c[0]+c[1]+... +c[cols]`, `r=r[0]+r[1]+... r[rows]` */
   csr_t *mat; /** constructed matrix */
   int debug;
 } par_t;
@@ -59,6 +60,7 @@ par_t *p = &params;
   "\t a#_#=[int,int,...]\t degrees of polynomial (row,col)\n" \
   "\t b_#=... b#_#=...\t same but also revert the polynomial\n" \
   "\t r#=int\t: number of rows in row block '#' (cannot exceed ell, the default value)\n" \
+  "\t c#=int\t: number of cols in col block '#' (cannot exceed ell, the default value)\n" \
   "\t\t Specify polynomials only for non-zero blocks\n" \
   "\t\t List polynomial deegrees in increasing order from 0 to (ell-1)\n" \
   "\t debug=[integer]\t: bitmap for aux information to output (default: 1)\n" \
@@ -168,6 +170,8 @@ int var_init(int argc, char **argv, par_t *p){
   }
   for(int i=0; i< p->rows; i++)
     p->r[i]=p->ell; /** default values */
+  for(int i=0; i< p->cols; i++)
+    p->c[i]=p->ell; /** default values */
   
   for(int i=1; i<argc; i++){   /** remaining arguments */
     int pos, dbg, p1=0, p2=0;
@@ -189,14 +193,26 @@ int var_init(int argc, char **argv, par_t *p){
       if((p1<0) || (p1>=p->rows))
 	ERROR("arg[%d]='%s' : invalid row index %d, must be from 0 to rows-1 = %d\n",
 	      i,argv[i],p1,p->rows -1);
-      if((dbg<0) || (dbg> p->ell))
+      if((dbg<=0) || (dbg> p->ell))
 	ERROR("arg[%d]='%s' invalid row num=%d in row block %d, "
-	      "must be from 1 to ell-1 = %d",
-	      i,argv[i],dbg,p1,p->ell -1);
+	      "must be from 1 to ell = %d",
+	      i,argv[i],dbg,p1,p->ell);
       p -> r[p1] = dbg;
       if (p->debug&4)
 	printf("# read %s, setting r[%d]=%d\n",argv[i],p1,p->r[p1]);
     }
+    else if (sscanf(argv[i],"c%d=%d",&p1, & dbg)==2){ /** `c#=` */
+      if((p1<0) || (p1>=p->cols))
+	ERROR("arg[%d]='%s' : invalid col index %d, must be from 0 to cols-1 = %d\n",
+	      i,argv[i],p1,p->cols -1);
+      if((dbg<=0) || (dbg> p->ell))
+	ERROR("arg[%d]='%s' invalid col num=%d in column block %d, "
+	      "must be from 1 to ell = %d",
+	      i,argv[i],dbg,p1,p->ell);
+      p -> c[p1] = dbg;
+      if (p->debug&4)
+	printf("# read %s, setting c[%d]=%d\n",argv[i],p1,p->c[p1]);
+    }    
     else if ((sscanf(argv[i],"a_%d=%d%n",&p2, & dbg, &pos)==2)||
 	     (sscanf(argv[i],"a%d_%d=%d%n",&p1, &p2, &dbg, &pos)==3)){
       /* a[p1,p2]=... */
@@ -218,14 +234,19 @@ int var_init(int argc, char **argv, par_t *p){
 int main(int argc, char **argv){
   var_init(argc,argv, p);
 
-  int n = p->ell * p->cols; /* number of columns */
+  int n = 0; /* number of columns */
+  for(int i=0; i< p->cols; i++){
+    int ci= p->c[i]; /* cols in this block */
+    n += ci;
+  }
+
   int rc =0; /* row count */
   int nz=0; /* non-zero elements */
   for(int i=0; i< p->rows; i++){
     int ri= p->r[i]; /* rows in this block */
     rc += ri;
     for(int j=0; j< p->cols; j++){
-      nz+= WGHT(i,j) * ri;
+      nz+= WGHT(i,j) * ri; //! OK for an estimate 
     }
   }
   if(p->debug&1)
@@ -249,32 +270,36 @@ int main(int argc, char **argv){
   for (int br=0; br< p->rows; br++){ /** block row index  */
     for(int ii=0; ii< p->r[br]; ii++, gr++){ /** rows in block */
       int cbeg=0; /** start column of this block */
-      for(int bc=0; bc < p->cols; bc++, cbeg+=p->ell){ /** block columns */
+      for(int bc=0; bc < p->cols; cbeg += p->c[bc], bc++){ /** block columns */
 	int wei=WGHT(br,bc);
 	for(int idx=0; idx<wei; idx++){
 	  int i_shift = (ii+wei-idx)%wei; /* shifted element index */
 	  //	  int c_shift = (ii+p->ell+COEF(br,bc,i_shift))%(p->ell);
 	  int c_shift = (ii + p->ell - COEF(br,bc,i_shift)) % (p->ell);
 	  if(p->debug&16)
-	    printf("br=%d ii=%d bc=%d idx=%d i_s=%d c_beg=%d c_s=%d  ge=%d COEF=%d\n",
-		   br,ii,bc,idx,i_shift,cbeg,c_shift,ge,COEF(br,bc,i_shift));
+	    printf("br=%d gr=%d gc=%d ii=%d bc=%d idx=%d i_s=%d c_beg=%d "
+		   "c_shift=%d  ge=%d COEF=%d %s\n",
+		   br,gr,cbeg+c_shift,ii,bc,idx,i_shift,cbeg,c_shift,ge,COEF(br,bc,i_shift),
+		   c_shift >= p->c[bc] ? "skipping":"");
 	  /** write a list of pairs */
-	  p->mat->p[ge] = gr;
-	  p->mat->i[ge++] = cbeg + c_shift;
+	  if(c_shift < p->c[bc]){
+	    p->mat->p[ge] = gr;
+	    p->mat->i[ge++] = cbeg + c_shift;
+	  }
 	}
       }
     }
   }
-  if((nz!=ge)||(gr!=rc))
+  if((nz<ge)||(gr!=rc))
     ERROR("this should not happen: nz=%d ge=%d  rc=%d gr=%d\n",nz,ge,rc,gr);
-  p->mat->nz=nz; /* non-zero elements */
+  p->mat->nz=ge; /* actual count of non-zero elements */
 
   //  if(p->debug&64)    csr_out(p->mat);
   csr_compress(p->mat);
 
 
   if(p->debug&8){
-    if(p->mat->cols<80){
+    if(p->mat->cols<100){
       mzd_t *dmat = mzd_from_csr(NULL,p->mat);
       mzd_print(dmat);
       mzd_free(dmat);
@@ -285,7 +310,7 @@ int main(int argc, char **argv){
 
   const size_t siz=1000;
   char comment[siz+1];
-  snprintf(comment,siz,"QC block matrix [%d,%d] ell=%d\n",p->rows,p->cols, p->ell);
+  snprintf(comment,siz,"QC block matrix [%d,%d] ell=%d",p->rows,p->cols, p->ell);
   comment[siz]='\0';/** sanity check */
   csr_mm_write(p->out,"" /** no extension */, p->mat, comment);
   if(p->mat) csr_free(p->mat);
