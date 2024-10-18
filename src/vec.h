@@ -78,6 +78,30 @@ typedef struct VEC_T{
     return w;
   }
 
+  /** @brief given a vector of weight `w`, construct alphabetically next vector */
+/** @brief alphabetically next vector of weight `w`
+ *  0<= err[0] < err[1] < ... < err[w] < max
+ *
+ */
+int vec_next(vec_t * const vec){
+  const int w = vec->wei;
+  const int max = vec->max; 
+  if(w>=max)
+    return 0;
+  int i, top=max;
+  for(i=w-1; i>=0; i--){
+    top--;
+    if(vec->vec[i]<top)
+      break;
+  }
+  if(i<0)
+    return 0; /** no more vectors */
+  vec->vec[i]++;
+  for(int j=i;j+1<w;j++)
+    vec->vec[j+1]=vec->vec[j]+1;
+  return 1;
+}
+
   
   
 /** @brief print entire `vec_t` structure by pointer */
