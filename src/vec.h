@@ -83,7 +83,7 @@ typedef struct VEC_T{
  *  0<= err[0] < err[1] < ... < err[w] < max
  *
  */
-int vec_next(vec_t * const vec){
+static inline int vec_next(vec_t * const vec){
   const int w = vec->wei;
   const int max = vec->max; 
   if(w>=max)

@@ -30,7 +30,9 @@ extern "C"{
 #define ERROR(fmt,...)							\
   do{									\
     fprintf (stderr, "%s:%d: *** ERROR in function '%s()' ***\n", __FILE__, __LINE__, __FUNCTION__); \
-    printf("[31;1m " fmt " [0m \n",##__VA_ARGS__);			\
+    fprintf(stderr,"[31;1m " fmt " [0m \n",##__VA_ARGS__);		\
+    printf(" " fmt " \n",##__VA_ARGS__);			\
+    fflush(stdout);							\
     exit(-1);								\
   }									\
   while(0)
