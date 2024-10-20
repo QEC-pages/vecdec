@@ -587,5 +587,26 @@ observable or soft-out row), and rows not-yet decoded.
  ./src/vecdec debug=1 seed=$s steps=5000 lerr=1 finH= ./examples/96.3.963.alist useP=0.05 ntot=1 nvec=1 uW=-1
  ```
   **verified this is not a bug but genuine equal-weight vectors (code distance is 6)**
-  
-
+ - [ ] Rewrite the cluster routine in `vecdec` for the special case
+       `uW=2 uR=1`, starting with a single check node and
+       double-cycling over neighboring variable nodes.  This would
+       create all $N_c*d_c*(d_c-1)/2$ weight-two combinations for such
+       neighboring errors (Would it be sufficient to cover all
+       weight-two clusters?  Why not?)
+ - [ ] generalization for tree-like connected clusters of higher weight.
+ - [ ] For `dist_m4ri`, add a mode for computing the confinement.
+       Namely, store all errors/syndrome combinations by syndrome and
+       the corresponding minimum weight error.
+ - [ ] Come up with a notion of a distance suitable for SS two-step
+       and SS one-step decoding.  At what minimum error/syndrome
+       weight would a non-trivial error show up? (That would cause the
+       decoding to fail).
+ - [ ] Can we come up with a some sort of a *locality distance*?  That
+       is, error weight to guarantee decoding cluster locality.
+ - [ ] Write a separate program for PRE+BP+OSD decoding, to save on
+       matrix rewriting.  Try partial cluster matching (with the
+       partially matched vectors correctly participating in the weight
+       calculation)
+ - [ ] For cluster matching, come up with the notion of locality distance.
+ - [ ] Try to use `sparse6` format to store error vectors and/or
+       binary matrices.  See `nauty` source code.
