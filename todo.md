@@ -568,10 +568,10 @@ observable or soft-out row), and rows not-yet decoded.
 - [ ] All debugging output -> `stderr`
 
 ### new items 2014/09/14
- - [ ] make sure steps=0 and uW=0 generates no fail stats when writing `det` and `obs` files
+ - [x] make sure steps=0 and uW=0 generates no fail stats when writing `det` and `obs` files
  - [ ] Come up with `cli` file to generate nice html documentation
        from `adoc` (with properly included files)
- - [ ] Come up with a script to verify the results statistics from the `ex_**.sh` files
+ - [x] Come up with a script to verify the results statistics from the `ex_**.sh` files
  - [ ] Make more examples with internal error generation for classical and quantum codes 
  - [x] here `lerr=1` seems to be detrimental:
  ```
