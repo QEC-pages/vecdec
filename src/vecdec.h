@@ -404,7 +404,7 @@ typedef struct UFL_T {
   "\t debug=[integer]\t: bitmap for aux information to output (default: 1)\n" \
   "\t\t*   0: clear the entire debug bitmap to 0.\n"                    \
   "\t\t*   1: output misc general info (on by default)\n"		\
-  "\t\t*   2: output matrices for verification\n"                       \
+  "\t\t*   2: additional info; calculate code confinement\n"            \
   "\t\t\t see the source code for more options\n"			\
   "\t See program documentation for input file syntax.\n"               \
   "\t Multiple 'debug' parameters are XOR combined except for 0.\n"	\
@@ -454,7 +454,11 @@ typedef struct UFL_T {
   "\t\t in an error vector stored in the hash; no limit if 'uR=0'\n"	\
   "\t\t Parameter 'uX', when non-zero, allows the use of partially matched syndrome clusters,\n" \
   "\t\t in which case only residual error is sent to the main decoder\n" \
-  "\t\t (default: 0, use only fully matched syndrome vectors)\n"	
+  "\t\t (default: 0, use only fully matched syndrome vectors)\n"	\
+  "\t\t (partial cluster decoding mode is experimental, may not work!)\n" \
+  "\t\t With debug&2 non-zero and uW>0, print out the confinement function\n" 
+  
+  
   //  "\t\t 'finU' / 'outU' names of likely error vectors file (not implemented)\n" 
   //  "\t\t\t(the file will be overwritten if names are the same). \n"
 
