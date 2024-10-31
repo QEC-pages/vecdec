@@ -36,7 +36,7 @@ void mzd_row_print_sparse(const mzd_t * const A, const int row){
 }
 
 
-size_t mzd_weight(const mzd_t *A){
+size_t mzd_weight(const mzd_t * const A){
   size_t count = 0;
   if(A->width == 1) {
     for(rci_t i = 0; i < A->nrows; ++i)
@@ -46,7 +46,7 @@ size_t mzd_weight(const mzd_t *A){
     return (count);
   }
   for(rci_t i = 0; i < A->nrows; ++i) {
-    word *truerow = mzd_row(A,i);
+    const word * const truerow = mzd_row_const(A,i);
     for(wi_t j = 0; j < A->width - 1; j ++)
       count += m4ri_bitcount(truerow[j]);
 
@@ -60,7 +60,7 @@ size_t mzd_weight(const mzd_t *A){
 
 int mzd_row_is_zero(const mzd_t  * const A, const int i) {
   const word mask_end = A->high_bitmask;
-  const word * const truerow = mzd_row(A,i);
+  const word * const truerow = mzd_row_const(A,i);
   for (wi_t j = 0; j < A->width - 1; ++j)
     if(truerow[j])
       return 0;
@@ -550,7 +550,7 @@ csr_t * csr_from_mzd(csr_t *mat, const mzd_t * const orig){
     mat->p[i]=j;
 #if 1 /** optimized version */
     int idx=0;
-    const word * const rawrow = mzd_row(orig,i);
+    const word * const rawrow = mzd_row_const(orig,i);
     while(((idx=nextelement(rawrow,orig->width,idx))!=-1)&&
 	  (idx>=0)&&
 	  (idx<orig->ncols)){

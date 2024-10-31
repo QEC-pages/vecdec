@@ -140,7 +140,7 @@ static inline void write_01_vec(FILE *fout, const vec_t * const vec, const int c
 }
 
   static inline int mzd_row_vec_match(const mzd_t * const mat, const int row, const vec_t * const vec){
-    const word * const rawrow = mzd_row(mat,row);
+    const word * const rawrow = mzd_row_const(mat,row);
     int idx=-1;
 #if 1
     for(int i=0; i<vec->wei; i++){

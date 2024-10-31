@@ -141,7 +141,7 @@ qllr_t mzd_row_energ(const qllr_t * const coeff, const mzd_t *A, const int i){
     ERROR("this does not work on a windowed matrix, use `mzd_row_energ_naive()`");  
 #endif   
   qllr_t ans=0;
-  word const * truerow = mzd_row(A, i);
+  word const * truerow = mzd_row_const(A, i);
   //  mzd_print(A);
   //  for(rci_t j = 0; j < A->ncols; ++j)
   int j=-1;

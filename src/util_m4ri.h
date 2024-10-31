@@ -10,6 +10,11 @@
 
 #define SWAPINT(a,b) do{ int t=a; a=b; b=t; } while(0)
 
+#ifndef NEW_M4RI
+static inline word const * mzd_row_const(const mzd_t * mat, const int row){
+  return mat->rows[row] ;
+}
+#endif 
 
 /**
  * macros from nauty.h
@@ -150,7 +155,7 @@ size_t mzd_weight(const mzd_t *A);
 
   void mzd_row_print_sparse(const mzd_t * const A, const int row);  
 
-static inline void mzd_flip_bit(mzd_t const *M, rci_t const row, rci_t const col ) {
+static inline void mzd_flip_bit(mzd_t * const M, rci_t const row, rci_t const col ) {
   word * const rawrow = mzd_row(M,row);
   __M4RI_FLIP_BIT(rawrow[col/m4ri_radix], col%m4ri_radix);
 }
