@@ -1,4 +1,4 @@
-WARN = -Wall -Wsign-compare -Wextra
+WARN = -Wall -Wsign-compare -Wextra -Wimplicit-fallthrough=0
 # add -Warray-bounds=2 for run-time memory checks (does it actually work?)
 # OPT  = -O2 -g -pg # for use with gprof
 # use `-ggdb3` for use with valgrind
@@ -11,9 +11,16 @@ VER=-DUSE_QLLR
 # to compile on Mac you may need to disable '-march=native` 
 OPT = -g -march=native -mtune=native -O3 ${EXTRA}
 #OPT = -g -mtune=native -O3 ${EXTRA}
-CC = gcc
 CFLAGS = ${OPT} ${VER} ${WARN}
+
+# use '-DNEW_M4RI' switch if you have newer M4RI library, e.g., from
+# https://github.com/malb/m4ri
+#
+# CC = gcc  -I../../m4ri -L../../m4ri/.libs -DNEW_M4RI
+# CPP = g++  -I../../m4ri -L../../m4ri/.libs -DNEW_M4RI
+CC = gcc
 CPP = g++
+
 
 #-Wmissing-prototypes   -Wconversion -Wextra
 # -std=gnu11
@@ -36,17 +43,17 @@ vecdec: ${VECDEC_OBJS} ${VECDEC_XTRA} ${VECDEC_HDRS} Makefile
 %.o: %.c ${VECDEC_HDRS} Makefile 
 	${CC} ${CFLAGS} -c $<
 
-mtx_sub: mtx_sub.o utils.h util_m4ri.h util_m4ri.o utils.o mmio.o Makefile 
-	${CPP} ${OPT} ${WARN} -o mtx_sub $< util_m4ri.o utils.o mmio.o -l m4ri
+mtx_sub: mtx_sub.c utils.h util_m4ri.h util_m4ri.o utils.o mmio.o Makefile 
+	${CC} ${OPT} ${WARN} -o mtx_sub $< util_m4ri.o utils.o mmio.o -l m4ri -lm
 
-mtx_qc: mtx_qc.o utils.h util_m4ri.h util_m4ri.o utils.o mmio.o Makefile 
-	${CPP} ${OPT} ${WARN} -o mtx_qc $< util_m4ri.o utils.o mmio.o -l m4ri
+mtx_qc: mtx_qc.c utils.h util_m4ri.h util_m4ri.o utils.o mmio.o Makefile 
+	${CC} ${OPT} ${WARN} -o mtx_qc $< util_m4ri.o utils.o mmio.o -l m4ri -lm
 
-mtx_rep: mtx_rep.o utils.h util_m4ri.h util_m4ri.o utils.o mmio.o Makefile 
-	${CPP} ${OPT} ${WARN} -o mtx_rep $< util_m4ri.o utils.o mmio.o -l m4ri
+mtx_rep: mtx_rep.c utils.h util_m4ri.h util_m4ri.o utils.o mmio.o Makefile 
+	${CC} ${OPT} ${WARN} -o mtx_rep $< util_m4ri.o utils.o mmio.o -l m4ri -lm
 
-mtx_fw: mtx_fw.o utils.h vec.h Makefile tinymt64.o util_m4ri.o utils.o mmio.o
-	${CPP} ${OPT} ${WARN} -o mtx_fw $< tinymt64.o util_m4ri.o utils.o mmio.o -l m4ri
+mtx_fw: mtx_fw.c utils.h vec.h Makefile tinymt64.o util_m4ri.o utils.o mmio.o
+	${CC} ${OPT} ${WARN} -o mtx_fw $< tinymt64.o util_m4ri.o utils.o mmio.o -l m4ri -l m 
 
 mtx_01_to_nz: mtx_01_to_nz.c Makefile 
 	${CC} ${OPT} ${WARN} -o mtx_01_to_nz $< 

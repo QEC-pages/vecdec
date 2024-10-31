@@ -803,7 +803,7 @@ int dec_ufl_one(const mzd_t * const srow, params_t * const p){
 
   /** convert mzd_t *srow -> vec_t *svec */
   int idx=0, w=0;
-  const word * const rawrow = srow->rows[0];
+  const word * const rawrow = mzd_row_const(srow,0);
   while(((idx=nextelement(rawrow,srow->width,idx))!=-1)&&(idx<srow->ncols)){
     svec->vec[w++]=idx;
     if(++idx == srow->ncols)
