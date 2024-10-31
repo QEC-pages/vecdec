@@ -1,7 +1,7 @@
 #ifndef VECDEC_H
 #define VECDEC_H
 /**
- * @file vecdec.h
+ * @file vecdec.h 
  *
  * @brief vecdec - a simple vectorized decoder
  *
