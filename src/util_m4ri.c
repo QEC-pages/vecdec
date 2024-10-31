@@ -46,7 +46,7 @@ size_t mzd_weight(const mzd_t *A){
     return (count);
   }
   for(rci_t i = 0; i < A->nrows; ++i) {
-    word *truerow = A->rows[i];
+    word *truerow = mzd_row(A,i);
     for(wi_t j = 0; j < A->width - 1; j ++)
       count += m4ri_bitcount(truerow[j]);
 
@@ -60,10 +60,11 @@ size_t mzd_weight(const mzd_t *A){
 
 int mzd_row_is_zero(const mzd_t  * const A, const int i) {
   const word mask_end = A->high_bitmask;
+  const word * const truerow = mzd_row(A,i);
   for (wi_t j = 0; j < A->width - 1; ++j)
-    if(A->rows[i][j])
+    if(truerow[j])
       return 0;
-  if(A->rows[i][A->width - 1] & mask_end)
+  if(truerow[A->width - 1] & mask_end)
     return 0;
   return 1;
 }
@@ -549,7 +550,7 @@ csr_t * csr_from_mzd(csr_t *mat, const mzd_t * const orig){
     mat->p[i]=j;
 #if 1 /** optimized version */
     int idx=0;
-    const word * const rawrow = orig->rows[i];
+    const word * const rawrow = mzd_row(orig,i);
     while(((idx=nextelement(rawrow,orig->width,idx))!=-1)&&
 	  (idx>=0)&&
 	  (idx<orig->ncols)){
@@ -1076,7 +1077,7 @@ csr_t *csr_apply_perm(csr_t *dst, const csr_t * const src, const mzp_t * const p
  */
 
 int do_reduce(mzd_t *row, const mzd_t *matP0, const rci_t rankP0){
-  word * rawrow = row->rows[0];  
+  word * rawrow = mzd_row(row,0);  
   rci_t j=0;
   rci_t n=row->ncols;
   do{

@@ -36,17 +36,17 @@ vecdec: ${VECDEC_OBJS} ${VECDEC_XTRA} ${VECDEC_HDRS} Makefile
 %.o: %.c ${VECDEC_HDRS} Makefile 
 	${CC} ${CFLAGS} -c $<
 
-mtx_sub: mtx_sub.o utils.h util_m4ri.h util_m4ri.o utils.o mmio.o Makefile 
-	${CPP} ${OPT} ${WARN} -o mtx_sub $< util_m4ri.o utils.o mmio.o -l m4ri
+mtx_sub: mtx_sub.c utils.h util_m4ri.h util_m4ri.o utils.o mmio.o Makefile 
+	${CC} ${OPT} ${WARN} -o mtx_sub $< util_m4ri.o utils.o mmio.o -l m4ri -lm
 
-mtx_qc: mtx_qc.o utils.h util_m4ri.h util_m4ri.o utils.o mmio.o Makefile 
-	${CPP} ${OPT} ${WARN} -o mtx_qc $< util_m4ri.o utils.o mmio.o -l m4ri
+mtx_qc: mtx_qc.c utils.h util_m4ri.h util_m4ri.o utils.o mmio.o Makefile 
+	${CC} ${OPT} ${WARN} -o mtx_qc $< util_m4ri.o utils.o mmio.o -l m4ri -lm
 
-mtx_rep: mtx_rep.o utils.h util_m4ri.h util_m4ri.o utils.o mmio.o Makefile 
-	${CPP} ${OPT} ${WARN} -o mtx_rep $< util_m4ri.o utils.o mmio.o -l m4ri
+mtx_rep: mtx_rep.c utils.h util_m4ri.h util_m4ri.o utils.o mmio.o Makefile 
+	${CC} ${OPT} ${WARN} -o mtx_rep $< util_m4ri.o utils.o mmio.o -l m4ri -lm
 
-mtx_fw: mtx_fw.o utils.h vec.h Makefile tinymt64.o util_m4ri.o utils.o mmio.o
-	${CPP} ${OPT} ${WARN} -o mtx_fw $< tinymt64.o util_m4ri.o utils.o mmio.o -l m4ri
+mtx_fw: mtx_fw.c utils.h vec.h Makefile tinymt64.o util_m4ri.o utils.o mmio.o
+	${CC} ${OPT} ${WARN} -o mtx_fw $< tinymt64.o util_m4ri.o utils.o mmio.o -l m4ri -l m 
 
 mtx_01_to_nz: mtx_01_to_nz.c Makefile 
 	${CC} ${OPT} ${WARN} -o mtx_01_to_nz $< 
