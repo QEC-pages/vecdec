@@ -2039,7 +2039,6 @@ int main(int argc, char **argv){
 	pLerr=mzd_init(1,p->mLt->cols);
     }
     for(long long int iround=1; iround <= rounds; iround++){
-      assert(iround>0 && "memory allocation failed");
       if(p->debug&1){
 	printf("# starting round %lld of %lld pfail=%g fail=%lld total=%lld\n", iround, rounds,
 	       cnt[TOTAL] ? (double) (cnt[TOTAL]-cnt[SUCC_TOT])/cnt[TOTAL] : 0.5, cnt[TOTAL]-cnt[SUCC_TOT], cnt[TOTAL]);
