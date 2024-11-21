@@ -1349,7 +1349,7 @@ int var_init(int argc, char **argv, params_t *p){
     ERROR("Please specify fdem=%s OR finH=%s but not both\n",p->fdem, p->finH);
 
   if(p->fdem){
-    if((p->finL)||(p->finP)||(p->finG)||(p->finH))
+    if((p->finL)||(p->finP)||(p->finH))
       ERROR("DEM file fdem=%s can not be specified together with \n"
 	    " finH=%s or finL=%s or finP=%s\n", p->fdem,  
 	    p->finH ? p->finH : "",  p->finL ? p->finL : "",  p->finP ? p->finP : "");
@@ -1372,18 +1372,19 @@ int var_init(int argc, char **argv, params_t *p){
 	ERROR("Without L matrix, cannot specify fdet=%s or fobs=%s\n",
 	      p->fdet ? p->fdet : "",  p->fobs ? p->fobs : "");      
     }
+    p->mH=csr_mm_read(p->finH, p->mH, 0, p->debug);
+    p->rankH = rank_csr(p->mH);
     if((! p->finL) && (! p->finG)){ /** only `H` matrix specified */
       p->classical=1;
       p->internal=1;
+      p->ncws = p->nvar - p->rankH;
     }
-    p->mH=csr_mm_read(p->finH, p->mH, 0, p->debug);
     p->nvar = p->mH->cols;
     p->nchk = p->mH->rows;
-    p->rankH = rank_csr(p->mH);
-    p->ncws = p->nvar - p->rankH;
   }
   /** at this point we should have `H` matrix for sure */
-  assert(p->mH);
+  if(p->mH == NULL)
+    ERROR("Must specify H matrix using 'finH=' or 'fdem=' argument!");
   
   if(p->mA){
     if(p->mA->rows != p->nchk)
@@ -1411,7 +1412,22 @@ int var_init(int argc, char **argv, params_t *p){
     if(p->mK->cols != p->nvar)
       ERROR("column number mismatch K[%d,%d] and H[%d,%d]\n",
 	    p->mK->rows, p->mK->cols, p->mH->rows, p->mH->cols);
-  }  
+
+    csr_t *Kt = csr_transpose(NULL, p->mK);
+    mzd_t *MKt = mzd_from_csr(NULL,Kt); /* convert to dense matrix */
+    if(p->mL){
+      mzd_t *prodLKt = csr_mzd_mul(NULL,p->mL,MKt,1);
+      int rank=mzd_gauss_delayed(prodLKt,0,0);
+      mzd_free(prodLKt);
+      if (rank != p->ncws)
+	ERROR("invalid L or K matrices: k=%d rank(K*L^T)=%d",p->ncws,rank);
+    }
+    csr_free(Kt);
+    if((p->mH)&&(product_weight_csr_mzd(p->mH,MKt,0)))
+      ERROR("rows of H=Hx and K=Lz should be orthogonal \n");
+    mzd_free(MKt);
+  }
+
 
   if(p->finG){
     p->mG=csr_mm_read(p->finG, p->mG, 0, p->debug);
@@ -1426,15 +1442,43 @@ int var_init(int argc, char **argv, params_t *p){
     if((p->mH)&&(product_weight_csr_mzd(p->mH,MGt,0)))
       ERROR("rows of H=Hx and G=Hz should be orthogonal \n");
 
+    p->rankG = rank_csr(p->mG);
+    if((p->ncws >= 0) && (p->nvar != p->ncws + p->rankH + p->rankG))
+      ERROR("rank mismatch: nvar=%d k=%d rankG=%d rankH=%d\n",p->nvar,p->ncws,p->rankG,p->rankH);
+    
     if(!p->mL) /** create `Lx` */
       /** WARNING: this does not necessarily have minimal row weights */
       p->mL=Lx_for_CSS_code(p->mH,p->mG);
-    p->ncws = p->mL->rows;
+    if(p->ncws >= 0){
+      if (p->mL->rows != p->ncws)
+	ERROR("code dimension mismatch: L->rows = %d k=%d\n",p->mL->rows,p->ncws);
+    }
+    else    
+      p->ncws = p->mL->rows;
 
     /** verify row orthogonality of `G` and `L` */
     if((p->mL)&&(product_weight_csr_mzd(p->mL,MGt,0)))
       ERROR("rows of L=Lx and G=Hz should be orthogonal \n");
     mzd_free(MGt);        
+  }
+
+  /** display input file information */
+  if(p->debug &1){
+    if(p->classical){
+      printf("# classical code n=%d  k=%d H->rows=%d H->nz=%d rankH=%d\n",p->nvar,p->nvar-p->rankH,p->nvar,
+	     p->mH->p[p->mH->rows], p->rankH);
+    }
+    else{
+      printf("# CSS code n=%d k=%d\n",p->nvar,p->ncws);
+      if(p->mH)
+	printf("# H=Hx[%d,%d] nz=%d rank=%d\n",p->mH->rows,p->mH->cols,p->mH->p[p->mH->rows],p->rankH);
+      if(p->mG)
+	printf("# G=Hz[%d,%d] nz=%d rank=%d\n",p->mG->rows,p->mG->cols,p->mG->p[p->mG->rows],p->rankG);
+      if(p->mL)
+	printf("# L=Lx[%d,%d] nz=%d rank=%d\n",p->mL->rows,p->mL->cols,p->mL->p[p->mL->rows],rank_csr(p->mL));
+      if(p->mK)
+	printf("# K=Lz[%d,%d] nz=%d rank=%d\n",p->mK->rows,p->mK->cols,p->mK->p[p->mK->rows],rank_csr(p->mK));
+    }
   }
 
   if(p->useP > 0){/** override probability values */
