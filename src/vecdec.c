@@ -1402,7 +1402,7 @@ int var_init(int argc, char **argv, params_t *p){
   if(p->finK){
     p->mK=csr_mm_read(p->finK, p->mK, 0, p->debug);
     int ncws = p->mK->rows;
-    if(p->ncws){
+    if(p->ncws >=0 ){
       if (ncws != p->ncws)
 	ERROR("number of codewords mismatch: K[%d,%d] and L[%d,%d]\n",
 	      p->mK->rows, p->mK->cols, p->mL->rows, p->mL->cols);

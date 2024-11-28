@@ -838,7 +838,7 @@ csr_t *csr_mm_read(char *fnam, csr_t *mat, int transpose, int debug){
 
   if (mm_read_banner(f, &matcode) != 0){
     /** try to read in `alist` format */
-    if(debug&1)
+    if(debug&2)
       printf("# Could not process Matrix Market banner; try 'alist' format\n");
     fclose(f);
     mat = csr_alist_read(fnam,mat,transpose,debug);    
@@ -885,6 +885,8 @@ csr_t *csr_mm_read(char *fnam, csr_t *mat, int transpose, int debug){
   csr_compress(mat); /* sort entries by row */
   // csr_out(mat);
   fclose(f);
+  if(debug&2)
+    printf("# read matrix %d x %d, nz=%d from file %s\n",M,N,nz,fnam);
   return mat;
 }
 
