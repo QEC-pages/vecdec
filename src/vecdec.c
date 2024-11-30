@@ -557,6 +557,7 @@ one_vec_t * do_hash_check(const int ee[], int weight, params_t * const p){
  */
 int do_LLR_dist(params_t  * const p, const int classical){
   const int dW=p->dW;
+  int maxW = p->maxW > 0 ? p->maxW : p->nvar;
   //  qllr_t dE=p->dE;
   /** whether to verify logical ops as a vector or individually */
   int use_vector=0;
@@ -583,6 +584,8 @@ int do_LLR_dist(params_t  * const p, const int classical){
 
   mzp_t * perm=mzp_init(p->nvar); /** identity column permutation */
   mzp_t * pivs=mzp_init(p->nvar); /** list of pivot columns */
+  mzp_t * pivs_srtd = mzp_init(p->nvar); /** sorted pivot list  */
+  mzp_t * skip_pivs = mzp_init(p->nvar); /** skip-pivot list  */
   if((!pivs) || (!perm))
     ERROR("memory allocation failed!\n");
 
@@ -604,7 +607,33 @@ int do_LLR_dist(params_t  * const p, const int classical){
         pivs->values[rank++]=col;
     }
     /** construct skip-pivot permutation */
-    mzp_t * skip_pivs = do_skip_pivs(rank, pivs);
+    pivs_srtd = mzp_copy(pivs_srtd,pivs);
+    qsort(pivs_srtd->values, rank, sizeof(pivs->values[0]), cmp_rci_t);
+    int end=-1, num=0;
+    for(int i=0; i < rank; i++){
+      int beg = end + 1;
+      end = pivs_srtd->values[i];
+      for(int j = beg; j < end; j++)
+	skip_pivs->values[num++] = j;
+      //      printf("beg=%d end=%d\n",beg,end);
+    }
+    for(int j = end + 1 ; j < p->nvar; j++)
+      skip_pivs->values[num++] = j;
+#if 0    
+    printf("beg=%d end=%d\n",end+1,p->nvar);
+    for(int i=0; i<rank; i++)
+      printf("%s%d%s", i==0?"# pivs_srtd=[":" ",pivs_srtd->values[i],i+1==rank?"]\n":"");
+    for(int i=0; i<num; i++)
+      printf("%s%d%s", i==0?"# skip_pivs=[":" ",skip_pivs->values[i],i+1==num?"]\n":"");
+#endif /* 0 */
+    
+#ifndef NDEBUG
+    if (num + rank != p->nvar)
+      ERROR("mismatch: rank=%d and num=%d do not add to nvar=%d\n",rank,num,p->nvar);
+#endif
+    skip_pivs->length = num;
+    //    mzp_t * skip_pivs = do_skip_pivs(rank, pivs);
+    //    skip_pivs = do_skip_pivs(rank, pivs);
 
     /** calculate sparse version of each vector (list of positions)
      *  `p`    `p``p`               # pivot columns marked with `p`   
@@ -612,16 +641,24 @@ int do_LLR_dist(params_t  * const p, const int classical){
      *  [   a2  1     b2 ]     [b1  0  b2 b3 1 ]
      *  [   a3     1  b3 ]
      */
-    int k = p->nvar - rank;
+    const int k = p->nvar - rank;
     for (int ir=0; ir< k; ir++){ /** each row in the dual matrix */
       int cnt=0; /** how many non-zero elements */
       const int col = ee[cnt++] = skip_pivs->values[ir];
       for(int ix=0; ix<rank; ix++){
         if(mzd_read_bit(mH,ix,col))
-          ee[cnt++] = pivs->values[ix];          
+          ee[cnt++] = pivs->values[ix];
+	if(cnt > maxW)
+	  break; /* not interesting */
       }
+      if(cnt > maxW)
+	continue; /** goto next row */
       /** sort the column indices */
+      //      for(int i=0; i<cnt; i++)
+      //	printf("%s%d%s", i==0?"# ee=[":" ",ee[i],i+1==cnt?"] before sorting\n":"");
       qsort(ee, cnt, sizeof(rci_t), cmp_rci_t);
+      //      for(int i=0; i<cnt; i++)
+      //	printf("%s%d%s", i==0?"# ee=[":" ",ee[i],i+1==cnt?"]\n":"");
       
       /** verify logical operator */
       int nz;
@@ -651,11 +688,13 @@ int do_LLR_dist(params_t  * const p, const int classical){
         /** at this point we have `cnt` codeword indices in `ee`, and its `energ` */
         if (cnt < p->minW){
           p->minW=cnt;
+	  if((dW>=0)&&(cnt+dW < maxW))
+	    maxW = cnt + dW; 
 	  if (p->minW <= p->dmin){ /** early termination condition */
 	    p->minW = - p->minW; /** this distance value is of little interest; */
 	  }
 	}
-        if((dW<0) || (cnt <= abs(p->minW) + dW)){ /** try to add to hashing storage */
+        if(cnt <= maxW){ /** try to add to hashing storage */
 	  one_vec_t *ptr=do_hash_check(ee,cnt,p); 
 	  if(ptr->cnt == 1){ /** new codeword just added to hash */
 	    ichanged++; 
@@ -674,7 +713,7 @@ int do_LLR_dist(params_t  * const p, const int classical){
       printf(" round=%d of %d minE=%g minW=%d num_cws=%lld ichanged=%d iwait=%d\n",
              ii+1, p->steps, dbl_from_llr(p->minE), p->minW, p->num_cws, ichanged, iwait);
     
-    mzp_free(skip_pivs);
+    //    mzp_free(skip_pivs);
     
     iwait = ichanged > 0 ? 0 : iwait+1 ;
     ichanged=0;
@@ -695,6 +734,8 @@ int do_LLR_dist(params_t  * const p, const int classical){
   /** clean up */
   mzp_free(perm);
   mzp_free(pivs);
+  mzp_free(skip_pivs);
+  mzp_free(pivs_srtd);
   free(ee);
   if(use_vector){
     if(eemLt)
@@ -790,6 +831,8 @@ void init_Ht(params_t *p){
   if((p->debug & 2)&&(p->debug &4096)){ /** print resulting vectors and matrices */
     if(p->useP>0)
       printf("# uniform error probability useP=%g LLR=%g\n",p->useP,dbl_from_llr(p->vLLR[0]));
+    else if (p->useP < 0)
+      printf("# useP=%g minimum-weight decoding \n",p->useP);
     else{
       printf("# P=[");
       for(int i=0; i< p->nvar; i++)
@@ -1492,6 +1535,8 @@ int var_init(int argc, char **argv, params_t *p){
       *ptr = p->useP;    
   }
   else if (p->finP){/** read probabilities */
+    if (p->useP < 0)
+      ERROR("useP=%g negative incompatible with finP=%s\n",p->useP,p->finP);
     int rows=0, cols=0, siz=0;
     p->vP = dbl_mm_read(p->finP, &rows, &cols, &siz, NULL);
     if ((rows != 1) || (cols != p->nvar))
@@ -1499,24 +1544,32 @@ int var_init(int argc, char **argv, params_t *p){
     if(p->debug&1)
       printf("# read %d probability values from %s\n", cols, p->finP);
   }
-  if(!p->vP)
+  else if (p->useP < 0){
+    if(p->vP){
+      free(p->vP);
+      p->vP = NULL;
+    }
+  }
+  if((!p->vP)&&(p->useP >= 0))
     ERROR("probabilities missing, specify 'fdem', 'finP', or 'useP'");
 
   if(p->mulP > 0){/** scale probability values */
+    if (p->useP < 0)
+      ERROR("useP=%g negative incompatible with non-zero mulP=%g\n",p->useP,p->mulP);
     double *ptr=p->vP;
     for(int i=0;i<p->nvar;i++, ptr++)
       *ptr *= p->mulP;    
   }
-    
-  LLR_table = init_LLR_tables(p->d1,p->d2,p->d3);
-
-  p->dE = llr_from_dbl(p->dEdbl);
+  if(p->vP){
+    LLR_table = init_LLR_tables(p->d1,p->d2,p->d3);
+    p->dE = llr_from_dbl(p->dEdbl);
+  }
   //  p->uE = llr_from_dbl(p->uEdbl);
   
   switch(p->mode){
   case 1: /** both `mode=1` (BP) and `mode=0` */
-    if(p->debug&1)
-      out_LLR_params(LLR_table, p->debug&4 ? 0 : 1);
+    if(p->vP == NULL)
+      ERROR("mode=1 BP decoding cannot have useP=%g negative",p->useP);
     if(p->debug&1){
       printf("# submode=%d, %s BP using %s LLR\n",
 	     p->submode,
@@ -1534,6 +1587,8 @@ int var_init(int argc, char **argv, params_t *p){
       ERROR(" mode=%d BP : submode='%d' currently unsupported\n", p->mode, p->submode);    
     /* fall through */
   case 0:
+    if((p->debug&1)&&(p->vP))
+      out_LLR_params(LLR_table, p->debug&4 ? 0 : 1);
     if(p->classical){
       p->mL=do_L_classical(p->mH, p);
       p->ncws = p->mL->rows;
@@ -1621,6 +1676,9 @@ int var_init(int argc, char **argv, params_t *p){
     
     break;
   case 2: /** estimate success probability */
+    if((p->useP<0)&&(p->submode))
+      ERROR("mode=%d submode=%d incompatible with weight-only mode useP=%g negative",
+	    p->mode,p->submode,p->useP);
     if((p->fdet!=NULL)||(p->fobs!=NULL) ||(p->ferr!=NULL))
       ERROR(" mode=%d, must not specify 'ferr' or 'fobs' or 'fdet' files\n",
 	    p->mode);
@@ -1632,6 +1690,9 @@ int var_init(int argc, char **argv, params_t *p){
   case 3: /** read in DEM file and output the H, L, G, K matrices and P vector */
     if(strcmp(p->fout,"stdout")==0)
       p->use_stdout=1;
+    if(((p->submode&16)||(p->submode==32)||(p->submode==64))&&(p->useP < 0))
+      ERROR("mode=%d submode=%d incompatible with weight-only mode useP=%g negative",
+	    p->mode,p->submode,p->useP);
     if (p->submode>64)
       ERROR(" mode=%d : submode='%d' unsupported\n",
 	    p->mode, p->submode);
@@ -1726,7 +1787,10 @@ int var_init(int argc, char **argv, params_t *p){
       break;
     case 2:
       printf("# Analyze small-weight codewords in %d RIS steps; swait=%d\n",p->steps,p->swait);
-      printf("# maxC=%lld dE=%g dW=%d maxW=%d\n",p->maxC, dbl_from_llr(p->dE), p->dW, p->maxW);
+      if(p->useP >= 0)
+	printf("# maxC=%lld dE=%g dW=%d maxW=%d\n",p->maxC, dbl_from_llr(p->dE), p->dW, p->maxW);
+      else 
+	printf("# maxC=%lld dW=%d maxW=%d\n",p->maxC, p->dW, p->maxW);
       printf("# calculating %s%sminimum weight\n",p->submode&1 ? "est fail prob, ":"", p->submode&1 ? "exact fail prob, ":"");
       break;
     case 3:
