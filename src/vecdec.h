@@ -173,7 +173,8 @@ typedef struct UFL_T {
     int classical; /** `1` if this is a classical code? */
     int internal; /** `1` to generate obs/det internally, `2` to generate from `err` file */
     long long int seed;  /** rng `seed`, set<=0 for automatic */
-    double useP; /** global error probability `overriding` values in the `DEM` file (default: 0, no override) */
+    double useP; /** global error probability `overriding` values in the `DEM` file (default: 0, no override)
+		  negative value means weight-only mode (no probabilities specified) */
     double mulP; /** scale error probability values in the `DEM` file (default: 0, no scaling) */
     double *vP; /** probability vector (total of `n`) */
     qllr_t *vLLR; /** vector of LLRs (total of `n`) */
@@ -360,6 +361,7 @@ typedef struct UFL_T {
   "\t\t for pre-decoding (default: '0', no limit)\n"			\
   "\t epsilon=[double]\t: small probability cutoff (default: 1e-8)\n"	\
   "\t useP=[double]\t: fixed probability value (override values in DEM file)\n"	\
+  "\t\t default: 0, do not override; negative value = weight-only mode\n" \
   "\t mulP=[double]\t: scale probability values from DEM file\n"	\
   "\t\t for a quantum code specify 'fdem' OR 'finH' and ( 'finL' OR 'finG' );\n" \
   "\t\t for classical just 'finH' (and optionally the dual matrix 'finL')\n" \

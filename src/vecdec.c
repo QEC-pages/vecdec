@@ -524,8 +524,9 @@ one_vec_t * do_hash_check(const int ee[], int weight, params_t * const p){
   }
   else{ /** vector not found, inserting */
     qllr_t energ=0;
-    for(int i=0; i<weight; i++) 
-      energ += p->vLLR[ee[i]];
+    if(p->useP >=0)
+      for(int i=0; i<weight; i++) 
+	energ += p->vLLR[ee[i]];
     if((p->dE < 0) || (energ <= p->minE + p->dE)){      
       pvec = (one_vec_t *) malloc(sizeof(one_vec_t)+keylen);
       if(!pvec)
@@ -590,9 +591,10 @@ int do_LLR_dist(params_t  * const p, const int classical){
     ERROR("memory allocation failed!\n");
 
   int iwait=0, ichanged=0;
-  perm = sort_by_llr(perm, p->vLLR, p);   /** order of decreasing `p` */
+  if(p->useP >=0)
+    perm = sort_by_llr(perm, p->vLLR, p);   /** order of decreasing `p` */
   for (int ii=0; ii< p->steps; ii++){
-    if(ii!=0){
+    if((ii!=0)||(p->useP < 0)){
       pivs=mzp_rand(pivs); /** random pivots LAPAC-style */
       mzp_set_ui(perm,1);
       perm=perm_p_trans(perm,pivs,0); /**< corresponding permutation */
@@ -700,7 +702,7 @@ int do_LLR_dist(params_t  * const p, const int classical){
 	    ichanged++; 
 	    if (ptr->energ < p->minE){  /** legacy code */
 	      if(p->debug&1)
-		printf("# nz=%d cnt=%d energ=%g\n",nz,cnt,dbl_from_llr(ptr->energ));
+		printf("# nz=%d cnt=%d energ=%g\n",nz,cnt,p->useP>=0 ? dbl_from_llr(ptr->energ): 0);
 	      p->minE=ptr->energ;
 	    }
 	    if (p->minW<0)
@@ -709,9 +711,9 @@ int do_LLR_dist(params_t  * const p, const int classical){
         }
       }
     } /** end of the dual matrix rows loop */
-    if(p->debug & 16)
+    if(p->debug & 16)      
       printf(" round=%d of %d minE=%g minW=%d num_cws=%lld ichanged=%d iwait=%d\n",
-             ii+1, p->steps, dbl_from_llr(p->minE), p->minW, p->num_cws, ichanged, iwait);
+             ii+1, p->steps, p->useP >= 0 ? dbl_from_llr(p->minE) : 0, p->minW, p->num_cws, ichanged, iwait);
     
     //    mzp_free(skip_pivs);
     
@@ -806,25 +808,30 @@ void init_Ht(params_t *p){
   /** todo: fix reallocation logic to be able to reuse the pointers model */
   //  if(p->vP)    free(p->vP);
   //  p->vP=inP;
-  if(!(p->vLLR = malloc(n*sizeof(qllr_t))))
-    ERROR("memory allocation!");
   p->LLRmin=1e9;
   p->LLRmax=-1e9;
-
-  for(int i=0;  i < n; i++){
-    qllr_t val=llr_from_P(p->vP[i]);
-    p->vLLR[i] = val;
-    if(val < p->LLRmin)
-      p->LLRmin = val;
-    if(val > p->LLRmax)
-      p->LLRmax = val;
+  if(p->useP >=0){
+    if(!(p->vLLR = malloc(n*sizeof(qllr_t))))
+      ERROR("memory allocation!");
+    for(int i=0;  i < n; i++){
+      qllr_t val=llr_from_P(p->vP[i]);
+      p->vLLR[i] = val;
+      if(val < p->LLRmin)
+	p->LLRmin = val;
+      if(val > p->LLRmax)
+	p->LLRmax = val;
+    }
   }
   if(p->LLRmin<=0)
     ERROR("LLR values should be positive!  LLRmin=%g LLRmax=%g",
 	  dbl_from_llr(p->LLRmin),dbl_from_llr(p->LLRmax));
   if(p->debug & 2){/** `print` out the entire error model ******************** */
-    printf("# error model read: r=%d k=%d n=%d LLR min=%g max=%g\n",
-	   p->nchk, p->ncws, p->nvar, dbl_from_llr(p->LLRmin),dbl_from_llr(p->LLRmax));  
+    if(p->useP >=0)
+      printf("# error model read: r=%d k=%d n=%d LLR min=%g max=%g\n",
+	     p->nchk, p->ncws, p->nvar, dbl_from_llr(p->LLRmin),dbl_from_llr(p->LLRmax));
+    else
+      printf("# error model read: r=%d k=%d n=%d min-weight mode\n",
+	     p->nchk, p->ncws, p->nvar);
   }
 
 #ifndef NDEBUG
@@ -1568,8 +1575,6 @@ int var_init(int argc, char **argv, params_t *p){
   
   switch(p->mode){
   case 1: /** both `mode=1` (BP) and `mode=0` */
-    if(p->vP == NULL)
-      ERROR("mode=1 BP decoding cannot have useP=%g negative",p->useP);
     if(p->debug&1){
       printf("# submode=%d, %s BP using %s LLR\n",
 	     p->submode,
@@ -1587,6 +1592,9 @@ int var_init(int argc, char **argv, params_t *p){
       ERROR(" mode=%d BP : submode='%d' currently unsupported\n", p->mode, p->submode);    
     /* fall through */
   case 0:
+    if(p->vP == NULL)
+      ERROR("decoding mode=%d currently cannot have useP=%g negative",p->mode,p->useP);
+
     if((p->debug&1)&&(p->vP))
       out_LLR_params(LLR_table, p->debug&4 ? 0 : 1);
     if(p->classical){
@@ -1767,7 +1775,7 @@ int var_init(int argc, char **argv, params_t *p){
       iter2[i]=0;
     }
 
-  }
+  } 
   if(p->debug &1){
     switch(p->mode){
     case 0:
@@ -2353,6 +2361,7 @@ int main(int argc, char **argv){
       long long cnt=nzlist_write(p->outC, buf, p);
       if(p->debug & 1)
 	printf("# wrote %lld computed codewords to file %s\n",cnt,p->outC);
+      free(buf);
     }
     do_hash_clear(p);
     break;
