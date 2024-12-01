@@ -1,7 +1,11 @@
 # opening DEM file ./examples/surf_d3.dem
 # read DEM ./examples/surf_d3.dem: rows_H=24 rows_L=1 cols=221; nz_H=568 nz_L=36
+# CSS code n=221 k=1
+# H=Hx[24,221] nz=568 rank=0
+# L=Lx[1,221] nz=36 rank=1
 # submode=12, serial-V BP using both regular and average LLR
 # use average LLR: aLLR = 0.5 * aLLR + 0.5 * LLR
+# LLR calculation unit uses quantized LLR
 # mode=1, running BP decoder : use DET and OBS files
 # mode=1 submode=12: use BP decoder
 # BP decoder parameters: steps=10 bpgamma=0.5 bpalpha=1 bpbeta=1 bpretry=1
@@ -12,8 +16,8 @@
 # stored 221 errors / 221 distinct syndrome vectors in hash
 # starting round 1 of 1 pfail=0.5 fail=0 total=0
 # read 5000 det/obs pairs
-# orig clusters: NC=953 an=1.47954 sn=0.538011 	 ac=2.70496 sc=1.62979 	 av=58.1915 sv=69.7764
-# remaining:     NX=571 an=1.0035 sn=0.0590793 	 ac=4.31239 sc=1.24143 	 av=96.9651 sv=99.1451
+# orig clusters: NC=933 an=1.49625 sn=0.545111 	 ac=2.6755 sc=1.63767 	 av=57.7808 sv=69.1537
+# remaining:     NX=569 an=1.00176 sn=0.0418853 	 ac=4.29298 sc=1.24539 	 av=95.9193 sv=97.9476
 # P_FAIL N_TOT FAIL S_TOT : C_TRIVIAL S_TRIVIAL   C_LOW S_LOW  C_CLUS S_CLUS : FAIL_BP N_BP   C_BP C_BP_AVG C_BP_TOT   S_BP S_OSD
-     0.0464 5000 232 4768 : 2098 2098 	 1949 1937 	 382 361 : 199 571 	 385 7 392 	 372  0
-failed: 232
+     0.0448 5000 224 4776 : 2130 2130 	 1937 1921 	 364 348 : 192 569 	 386 7 393 	 377  0
+failed: 224

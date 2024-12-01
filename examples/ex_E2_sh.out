@@ -1,11 +1,12 @@
-# initializing seed=207980038387 from time(NULL)+1000000ul*getpid()+0
+# initializing seed=279125089086 from time(NULL)+1000000ul*getpid()+0
+# classical code n=221  k=197 H->rows=221 H->nz=568 rankH=24
 # Analyze small-weight codewords in 10000 RIS steps; swait=0
 # maxC=0 dE=-1 dW=0 maxW=0
 # calculating minimum weight
 # mode=2, estimating fail probability in 10000 steps
 # nz=1 cnt=4 energ=18.3809
 # nz=1 cnt=3 energ=13.7856
-# try to remove reducible codewords dx=1 ...
+# minW=3 after search # searching for reducible codewords dx=1 ...
 # scanned for reducible codewords, found none of 862
 # done
 # min_weight N_min N_use N_tot
