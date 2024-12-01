@@ -1206,3 +1206,18 @@ int rank_csr(const csr_t * const M){
   mzd_free(mzd_M);
   return rank;
 }
+
+
+/** @brief calculate the joint rank of two matrices stacked on top of each other */
+int rank_stacked(const csr_t * const H, const csr_t * const L){
+  assert(M);
+  assert(L);
+  mzd_t *mzd_H = mzd_from_csr(NULL, H);
+  mzd_t *mzd_L = mzd_from_csr(NULL, L);
+  mzd_t *stacked = mzd_stack(NULL,mzd_H, mzd_L);
+  mzd_free(mzd_H);
+  mzd_free(mzd_L);  
+  int rank=mzd_gauss_delayed(stacked,0,0);
+  mzd_free(stacked);
+  return rank;
+}

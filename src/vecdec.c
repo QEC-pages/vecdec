@@ -1427,6 +1427,8 @@ int var_init(int argc, char **argv, params_t *p){
     p->nvar = p->mH->cols;
     p->nchk = p->mH->rows;
     p->ncws = p->mL->rows;
+    p->rankH = rank_csr(p->mH);
+
   }
 
   if(p->finH){
@@ -1523,6 +1525,13 @@ int var_init(int argc, char **argv, params_t *p){
     if((p->mL)&&(product_weight_csr_mzd(p->mL,MGt,0)))
       ERROR("rows of L=Lx and G=Hz should be orthogonal \n");
     mzd_free(MGt);        
+  }
+
+  if (p->mL){
+    /** verify independent rank of L */
+    int k = rank_stacked(p->mH, p->mL) - p->rankH;
+    if (k != p->mL->rows)
+      ERROR("rows of matrix L[%d,%d] should be linearly independent from rows of H, k=%d",p->mL->rows,p->mL->cols,k);
   }
 
   /** display input file information */
