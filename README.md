@@ -268,8 +268,18 @@ with RIS (`mode=0`) decoder.
 ## LER and code distance estimator
 
 This section describes operation with the command-line switch `mode=2`.
-(**TODO:** update the submode options.  Description below applies to
-current `mode=2.1`).
+Summary of additional mode options:
+* Without any submode specified, the program just tries to find a
+  minimum-weight codeword.  In this regime, it is recommended to add
+  `useP=-1` to the command line, to skip energy calculations. 
+* With submode 1 (i.e., `mode=2.1`), the program will use the computed
+  codewords to estimate the fail probability.  Two quantities will be
+  computed: the sum of estimated fail probabilities over the codewords
+  and the maximum single-codeword fail probability.  The results are
+  not expected to be accurate since estimated prefactors will be used.
+* The submode 2 (i.e., `mode=2.2`) is similar, except that exact
+  prefactors will be used (for a codeword of weight `w` a prefactor is
+  computed by examining all $2^w$ binary error patterns).
 
 Given the error model, i.e., the matrices $H$, $L$, and the vector of column
 probability values $p_i$, the program tries to enumerate the likely binary
@@ -278,7 +288,8 @@ while the associate log-likelihood probability ratio (LLR)
 $\sum_i c_i \ln(1/p_i-1)$
 is not too large. 
 
-To this end, it stores the list of codewords found in a hash, and
+The following gives a more detailed description for `mode=2.1`:
+The program stores the list of codewords found in a hash, and
 outputs four numbers: 
 - The sum of estimated contributions to the logical error probability
   from all codewords found, $\displaystyle\sum_c\prod_{i\in

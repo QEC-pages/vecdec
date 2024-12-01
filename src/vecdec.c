@@ -30,7 +30,7 @@
 params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50,
   .rankH=0, .rankG=-1, .rankL=-1, 
   .lerr=-1, .maxosd=100, .swait=0, .maxC=0,
-  .dW=0, .minW=INT_MAX, .maxW=0, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
+  .dW=0, .minW_rec=INT_MAX, .maxW_rec=0, .maxW=0, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
   .bpalpha=1, .bpbeta=1, .bpgamma=0.5, .bpretry=1, 
   .uW=1, .uX=0, .uR=0, //.uEdbl=-1, .uE=-1,
   .numU=0, .numE=0, .maxU=0,
@@ -63,7 +63,7 @@ params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50,
 
 params_t prm_default={  .steps=50, 
   .lerr=-1, .maxosd=100, .bpgamma=0.5, .bpretry=1, .swait=0, .maxC=0,
-  .dW=0, .minW=INT_MAX, .maxW=0, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
+  .dW=0, .minW_rec=INT_MAX, .maxW_rec=-1, .maxW=0, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
   .uW=1, .uX=0, .uR=0, //.uEdbl=-1, .uE=-1,
   .maxU=0, .bpalpha=1, .bpbeta=1,
   .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8, .useP=0, .mulP=0, .dmin=0,
@@ -256,17 +256,19 @@ long long int nzlist_read(const char fnam[], params_t *p){
       if(!pvec){ /** vector not found, inserting */
 	
 	qllr_t energ=0;
-	for(int i=0; i < entry->weight; i++) 
-	  energ += p->vLLR[entry -> arr[i]];
+	if(p->useP>=0)
+	  for(int i=0; i < entry->weight; i++) 
+	    energ += p->vLLR[entry -> arr[i]];
 	entry->energ=energ;
 	
 	HASH_ADD(hh, p->codewords, arr, keylen, entry); /** store in the `hash` */
 	count ++;
 	if(p->minE > entry->energ)
 	  p->minE = entry->energ;
-
-	if(p->minW > entry->weight)
-	  p->minW = entry->weight;
+	if(p->minW_rec > entry->weight)
+	  p->minW_rec = entry->weight;
+	if(p->maxW_rec < entry->weight)
+	  p->maxW_rec = entry->weight;
       }
     }
   }
@@ -301,10 +303,12 @@ int do_hash_min(params_t * const p){
   for(one_vec_t *pvec = p->codewords; pvec != NULL; pvec=(one_vec_t *)(pvec->hh.next)){
     if(p->minE > pvec->energ)
       p->minE = pvec->energ;
-    if(p->minW > pvec->weight)
-      p->minW = pvec->weight;
+    if(p->minW_rec > pvec->weight)
+      p->minW_rec = pvec->weight;
+    if(p->maxW_rec < pvec->weight)
+      p->maxW_rec = pvec->weight;
   }
-  return p->minW;
+  return p->minW_rec;
 }
 
 /** @brief Verify codewords `cz` in the hash.  Valid `c` satisfies `c*Ht=0` and `c*Lt!=0`.
@@ -426,7 +430,7 @@ void do_hash_clear(params_t *const p){
 /** @brief remove reducible codewords from hash
  * @input min_dW the minimum weight of a `trivial` codeword (weight increment) */
 void do_hash_remove_reduc(const int min_dW, params_t *const p){
-  int max=0, siz = p->maxW > 0 ? p->maxW+1 : 30 ;
+  int siz=p->maxW_rec +1;
  
   one_vec_t *** by_w = calloc(siz, sizeof(one_vec_t **));
   if(!by_w) ERROR("memory allocation");
@@ -435,70 +439,69 @@ void do_hash_remove_reduc(const int min_dW, params_t *const p){
   HASH_SORT(p->codewords, by_weight_pos);
 
   /** distribute `irreducible` vectors by weight and 1st entry position */
-  int w;
-  for(w = p->minW; p->codewords != NULL ; w++){
-    if (w >= siz){
-      siz=2*siz;
-      by_w = realloc(by_w, sizeof(one_vec_t **) * siz);
-      if(!by_w) ERROR("memory allocation");
+  int w=-1;
+  size_t keylen=0;
+  HASH_ITER(hh, p->codewords, cw, tmp){
+    if(w != cw->weight){ /** new weight found */
+      w = cw->weight;
+      if(w>=siz)
+	ERROR("this should not happen w=%d >= siz=%d\n",w,siz);
+      keylen = w * sizeof(int);
+      by_w[w]=calloc(p->nvar, sizeof(one_vec_t **));
+      if(!by_w[w]) ERROR("memory allocation");
     }
-    const size_t keylen = w * sizeof(int);
-    by_w[w]=calloc(p->nvar, sizeof(one_vec_t **));
-    HASH_ITER(hh, p->codewords, cw, tmp) {
-      if(cw->weight == w){
-	int good=1;  /** verify irreducibility */
-	for(int w1=p->minW; w1 + min_dW <= w; w1++){
-	  const int b1max = cw->arr[w-1] - w + 2 > p->nvar ? cw->arr[w-1] - w + 2 : p->nvar - 1;
-	  for(int beg1 = cw->arr[0]; beg1 < b1max; beg1++){
-	    one_vec_t *cw1, *tmp1;
-	    HASH_ITER(hh, by_w[w1][beg1], cw1, tmp1){
-	      if(is_subvec(cw1, cw)){
-		if(p->debug & 1){
-		  printf("reducible pair w1=%d w=%d:\n",w1,w);
-		  print_one_vec(cw1);
-		  print_one_vec(cw);
-		}
-		good=0;
-		break;	       
+    int good=1;  /** verify irreducibility */
+    for(int w1=p->minW_rec; w1 + min_dW <= w; w1++){
+      if(by_w[w1]){
+	const int b1max = cw->arr[w-1] - w + 2 > p->nvar ? cw->arr[w-1] - w + 2 : p->nvar - 1;
+	for(int beg1 = cw->arr[0]; beg1 < b1max; beg1++){
+	  one_vec_t *cw1, *tmp1;
+	  HASH_ITER(hh, by_w[w1][beg1], cw1, tmp1){
+	    if(is_subvec(cw1, cw)){
+	      if(p->debug & 1){
+		printf("reducible pair w1=%d w=%d:\n",w1,w);
+		print_one_vec(cw1);
+		print_one_vec(cw);
 	      }
+	      good=0;
+	      break;	       
 	    }
-	    if(!good)
-	      break;
 	  }
 	  if(!good)
 	    break;
 	}
-	HASH_DEL(p->codewords,cw);
-	if(good){
-	  //	  	  printf("adding to w=%d b=%d cw: ",w,cw->arr[0]); print_one_vec(cw);
-	  HASH_ADD(hh, by_w[w][cw->arr[0]], arr, keylen, cw);
-	}
-	else{
-	  //	  printf("skipping cw: "); print_one_vec(cw);
-	  free(cw);
-	}
+	if(!good)
+	  break;
       }
-      else
-	break;
+    }
+    HASH_DEL(p->codewords,cw);
+    if(good){
+	  //	  	  printf("adding to w=%d b=%d cw: ",w,cw->arr[0]); print_one_vec(cw);
+      HASH_ADD(hh, by_w[w][cw->arr[0]], arr, keylen, cw);
+    }
+    else{
+	  //	  printf("skipping cw: "); print_one_vec(cw);
+      free(cw);
     }
   }
-  max=w;
   if(p->codewords !=NULL)
     ERROR("unexpected");
   long long int count=0;
   /** and now move the entries back to `codewords` */
-  for(w=p->minW; w < max; w++){
-    const int keylen = w*sizeof(int);
-    for(int beg = 0; beg < p->nvar; beg++){
-      if(by_w[w][beg]){
-	HASH_ITER(hh, by_w[w][beg], cw, tmp){
-	  HASH_DEL(by_w[w][beg],cw);
-	  HASH_ADD(hh, p->codewords, arr, keylen, cw);
-	  count++;
+  for(w=p->minW_rec; w < siz; w++){
+    if(by_w[w]){
+      const int keylen = w*sizeof(int);
+      for(int beg = 0; beg < p->nvar; beg++){
+	if(by_w[w][beg]){
+	  HASH_ITER(hh, by_w[w][beg], cw, tmp){
+	    HASH_DEL(by_w[w][beg],cw);
+	    HASH_ADD(hh, p->codewords, arr, keylen, cw);
+	    count++;
+	  }
 	}
       }
+      free(by_w[w]);
     }
-    free(by_w[w]);
   }
   free(by_w);
   if(p->debug & 1){
@@ -559,6 +562,8 @@ one_vec_t * do_hash_check(const int ee[], int weight, params_t * const p){
 int do_LLR_dist(params_t  * const p, const int classical){
   const int dW=p->dW;
   int maxW = p->maxW > 0 ? p->maxW : p->nvar;
+  if((dW>=0)&&(p->maxW_rec>0)&&(p->minW_rec + dW < maxW))
+    maxW = p->minW_rec + dW;
   //  qllr_t dE=p->dE;
   /** whether to verify logical ops as a vector or individually */
   int use_vector=0;
@@ -688,12 +693,18 @@ int do_LLR_dist(params_t  * const p, const int classical){
         /** TODO: try local search to `lerr` (if 2 or larger) */
         /** calculate the energy and compare */
         /** at this point we have `cnt` codeword indices in `ee`, and its `energ` */
-        if (cnt < p->minW){
-          p->minW=cnt;
+        if (cnt < p->minW_rec){
+	  if(p->debug&2){
+	    printf("# cw w=%d found:", cnt);
+	    const int max = cnt>25 ? 25:cnt ;
+            for(int i=0; i< max; i++)
+	      printf("%s%d%s", i==0?" [":" ",ee[i],i+1==max? (max==cnt? "]\n":"...]\n"): "");	    
+	  }
+          p->minW_rec=cnt;
 	  if((dW>=0)&&(cnt+dW < maxW))
 	    maxW = cnt + dW; 
-	  if (p->minW <= p->dmin){ /** early termination condition */
-	    p->minW = - p->minW; /** this distance value is of little interest; */
+	  if (p->minW_rec <= p->dmin){ /** early termination condition */
+	    p->minW_rec = - p->minW_rec; /** this distance value is of little interest; */
 	  }
 	}
         if(cnt <= maxW){ /** try to add to hashing storage */
@@ -705,7 +716,9 @@ int do_LLR_dist(params_t  * const p, const int classical){
 		printf("# nz=%d cnt=%d energ=%g\n",nz,cnt,p->useP>=0 ? dbl_from_llr(ptr->energ): 0);
 	      p->minE=ptr->energ;
 	    }
-	    if (p->minW<0)
+	    if(cnt> p->maxW_rec)
+	      p->maxW_rec = cnt;
+	    if (p->minW_rec<0)
 	      goto alldone; 
           }
         }
@@ -713,7 +726,7 @@ int do_LLR_dist(params_t  * const p, const int classical){
     } /** end of the dual matrix rows loop */
     if(p->debug & 16)      
       printf(" round=%d of %d minE=%g minW=%d num_cws=%lld ichanged=%d iwait=%d\n",
-             ii+1, p->steps, p->useP >= 0 ? dbl_from_llr(p->minE) : 0, p->minW, p->num_cws, ichanged, iwait);
+             ii+1, p->steps, p->useP >= 0 ? dbl_from_llr(p->minE) : 0, p->minW_rec, p->num_cws, ichanged, iwait);
     
     //    mzp_free(skip_pivs);
     
@@ -750,7 +763,7 @@ int do_LLR_dist(params_t  * const p, const int classical){
       mzd_free(mL);
   mzd_free(mH);
   
-  return p->minW;
+  return p->minW_rec;
 }
 
 int do_energ_verify(const qllr_t * const vE, const mzd_t * const mE, const params_t * const p){
@@ -2331,17 +2344,23 @@ int main(int argc, char **argv){
       if(p->debug&1)
 	printf("all verified\n");
       do_hash_min(p); /** set values `minE` and `minW` from stored CWs */
+      if (p->debug&1)
+	printf("# minW=%d so far\n",p->minW_rec);
     }
     do_LLR_dist(p, p->classical);
     //    do_hash_fail_prob(p); /** output results */
     if(p->steps){
       /** TODO: make more intelligent distance estimate or param */
-      int dx= p->fdem == NULL ? 1 : 3 ;      
       if (p->debug&1)
-	printf("# try to remove reducible codewords dx=%d ...\n",dx);
-      do_hash_remove_reduc(dx,p);
-      if (p->debug&1)
-	printf("# done\n");
+	printf("# minW=%d after search ",p->minW_rec);
+      if((p->submode) || (p->outC)){
+	int dx= p->fdem == NULL ? 1 : 3 ;      
+	if (p->debug&1)
+	  printf("# searching for reducible codewords dx=%d ...\n",dx);
+	do_hash_remove_reduc(dx,p);
+	if (p->debug&1)
+	  printf("# done\n");
+      }
     }
     do_hash_fail_prob(p); /** output results */    
     if(p->outC){
@@ -2396,8 +2415,8 @@ int main(int argc, char **argv){
       if(p->debug&1)
 	printf("all verified\n");
       do_hash_min(p); /** set values `minE` and `minW` from stored CWs */
-      if(p->minW > 3)
-	ERROR("minW=%d, codewords of weight <= 3 required for matrix transformation\n",p->minW);
+      if(p->minW_rec > 3)
+	ERROR("minW=%d, codewords of weight <= 3 required for matrix transformation\n",p->minW_rec);
       star_triangle(p->mHt, p->mLt, p->vLLR, p->codewords, p->debug);
 
       /** update the three matrices and the error vector */
@@ -2477,7 +2496,7 @@ int main(int argc, char **argv){
 	    printf("# creating G=Hz matrix and writing to\t%s%s\n",
 		   p->fout, p->use_stdout ? "\n" :"G.mmx");
 	  if(p->finC){
-	    p->mG = do_G_from_C(p->mLt,p->codewords,p->rankG,p->minW, p->maxW ? p->maxW : p->minW + p->dW, p->debug);
+	    p->mG = do_G_from_C(p->mLt,p->codewords,p->rankG,p->minW_rec, p->maxW ? p->maxW : p->minW_rec + p->dW, p->debug);
 	  }
 	  else 
 	    p->mG = do_G_matrix(p->mHt,p->mLt,p->vLLR, p->rankG, p->debug);
@@ -2513,7 +2532,7 @@ int main(int argc, char **argv){
 	  if(p->finC){/** use the list of codewords from file */
 	    //	    nzlist_read(p->finC, p);
 	    p->mK = do_K_from_C(p->mLt, p->codewords, p->ncws, p->nvar,
-				p->minW, p->maxW ? p->maxW : p->minW+p->dW, p->debug);
+				p->minW_rec, p->maxW ? p->maxW : p->minW_rec+p->dW, p->debug);
 	    //	  csr_out(p->mK);
 	  }
 	  else{

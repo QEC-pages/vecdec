@@ -178,7 +178,8 @@ typedef struct UFL_T {
     double mulP; /** scale error probability values in the `DEM` file (default: 0, no scaling) */
     double *vP; /** probability vector (total of `n`) */
     qllr_t *vLLR; /** vector of LLRs (total of `n`) */
-    int minW; /** minimum weight of a codeword or error vector found */
+    int minW_rec; /** minimum weight of a codeword or error vector found */
+    int maxW_rec; /** max weight of a codeword or error vector found */
     int dW; /** if non-negative, weight over `minW` to keep the CW or error vector in a hash (default: `0`, `minW` only) */
     int maxW; /** if non-zero, skip any vectors above this weight (default `0`, no upper limit) */
     qllr_t minE; /** minimum energy of a codeword or error vector found */
