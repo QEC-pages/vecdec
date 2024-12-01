@@ -524,6 +524,9 @@ void make_err(mzd_t *row, double p);
 /** @brief calculate the rank of the csr matrix `M` */
   int rank_csr(const csr_t * const M);  
 
+/** @brief calculate the joint rank of two matrices stacked on top of each other */
+  int rank_stacked(const csr_t * const H, const csr_t * const L);
+  
 #if defined(__cplusplus) && !defined (_MSC_VER)
 }
 #endif
