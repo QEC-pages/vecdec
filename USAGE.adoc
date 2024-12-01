@@ -193,7 +193,7 @@ therefore reused with a different set of error probabilities.
 
 In the simplest case, we just want to calculate the code distance.
 Use parameter `dW=0` to indicate that only the smallest-weight
-codewords are of interest.
+codewords are of interest, and `useP=-1` to skip energy calculations.
 
 .example D0
 [source,sh]
@@ -207,8 +207,13 @@ that only one codeword of such a weight has been found.  There are
 memory (`N_use=15`).
 
 The following example uses `100,000` RIS steps to enumerate codewords
-of weight up to `dW=10` above the minimum weight found (for this particular
-code the code distance `minW=6`) and write them to a file `tmp.nz`.
+of weight up to `dW=10` above the minimum weight found (for this
+particular code the code distance `minW=6`) and write them to a file
+`tmp.nz`.  In addition, `mode=2.1` indicates that a two estimates for
+fail probability be made: the greedy estimate, a sum of estimated fail
+probabilities for each codeword found, and the maximum estimated fail
+probability among the codewords found.  Evidently, this requires that
+the error probabilities be specified, thus `useP=0.05` was used.
 
 .example D1
 [source,sh]

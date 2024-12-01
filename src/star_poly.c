@@ -524,7 +524,10 @@ csr_t * do_G_matrix(const csr_t * const mHt, const csr_t * const mLt, const qllr
     //    printf("i=%d len=%d pos=%ld of %zu\n",i,len,pos-buf,buflen);
     assert(pos-buf <=buflen);
     pvec->weight = len;
-    pvec->energ = LLR[i];
+    if (LLR)
+      pvec->energ = LLR[i];
+    else
+      pvec->energ = 0;
     pvec->cnt = i; /* use it to record the column number */
     HASH_ADD(hh, hash, arr, (len*sizeof(int)), pvec);
     if(max<len)
