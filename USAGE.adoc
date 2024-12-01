@@ -104,7 +104,7 @@ include::examples/ex_B1.sh[]
 ---
 include::examples/ex_B1_sh.out[lines="17..-1"]
 
-Notice that the success rate is `0.036`, lower than that of RIS
+Notice that the success rate is `1 - 0.036`, lower than that of RIS
 decoder.  The statistics given includes the total count of converged
 BP cases `C_BP_TOT=824`, which includes convergence with instantaneous
 LLR values `C_BP=507` and those with average LLR values
