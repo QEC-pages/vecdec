@@ -1,4 +1,4 @@
-# initializing seed=279125089086 from time(NULL)+1000000ul*getpid()+0
+# initializing seed=5363272316 from time(NULL)+1000000ul*getpid()+0
 # classical code n=221  k=197 H->rows=221 H->nz=568 rankH=24
 # Analyze small-weight codewords in 10000 RIS steps; swait=0
 # maxC=0 dE=-1 dW=0 maxW=0

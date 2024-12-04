@@ -257,7 +257,7 @@ typedef struct UFL_T {
   mzp_t * sort_by_llr(mzp_t *perm, const qllr_t vLLR[], params_t const * const p);
 
   /** @brief prepare an ordered pivot-skip list of length `n-rank` */
-  mzp_t * do_skip_pivs(const size_t rank, const mzp_t * const pivs);
+  mzp_t * do_skip_pivs(mzp_t * skip_pivs, mzp_t * const pivs_srtd, const int rank, const mzp_t * const pivs);
 
   /** functions defined in `dec_iter.c` ******************************************** */
   void cnt_out(int print_banner, const params_t * const p);

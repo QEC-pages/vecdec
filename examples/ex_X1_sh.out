@@ -1,8 +1,8 @@
-# initializing seed=279134089086 from time(NULL)+1000000ul*getpid()+0
+# initializing seed=5380272316 from time(NULL)+1000000ul*getpid()+0
 # opening DEM file ./examples/surf_d3.dem
 # read DEM ./examples/surf_d3.dem: rows_H=24 rows_L=1 cols=221; nz_H=568 nz_L=36
 # CSS code n=221 k=1
-# H=Hx[24,221] nz=568 rank=0
+# H=Hx[24,221] nz=568 rank=24
 # L=Lx[1,221] nz=36 rank=1
 # LLR calculation unit uses quantized LLR
 # mode=0, running vecdec RIS decoder : use DET and OBS files
@@ -13,7 +13,7 @@
 # uX=0, will not use partially matched errors for pre-decoding
 # stored 221 errors / 221 distinct syndrome vectors in hash
 # read 2500 det/obs pairs
-# starting round 2 of 2 pfail=0.0168 fail=42 out of total=2500
+# starting round 2 of 2 pfail=0.0172 fail=43 out of total=2500
 # read 2500 det/obs pairs
 # P_FAIL N_TOT FAIL S_TOT : C_TRIVIAL S_TRIVIAL   C_LOW S_LOW  C_CLUS S_CLUS : FAIL_RIS N_RIS S_RIS
-     0.0152 5000 76 4924 : 2130 2130 	 1937 1921 	 364 348 : 44 569 525 
+     0.0152 5000 76 4924 : 2178 2178 	 1889 1881 	 375 362 : 55 558 503 

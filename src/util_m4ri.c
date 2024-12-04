@@ -812,7 +812,8 @@ csr_t *csr_alist_read(const char fnam[], csr_t * mat, int transpose, int debug){
     
   free(inH);
   free(num_mlist);
-
+  fclose(f);
+  
   if(debug &1)
     printf("# read alist file %s %s: rows=%d cols=%d nz=%d\n",
 	   fnam,!transpose?"(transposed)":"",mat->rows,mat->cols,nz);
@@ -1210,7 +1211,7 @@ int rank_csr(const csr_t * const M){
 
 /** @brief calculate the joint rank of two matrices stacked on top of each other */
 int rank_stacked(const csr_t * const H, const csr_t * const L){
-  assert(M);
+  assert(H);
   assert(L);
   mzd_t *mzd_H = mzd_from_csr(NULL, H);
   mzd_t *mzd_L = mzd_from_csr(NULL, L);

@@ -189,7 +189,7 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
   }
 
   if((p->steps > 0) &&(p->lerr > 0)){  /** do information-set decoding `**********************` */
-    mzp_t * skip_pivs = do_skip_pivs(rank, pivs);
+    mzp_t * skip_pivs = do_skip_pivs(NULL, NULL, rank, pivs);
     mzd_t * mEt1=NULL;
     qllr_t *vE1=NULL;
     if (p->lerr > 1){
@@ -265,7 +265,7 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
       }
     }
     if(p->lerr > 0){  /** do information-set decoding `**********************` */
-      mzp_t * skip_pivs = do_skip_pivs(rank, pivs);
+      mzp_t * skip_pivs = do_skip_pivs(NULL,NULL,rank, pivs);
       do_local_search(vE, mEt0, 0, 1, vE1, mEt, mH, skip_pivs, pivs, p);
       if(p->debug & 512){
         printf("mEt0 after local search:\n");

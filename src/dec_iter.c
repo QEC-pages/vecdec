@@ -707,7 +707,7 @@ int do_osd_start(qllr_t * LLR, const mzd_t * const srow,
     csr_t * sHt = csr_from_mzd(NULL, mHt);
     mzd_free(mHt);
     
-    mzp_t * skip_pivs = do_skip_pivs(rank, pivs);    
+    mzp_t * skip_pivs = do_skip_pivs(NULL, NULL, rank, pivs);    
     vE[0]=vE[minrow];
     mzd_copy_row(mE,0, mE,minrow); /** initial row for OSD */
 

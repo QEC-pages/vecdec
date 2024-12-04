@@ -8,7 +8,7 @@ two-step decoding failed: det 0 obs 4 out of 1000
 # opening DEM file examples/surf_d5.dem
 # read DEM examples/surf_d5.dem: rows_H=120 rows_L=1 cols=1679; nz_H=5008 nz_L=140
 # CSS code n=1679 k=1
-# H=Hx[120,1679] nz=5008 rank=0
+# H=Hx[120,1679] nz=5008 rank=120
 # L=Lx[1,1679] nz=140 rank=1
 # LLR calculation unit uses quantized LLR
 # mode=0, running vecdec RIS decoder : use DET and OBS files

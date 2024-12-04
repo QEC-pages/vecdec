@@ -1,8 +1,8 @@
-# initializing seed=279136089086 from time(NULL)+1000000ul*getpid()+0
+# initializing seed=5384272316 from time(NULL)+1000000ul*getpid()+0
 # opening DEM file input/rep_code3.dem
 # read DEM input/rep_code3.dem: rows_H=8 rows_L=1 cols=9; nz_H=16 nz_L=1
 # CSS code n=9 k=1
-# H=Hx[8,9] nz=16 rank=0
+# H=Hx[8,9] nz=16 rank=8
 # L=Lx[1,9] nz=1 rank=1
 # LLR calculation unit uses quantized LLR
 # mode=0, running vecdec RIS decoder : generating errors internally
@@ -11,5 +11,5 @@
 # ntot=1500 nvec=1000 nfail=0
 # uW=-1, will not use cluster-based pre-decoder
 # generated 1000 det/obs pairs
-# starting round 2 of 2 pfail=0.252 fail=252 out of total=1000
+# starting round 2 of 2 pfail=0.236 fail=236 out of total=1000
 # generated 1000 det/obs pairs

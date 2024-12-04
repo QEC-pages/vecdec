@@ -1,7 +1,7 @@
 # opening DEM file ./examples/surf_d3.dem
 # read DEM ./examples/surf_d3.dem: rows_H=24 rows_L=1 cols=221; nz_H=568 nz_L=36
 # CSS code n=221 k=1
-# H=Hx[24,221] nz=568 rank=0
+# H=Hx[24,221] nz=568 rank=24
 # L=Lx[1,221] nz=36 rank=1
 # Output G=Hz matrices 
 # read 854 codewords from tmp.nz, total 854

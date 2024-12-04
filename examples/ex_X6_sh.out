@@ -1,7 +1,7 @@
 # P_FAIL N_TOT FAIL S_TOT : C_TRIVIAL S_TRIVIAL   C_LOW S_LOW  C_CLUS S_CLUS : FAIL_BP N_BP   C_BP C_BP_AVG C_BP_TOT   S_BP S_OSD
       0.094 1000 94 906 : 3 3 	 31 31 	 11 11 : 94 955 	 513 352 865 	 861  0
 # read alist file ./examples/96.3.963.alist (transposed): rows=48 cols=96 nz=288
-# initializing seed=279172089088 from time(NULL)+1000000ul*getpid()+0
+# initializing seed=5420272317 from time(NULL)+1000000ul*getpid()+0
 # read alist file ./examples/96.3.963.alist (transposed): rows=48 cols=96 nz=288
 # classical code n=96  k=50 H->rows=96 H->nz=282 rankH=46
 # LLR calculation unit uses quantized LLR

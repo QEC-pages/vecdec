@@ -725,5 +725,5 @@ removed, so the last example altogether fails to run.
 
 // run this to update examples' output and re-create `USAGE.html` file
 //
-// for f in examples/ex_D0.sh ; do echo $f; bash $f > ${f//.sh/_sh.out}; echo ; done
+// for f in examples/ex_D0.sh ; do echo -e "# processing \e[31m" $f "########\e[0m"; cat $f ; echo; bash $f > ${f//.sh/_sh.out}; echo ; cat ${f//.sh/_sh.out}; echo ; done
 // asciidoc USAGE.adoc

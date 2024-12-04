@@ -165,34 +165,31 @@ mzp_t * sort_by_llr(mzp_t *perm, const qllr_t vLLR[], params_t const * const p){
   return perm;
 }
 
-/** @brief prepare an ordered pivot-skip list of length `n-rank` */
-mzp_t * do_skip_pivs(const size_t rank, const mzp_t * const pivs){
-  const rci_t n=pivs->length;
-  rci_t j1=rank; /** position to insert the next result */
-  mzp_t * ans = mzp_copy(NULL,pivs);
-  qsort(ans->values, rank, sizeof(pivs->values[0]), cmp_rci_t);
-
-  for(rci_t j=0; j<n; j++){
-    if(!bsearch(&j, ans->values, rank, sizeof(ans->values[0]), cmp_rci_t)){
-      ans->values[j1++]=j;
-    }
+/** @brief prepare an ordered pivot-skip list of length `n-rank`
+    @param skip_pivs allocated structure or NULL 
+    @param pivs_srtd allocated structure to return or NULL
+    @param rank rank of H (number of pivot rows)
+ */
+mzp_t * do_skip_pivs(mzp_t * skip_pivs, mzp_t * const pivs_srtd, const int rank, const mzp_t * const pivs){
+  /** prepare sorted version of `pivs` */
+  mzp_t *pivs_srtd_local = mzp_copy(pivs_srtd,pivs); 
+  qsort(pivs_srtd_local->values, rank, sizeof(pivs->values[0]), cmp_rci_t);
+  /** space for `pivs_local` to return */
+  mzp_t *skip_pivs_local = (skip_pivs != NULL) ? skip_pivs : mzp_init(pivs->length);
+  int end=-1, num=0;
+  for(int i=0; i < rank; i++){
+    int beg = end + 1;
+    end = pivs_srtd_local->values[i];
+    for(int j = beg; j < end; j++)
+      skip_pivs_local->values[num++] = j;
   }
-  assert(j1==n);
-
-  int j=rank;
-  for(size_t i=0; j<n; j++)
-    ans->values[i++] = ans->values[j];
-  ans->length = n-rank;
-
-  if(prm.debug & 8){/** in skip_pivs */
-    printf("skip_pivs of len=%d: ",ans->length);
-    for(int i=0; i< ans->length; i++)
-      printf(" %d%s",ans->values[i],i+1 == ans->length ?"\n":"");
-    printf("pivs of len=%d, rank=%zu: ",pivs->length, rank);
-    for(size_t i=0; i< rank; i++)
-      printf(" %d%s",pivs->values[i],i+1 == rank ?"\n":"");
-  }
-  return ans;
+  for(int j = end + 1 ; j < pivs->length; j++)
+    skip_pivs_local->values[num++] = j;
+  skip_pivs_local->length = num;
+  assert((num+rank==pivs->length) && "pivs and skip_pivs should add to nvar");
+  if (pivs_srtd == NULL)
+    mzp_free(pivs_srtd_local);
+  return skip_pivs_local;
 }
 
 /** @brief construct `L` matrix for a classical code orthogonal to rows of `H`
@@ -614,31 +611,7 @@ int do_LLR_dist(params_t  * const p, const int classical){
         pivs->values[rank++]=col;
     }
     /** construct skip-pivot permutation */
-    pivs_srtd = mzp_copy(pivs_srtd,pivs);
-    qsort(pivs_srtd->values, rank, sizeof(pivs->values[0]), cmp_rci_t);
-    int end=-1, num=0;
-    for(int i=0; i < rank; i++){
-      int beg = end + 1;
-      end = pivs_srtd->values[i];
-      for(int j = beg; j < end; j++)
-	skip_pivs->values[num++] = j;
-      //      printf("beg=%d end=%d\n",beg,end);
-    }
-    for(int j = end + 1 ; j < p->nvar; j++)
-      skip_pivs->values[num++] = j;
-#if 0    
-    printf("beg=%d end=%d\n",end+1,p->nvar);
-    for(int i=0; i<rank; i++)
-      printf("%s%d%s", i==0?"# pivs_srtd=[":" ",pivs_srtd->values[i],i+1==rank?"]\n":"");
-    for(int i=0; i<num; i++)
-      printf("%s%d%s", i==0?"# skip_pivs=[":" ",skip_pivs->values[i],i+1==num?"]\n":"");
-#endif /* 0 */
-    
-#ifndef NDEBUG
-    if (num + rank != p->nvar)
-      ERROR("mismatch: rank=%d and num=%d do not add to nvar=%d\n",rank,num,p->nvar);
-#endif
-    skip_pivs->length = num;
+    skip_pivs = do_skip_pivs(skip_pivs, pivs_srtd, rank, pivs);
     //    mzp_t * skip_pivs = do_skip_pivs(rank, pivs);
     //    skip_pivs = do_skip_pivs(rank, pivs);
 
