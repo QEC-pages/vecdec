@@ -1,4 +1,4 @@
-# initializing seed=5388272316 from time(NULL)+1000000ul*getpid()+0
+# initializing seed=6211273121 from time(NULL)+1000000ul*getpid()+0
 # opening DEM file ./examples/surf_d3.dem
 # read DEM ./examples/surf_d3.dem: rows_H=24 rows_L=1 cols=221; nz_H=568 nz_L=36
 # CSS code n=221 k=1
@@ -13,8 +13,8 @@
 # uX=0, will not use partially matched errors for pre-decoding
 # stored 221 errors / 221 distinct syndrome vectors in hash
 # read 2500 det/obs pairs
-# starting round 2 of 2 pfail=0.0164 fail=41 out of total=2500
+# starting round 2 of 2 pfail=0.0176 fail=44 out of total=2500
 # read 2500 det/obs pairs
 # P_FAIL N_TOT FAIL S_TOT : C_TRIVIAL S_TRIVIAL   C_LOW S_LOW  C_CLUS S_CLUS : FAIL_RIS N_RIS S_RIS
-     0.0162 5000 81 4919 : 2178 2178 	 1889 1881 	 375 362 : 60 558 498 
-mismatched det: 0 obs: 81
+     0.0174 5000 87 4913 : 2111 2111 	 1933 1922 	 380 354 : 50 576 526 
+mismatched det: 0 obs: 87

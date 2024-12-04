@@ -1,4 +1,4 @@
-# initializing seed=5218272189 from time(NULL)+1000000ul*getpid()+0
+# initializing seed=6115272964 from time(NULL)+1000000ul*getpid()+0
 # read alist file ./examples/96.3.963.alist (transposed): rows=48 cols=96 nz=288
 # classical code n=96  k=50 H->rows=96 H->nz=282 rankH=46
 # Analyze small-weight codewords in 100000 RIS steps; swait=0
@@ -9,8 +9,8 @@
 # 195690 codewords read from tmp.nz ...all verified
 # minW=6 so far
 # minW=6 after search # searching for reducible codewords dx=1 ...
-# scanned for reducible codewords, found none of 210867
+# scanned for reducible codewords, found none of 210813
 # done
 # sumP(fail) maxP(fail) min_weight N_min N_use N_tot
-0.683637 0.006859 6 3 210867 210867
-# wrote 210867 computed codewords to file tmp.nz
+0.683545 0.006859 6 3 210813 210813
+# wrote 210813 computed codewords to file tmp.nz

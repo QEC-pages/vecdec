@@ -38,6 +38,10 @@ TAGS
 src/vecdec
 vecdec
 mtx_sub
+mtx_fw
+mtx_qc
+mtx_rep
+mtx_01_to_nz
 src/mtx_sub
 *.exe
 *.out

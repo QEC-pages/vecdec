@@ -16,8 +16,8 @@
 # stored 221 errors / 221 distinct syndrome vectors in hash
 # starting round 1 of 1 pfail=0.5 fail=0 total=0
 # read 5000 det/obs pairs
-# orig clusters: NC=933 an=1.51018 sn=0.554774 	 ac=2.65862 sc=1.6626 	 av=56.594 sv=68.6901
-# remaining:     NX=558 an=1 sn=0 	 ac=4.33692 sc=1.29837 	 av=95.767 sv=98.6548
+# orig clusters: NC=956 an=1.48745 sn=0.538137 	 ac=2.67651 sc=1.61071 	 av=57.5331 sv=69.0127
+# remaining:     NX=576 an=1 sn=0 	 ac=4.2691 sc=1.24533 	 av=95.8368 sv=98.0484
 # P_FAIL N_TOT FAIL S_TOT : C_TRIVIAL S_TRIVIAL   C_LOW S_LOW  C_CLUS S_CLUS : FAIL_BP N_BP   C_BP C_BP_AVG C_BP_TOT   S_BP S_OSD
-     0.0432 5000 216 4784 : 2178 2178 	 1889 1881 	 375 362 : 195 558 	 371 8 379 	 363  0
-failed: 216
+     0.0494 5000 247 4753 : 2111 2111 	 1933 1922 	 380 354 : 210 576 	 379 6 385 	 366  0
+failed: 247
