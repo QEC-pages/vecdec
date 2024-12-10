@@ -869,21 +869,27 @@ int var_init(int argc, char **argv, params_t *p){
 #endif   
 
   /** scan for `debug` and `mode` first */
+  int first=1; /** this is the first time `debug` was encountered */
+  for(int i=1; i<argc; i++){
+    if(sscanf(argv[i],"debug=%d",& dbg)==1){/** `debug` */
+      if(first){
+	first=0;
+	p->debug = dbg; /** just assign if in the `1st position` */
+      }
+      else
+	p->debug ^= dbg; /** otherwise `XOR` */
+      if(p->debug &4)
+	printf("# read %s, debug=%d octal=%o\n",argv[i],p->debug,p->debug);
+    }
+  }
+
+  first=1; /** same for `mode` */
   for(int i=1; i<argc; i++){  
     int pos=0;
-    if(sscanf(argv[i],"debug=%d",& dbg)==1){/** `debug` */
-      if(dbg==0)
-	p->debug = 0;
-      else{
-        if(i==1)
-          p->debug = dbg; /** just assign if in the `1st position` */
-        else
-          p->debug ^= dbg; /** otherwise `XOR` */
-        if(p->debug &4)
-	  printf("# read %s, debug=%d octal=%o\n",argv[i],p->debug,p->debug);
-      }
-    }
-    else if(sscanf(argv[i],"mode=%d%n",& dbg, &pos)==1){ /** `mode.submode` */
+    if(sscanf(argv[i],"mode=%d%n",& dbg, &pos)==1){ /** `mode.submode` */
+      if(!first)
+	ERROR("command-line argument 'mode=...' should only be given once, arg[%d]=%s",i,argv[i]);
+      first=0;
       p->mode = dbg;
       if((int) strlen(argv[i]) > pos){
 	 if(sscanf(argv[i]+pos,".%d",& dbg)==1)
