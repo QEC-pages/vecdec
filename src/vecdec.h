@@ -494,6 +494,8 @@ typedef struct UFL_T {
   "\t\t\t .8 (bit 3) with serial, use V-based order (not C-based)\n"	\
   "\t\t\t .16 (bit 4) with serial, randomize node order in each round \n" \
   "\t\t\t     (by default randomize only once per run)\n"		\
+  "\t\t\t .32 (bit 5) with serial, suppress all node order randomization\n" \
+  "\t\t\t     (must have bpretry=1 and bit 4 not set in submode)\n"		\
   "\t For convenience, 'submode=0' is equivalent to 'submode=3'. \n"	\
   "\t This decoder may experience convergence issues.\n" \
   "\t Accuracy and performance are determined by parameters \n" \
