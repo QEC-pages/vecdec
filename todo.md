@@ -610,3 +610,7 @@ observable or soft-out row), and rows not-yet decoded.
  - [ ] For cluster matching, come up with the notion of locality distance.
  - [ ] Try to use `sparse6` format to store error vectors and/or
        binary matrices.  See `nauty` source code.
+
+## new items 2014/11/19
+
+- [ ] make sure programs work with p=0.5 (and also with p>0.5)
