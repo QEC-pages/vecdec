@@ -1,5 +1,10 @@
+# CSS code n=40 k=10
+# H=Hx[16,40] nz=80 rank=15
+# G=Hz[16,40] nz=80 rank=15
+# L=Lx[10,40] nz=97 rank=10
 # submode=14, serial-V BP using average LLR
 # use average LLR: aLLR = 0.5 * aLLR + 0.5 * LLR
+# LLR calculation unit uses quantized LLR
 # mode=1, running BP decoder : generating errors internally
 # mode=1 submode=14: use BP decoder
 # BP decoder parameters: steps=10 bpgamma=0.5 bpalpha=1 bpbeta=1 bpretry=1

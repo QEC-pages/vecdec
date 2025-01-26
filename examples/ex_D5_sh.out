@@ -1,5 +1,6 @@
-# Could not process Matrix Market banner; try 'alist' format
 # read alist file ./examples/96.3.963.alist (transposed): rows=48 cols=96 nz=288
+# classical code n=96  k=50 H->rows=96 H->nz=282 rankH=46
+# LLR calculation unit uses quantized LLR
 # mode=0, running vecdec RIS decoder : generating errors internally
 # mode=0 submode=0: use RIS decoder
 # RIS decoder parameters: steps=1000 swait=0 lerr=1
@@ -7,7 +8,6 @@
 # uW=2, adding errors of weight up to 2 to syndrome hash
 # uX=0, will not use partially matched errors for pre-decoding
 # stored 4656 errors / 4656 distinct syndrome vectors in hash
-# starting round 1 of 10
 # generated 100000 det/obs pairs
 # starting round 2 of 10 pfail=3e-05 fail=3 out of total=100000
 # generated 100000 det/obs pairs

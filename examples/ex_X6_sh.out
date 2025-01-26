@@ -1,17 +1,16 @@
 # P_FAIL N_TOT FAIL S_TOT : C_TRIVIAL S_TRIVIAL   C_LOW S_LOW  C_CLUS S_CLUS : FAIL_BP N_BP   C_BP C_BP_AVG C_BP_TOT   S_BP S_OSD
       0.094 1000 94 906 : 3 3 	 31 31 	 11 11 : 94 955 	 513 352 865 	 861  0
-# Could not process Matrix Market banner; try 'alist' format
 # read alist file ./examples/96.3.963.alist (transposed): rows=48 cols=96 nz=288
-# initializing seed=208019038388 from time(NULL)+1000000ul*getpid()+0
-# Could not process Matrix Market banner; try 'alist' format
+# initializing seed=6243273122 from time(NULL)+1000000ul*getpid()+0
 # read alist file ./examples/96.3.963.alist (transposed): rows=48 cols=96 nz=288
+# classical code n=96  k=50 H->rows=96 H->nz=282 rankH=46
+# LLR calculation unit uses quantized LLR
 # mode=0, running vecdec RIS decoder : use DET file
 # modifying DET events +A*e0 with A ./examples/96.3.963.alist and e0 bperr.01 files
 # mode=0 submode=0: use RIS decoder
 # RIS decoder parameters: steps=0 swait=0 lerr=-1
 # ntot=1000 nvec=1000 nfail=0
 # uW=-1, will not use cluster-based pre-decoder
-# starting round 1 of 1
 # read 1000 det events
 # updated 1000 det += A*e0 events
 # number of convergence failures: 90

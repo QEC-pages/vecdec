@@ -539,6 +539,28 @@ int next_vec(const int w, int arr[], const int max){
   return 1;
 }
 
+void hash_do_confinement(const params_t * const p){
+  two_vec_t *entry, *pvec;
+  long long int cnt=0, cnt_w=0;
+  int ws=-1, we=0;
+  printf("### code confinement up to uW=%d\n",p->uW);
+  HASH_ITER(hh, p->hashU_error, entry, pvec) {
+    if(ws!=entry->w_s){
+      if(ws>=0)
+	printf("### ws=%d min we=%d cnt_w=%lld\n",ws,we,cnt_w);
+      ws=entry->w_s;
+      we=entry->w_e;
+      cnt_w=0;
+    }
+    cnt++;
+    cnt_w++;
+    if(entry->w_e  < we)
+      we=entry->w_e;
+  }
+  printf("### ws=%d min we=%d cnt_w=%lld total cnt=%lld\n",ws,we,cnt_w,cnt);
+}
+
+
 void hash_add_maybe(vec_t *vec, params_t * const p){
   two_vec_t *pvec, *entry;
   vec_t * sorted = vec_copy(vec);
@@ -669,6 +691,8 @@ void do_clusters(params_t * const p){
     }
     printf("############################# total of %d\n\n",cnt);
   }
+  else if (p->debug&2) /* output confinement */
+    hash_do_confinement(p);
   //#endif
   
 
@@ -779,7 +803,7 @@ int dec_ufl_one(const mzd_t * const srow, params_t * const p){
 
   /** convert mzd_t *srow -> vec_t *svec */
   int idx=0, w=0;
-  const word * const rawrow = srow->rows[0];
+  const word * const rawrow = mzd_row_const(srow,0);
   while(((idx=nextelement(rawrow,srow->width,idx))!=-1)&&(idx<srow->ncols)){
     svec->vec[w++]=idx;
     if(++idx == srow->ncols)

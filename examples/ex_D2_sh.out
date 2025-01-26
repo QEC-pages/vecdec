@@ -1,15 +1,16 @@
-# initializing seed=207948038246 from time(NULL)+1000000ul*getpid()+0
-# Could not process Matrix Market banner; try 'alist' format
+# initializing seed=6115272964 from time(NULL)+1000000ul*getpid()+0
 # read alist file ./examples/96.3.963.alist (transposed): rows=48 cols=96 nz=288
+# classical code n=96  k=50 H->rows=96 H->nz=282 rankH=46
 # Analyze small-weight codewords in 100000 RIS steps; swait=0
 # maxC=0 dE=-1 dW=10 maxW=0
 # calculating est fail prob, exact fail prob, minimum weight
 # mode=2, estimating fail probability in 100000 steps
 # read 195690 codewords from tmp.nz, total 195690
 # 195690 codewords read from tmp.nz ...all verified
-# try to remove reducible codewords dx=1 ...
-# scanned for reducible codewords, found none of 210879
+# minW=6 so far
+# minW=6 after search # searching for reducible codewords dx=1 ...
+# scanned for reducible codewords, found none of 210813
 # done
 # sumP(fail) maxP(fail) min_weight N_min N_use N_tot
-0.683658 0.006859 6 3 210879 210879
-# wrote 210879 computed codewords to file tmp.nz
+0.683545 0.006859 6 3 210813 210813
+# wrote 210813 computed codewords to file tmp.nz

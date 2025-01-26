@@ -36,7 +36,7 @@ void mzd_row_print_sparse(const mzd_t * const A, const int row){
 }
 
 
-size_t mzd_weight(const mzd_t *A){
+size_t mzd_weight(const mzd_t * const A){
   size_t count = 0;
   if(A->width == 1) {
     for(rci_t i = 0; i < A->nrows; ++i)
@@ -46,7 +46,7 @@ size_t mzd_weight(const mzd_t *A){
     return (count);
   }
   for(rci_t i = 0; i < A->nrows; ++i) {
-    word *truerow = A->rows[i];
+    const word * const truerow = mzd_row_const(A,i);
     for(wi_t j = 0; j < A->width - 1; j ++)
       count += m4ri_bitcount(truerow[j]);
 
@@ -60,10 +60,11 @@ size_t mzd_weight(const mzd_t *A){
 
 int mzd_row_is_zero(const mzd_t  * const A, const int i) {
   const word mask_end = A->high_bitmask;
+  const word * const truerow = mzd_row_const(A,i);
   for (wi_t j = 0; j < A->width - 1; ++j)
-    if(A->rows[i][j])
+    if(truerow[j])
       return 0;
-  if(A->rows[i][A->width - 1] & mask_end)
+  if(truerow[A->width - 1] & mask_end)
     return 0;
   return 1;
 }
@@ -549,7 +550,7 @@ csr_t * csr_from_mzd(csr_t *mat, const mzd_t * const orig){
     mat->p[i]=j;
 #if 1 /** optimized version */
     int idx=0;
-    const word * const rawrow = orig->rows[i];
+    const word * const rawrow = mzd_row_const(orig,i);
     while(((idx=nextelement(rawrow,orig->width,idx))!=-1)&&
 	  (idx>=0)&&
 	  (idx<orig->ncols)){
@@ -811,7 +812,8 @@ csr_t *csr_alist_read(const char fnam[], csr_t * mat, int transpose, int debug){
     
   free(inH);
   free(num_mlist);
-
+  fclose(f);
+  
   if(debug &1)
     printf("# read alist file %s %s: rows=%d cols=%d nz=%d\n",
 	   fnam,!transpose?"(transposed)":"",mat->rows,mat->cols,nz);
@@ -837,7 +839,7 @@ csr_t *csr_mm_read(char *fnam, csr_t *mat, int transpose, int debug){
 
   if (mm_read_banner(f, &matcode) != 0){
     /** try to read in `alist` format */
-    if(debug&1)
+    if(debug&2)
       printf("# Could not process Matrix Market banner; try 'alist' format\n");
     fclose(f);
     mat = csr_alist_read(fnam,mat,transpose,debug);    
@@ -884,6 +886,8 @@ csr_t *csr_mm_read(char *fnam, csr_t *mat, int transpose, int debug){
   csr_compress(mat); /* sort entries by row */
   // csr_out(mat);
   fclose(f);
+  if(debug&2)
+    printf("# read matrix %d x %d, nz=%d from file %s\n",M,N,nz,fnam);
   return mat;
 }
 
@@ -1076,7 +1080,7 @@ csr_t *csr_apply_perm(csr_t *dst, const csr_t * const src, const mzp_t * const p
  */
 
 int do_reduce(mzd_t *row, const mzd_t *matP0, const rci_t rankP0){
-  word * rawrow = row->rows[0];  
+  word * rawrow = mzd_row(row,0);  
   rci_t j=0;
   rci_t n=row->ncols;
   do{
@@ -1201,5 +1205,20 @@ int rank_csr(const csr_t * const M){
   mzd_t *mzd_M = mzd_from_csr(NULL, M);
   int rank=mzd_gauss_delayed(mzd_M,0,0);
   mzd_free(mzd_M);
+  return rank;
+}
+
+
+/** @brief calculate the joint rank of two matrices stacked on top of each other */
+int rank_stacked(const csr_t * const H, const csr_t * const L){
+  assert(H);
+  assert(L);
+  mzd_t *mzd_H = mzd_from_csr(NULL, H);
+  mzd_t *mzd_L = mzd_from_csr(NULL, L);
+  mzd_t *stacked = mzd_stack(NULL,mzd_H, mzd_L);
+  mzd_free(mzd_H);
+  mzd_free(mzd_L);  
+  int rank=mzd_gauss_delayed(stacked,0,0);
+  mzd_free(stacked);
   return rank;
 }

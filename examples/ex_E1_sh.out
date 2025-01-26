@@ -1,5 +1,8 @@
 # opening DEM file ./examples/surf_d3.dem
 # read DEM ./examples/surf_d3.dem: rows_H=24 rows_L=1 cols=221; nz_H=568 nz_L=36
+# CSS code n=221 k=1
+# H=Hx[24,221] nz=568 rank=24
+# L=Lx[1,221] nz=36 rank=1
 # Output matrices 
 # writing H=Hx matrix [ 24 x 221 ] to 	tmpH.mmx
 # writing L=Lx matrix [ 1 x 221 ] to 	tmpL.mmx

@@ -1,7 +1,7 @@
 #ifndef VECDEC_H
 #define VECDEC_H
 /**
- * @file vecdec.h
+ * @file vecdec.h 
  *
  * @brief vecdec - a simple vectorized decoder
  *
@@ -173,11 +173,13 @@ typedef struct UFL_T {
     int classical; /** `1` if this is a classical code? */
     int internal; /** `1` to generate obs/det internally, `2` to generate from `err` file */
     long long int seed;  /** rng `seed`, set<=0 for automatic */
-    double useP; /** global error probability `overriding` values in the `DEM` file (default: 0, no override) */
+    double useP; /** global error probability `overriding` values in the `DEM` file (default: 0, no override)
+		  negative value means weight-only mode (no probabilities specified) */
     double mulP; /** scale error probability values in the `DEM` file (default: 0, no scaling) */
     double *vP; /** probability vector (total of `n`) */
     qllr_t *vLLR; /** vector of LLRs (total of `n`) */
-    int minW; /** minimum weight of a codeword or error vector found */
+    int minW_rec; /** minimum weight of a codeword or error vector found */
+    int maxW_rec; /** max weight of a codeword or error vector found */
     int dW; /** if non-negative, weight over `minW` to keep the CW or error vector in a hash (default: `0`, `minW` only) */
     int maxW; /** if non-zero, skip any vectors above this weight (default `0`, no upper limit) */
     qllr_t minE; /** minimum energy of a codeword or error vector found */
@@ -255,7 +257,7 @@ typedef struct UFL_T {
   mzp_t * sort_by_llr(mzp_t *perm, const qllr_t vLLR[], params_t const * const p);
 
   /** @brief prepare an ordered pivot-skip list of length `n-rank` */
-  mzp_t * do_skip_pivs(const size_t rank, const mzp_t * const pivs);
+  mzp_t * do_skip_pivs(mzp_t * skip_pivs, mzp_t * const pivs_srtd, const int rank, const mzp_t * const pivs);
 
   /** functions defined in `dec_iter.c` ******************************************** */
   void cnt_out(int print_banner, const params_t * const p);
@@ -360,6 +362,7 @@ typedef struct UFL_T {
   "\t\t for pre-decoding (default: '0', no limit)\n"			\
   "\t epsilon=[double]\t: small probability cutoff (default: 1e-8)\n"	\
   "\t useP=[double]\t: fixed probability value (override values in DEM file)\n"	\
+  "\t\t default: 0, do not override; negative value = weight-only mode\n" \
   "\t mulP=[double]\t: scale probability values from DEM file\n"	\
   "\t\t for a quantum code specify 'fdem' OR 'finH' and ( 'finL' OR 'finG' );\n" \
   "\t\t for classical just 'finH' (and optionally the dual matrix 'finL')\n" \
@@ -404,7 +407,7 @@ typedef struct UFL_T {
   "\t debug=[integer]\t: bitmap for aux information to output (default: 1)\n" \
   "\t\t*   0: clear the entire debug bitmap to 0.\n"                    \
   "\t\t*   1: output misc general info (on by default)\n"		\
-  "\t\t*   2: output matrices for verification\n"                       \
+  "\t\t*   2: additional info; calculate code confinement\n"            \
   "\t\t\t see the source code for more options\n"			\
   "\t See program documentation for input file syntax.\n"               \
   "\t Multiple 'debug' parameters are XOR combined except for 0.\n"	\
@@ -454,7 +457,11 @@ typedef struct UFL_T {
   "\t\t in an error vector stored in the hash; no limit if 'uR=0'\n"	\
   "\t\t Parameter 'uX', when non-zero, allows the use of partially matched syndrome clusters,\n" \
   "\t\t in which case only residual error is sent to the main decoder\n" \
-  "\t\t (default: 0, use only fully matched syndrome vectors)\n"	
+  "\t\t (default: 0, use only fully matched syndrome vectors)\n"	\
+  "\t\t (partial cluster decoding mode is experimental, may not work!)\n" \
+  "\t\t With debug&2 non-zero and uW>0, print out the confinement function\n" 
+  
+  
   //  "\t\t 'finU' / 'outU' names of likely error vectors file (not implemented)\n" 
   //  "\t\t\t(the file will be overwritten if names are the same). \n"
 

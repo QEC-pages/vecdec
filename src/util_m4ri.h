@@ -10,6 +10,11 @@
 
 #define SWAPINT(a,b) do{ int t=a; a=b; b=t; } while(0)
 
+#ifndef NEW_M4RI
+static inline word const * mzd_row_const(const mzd_t * mat, const int row){
+  return mat->rows[row] ;
+}
+#endif 
 
 /**
  * macros from nauty.h
@@ -150,8 +155,9 @@ size_t mzd_weight(const mzd_t *A);
 
   void mzd_row_print_sparse(const mzd_t * const A, const int row);  
 
-static inline void mzd_flip_bit(mzd_t const *M, rci_t const row, rci_t const col ) {
-  __M4RI_FLIP_BIT(M->rows[row][col/m4ri_radix], col%m4ri_radix);
+static inline void mzd_flip_bit(mzd_t * const M, rci_t const row, rci_t const col ) {
+  word * const rawrow = mzd_row(M,row);
+  __M4RI_FLIP_BIT(rawrow[col/m4ri_radix], col%m4ri_radix);
 }
 
   
@@ -518,6 +524,9 @@ void make_err(mzd_t *row, double p);
 /** @brief calculate the rank of the csr matrix `M` */
   int rank_csr(const csr_t * const M);  
 
+/** @brief calculate the joint rank of two matrices stacked on top of each other */
+  int rank_stacked(const csr_t * const H, const csr_t * const L);
+  
 #if defined(__cplusplus) && !defined (_MSC_VER)
 }
 #endif
