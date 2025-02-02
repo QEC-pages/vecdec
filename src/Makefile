@@ -74,6 +74,7 @@ zip: ${src}
 	zip -9 -o vecdec.zip ${src} ../Doxyfile ../README.md
 
 give_help:
+	@echo  "\e[36m make -j all \e[0m" "   to compile all programs in the collection"
 	@echo  "\e[36m make vecdec \e[0m" "   to compile \`vecdec\` \e[32m a simple vectorized decoder\e[0m"
 	@echo  "\e[36m make clean \e[0m   " "to\e[31m remove\e[0m object files and such"
 	@echo  "\e[36m make veryclean \e[0m" "also\e[31m remove\e[0m executables and zip file"
