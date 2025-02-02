@@ -1382,7 +1382,9 @@ int var_init(int argc, char **argv, params_t *p){
       printf("# initializing seed=%lld from time(NULL)+1000000ul*getpid()+%lld\n",p->seed, seed_old);
     /** use `tinymt64_generate_double(&pp.tinymt)` for double `[0,1)` */
   }
-  
+  else if((p->debug)&&(p->mode!=3))
+    printf("# using seed=%lld\n",p->seed);
+
   tinymt64_init(&tinymt,p->seed);
 
   if((! p->fdem) && (! p->finH))
@@ -1589,8 +1591,14 @@ int var_init(int argc, char **argv, params_t *p){
       if((p->submode & 4) && (p->submode & 16))
 	printf("# randomize node order at each step");
     }
-    if ((p->submode>=32))
-      ERROR(" mode=%d BP : submode='%d' currently unsupported\n", p->mode, p->submode);    
+    if ((p->submode>=64))
+      ERROR(" mode=%d BP : submode='%d' currently unsupported\n", p->mode, p->submode);
+    if (p->submode&32){
+      if (p->submode&16)
+	ERROR(" mode=%d BP : submode='%d' bit 4 (16) and bit 5 (32) are incompatible\n", p->mode, p->submode);
+      if(p->bpretry!=1)
+	ERROR(" mode=%d BP : submode='%d' bit 5 (32) requires bpretry=1 (have %d)\n", p->mode, p->submode, p->bpretry);
+    }      
     /* fall through */
   case 0:
     if(p->vP == NULL)

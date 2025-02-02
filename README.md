@@ -32,19 +32,53 @@ scripts in `vecdec/examples` and `vecdec/input` directories.
 
 ## Installation 
 
+### Libraries and related programs
 The program uses `m4ri` library for binary linear algebra.
 To install this library on a Ubuntu system, run
     `sudo apt-get install libm4ri-dev`
-    
-To run scripts in `vecdec/examples` directory, you will need to install
-command-line versions of [Stim](https://github.com/quantumlib/Stim) and
-[PyMatching](https://github.com/oscarhiggott/PyMatching).
-    
+	
+Alternatively, download `m4ri` library from
+[github](https://github.com/malb/m4ri/) using, e.g., 
+```
+git clone https://github.com/malb/m4ri/
+```
+and follow the instructions to compile and install it.  You may need
+to edit your `C_INCLUDE_PATH`, `CPLUS_INCLUDE_PATH`, or `LIBRARY_PATH`
+if you install outside normal directory structure.
+Alternatively, you can also set `INC` variable in the `Makefile`, or set it during 
+compilation as an argument to `make` (this assumes `m4ri` was compiled
+but not installed in `../../m4ri` directory relative the
+`vecdec/src`):
+```
+make -j all DINC="-I../../m4ri -L../../m4ri/.libs"
+```
+
+To run scripts in `vecdec/examples` directory, you will also need to
+install command-line versions of  
+[Stim](https://github.com/quantumlib/Stim) and  
+[PyMatching](https://github.com/oscarhiggott/PyMatching).  
+
+### Compilation
+
+Get the source code from
+[https://github.com/QEC-pages/vecdec](https://github.com/QEC-pages/vecdec),
+e.g., using `git`, and compile by running 
+```
+git clone https://github.com/QEC-pages/vecdec
+cd vecdec/src
+make -j all
+```
+
+The program should compile without warnings on a reasonably recent
+Linux system.
+
 For compilation *help*, change to the (vecdec/src/) directory and just run w/o
-arguments  
+arguments 
     `make`
-Since the program  is experimental, I recommend compiling with  
-    `make vecdec EXTRA=""`  
+
+Normal compilation defines the variable `NDEBUG`.
+If you run into trouble, you way want to recompile without it, by running
+    `make clean && make vecdec EXTRA=""`  
 This will enable additional integrity checks, and a lot of optional
 debugging information.  Some of the additional checks may be
 expensive; the program runs slower in this mode.
