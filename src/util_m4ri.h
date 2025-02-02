@@ -10,13 +10,10 @@
 
 #define SWAPINT(a,b) do{ int t=a; a=b; b=t; } while(0)
 
-#include <m4ri/m4ri.h>
-#ifndef mzd_row_const
-// #ifndef NEW_M4RI
-static inline word const * mzd_row_const(const mzd_t * mat, const int row){
-  return mat->rows[row] ;
+/** `kludge` to work around the differences between old and new m4ri libraries */
+static inline word const * mzd_row_cons(const mzd_t * const mat, const int row){
+  return mzd_row((mzd_t *)mat, row);
 }
-#endif 
 
 /**
  * macros from nauty.h
