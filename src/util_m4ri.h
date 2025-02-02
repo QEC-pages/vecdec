@@ -10,7 +10,9 @@
 
 #define SWAPINT(a,b) do{ int t=a; a=b; b=t; } while(0)
 
-#ifndef NEW_M4RI
+#include <m4ri/m4ri.h>
+#ifndef mzd_row_const
+// #ifndef NEW_M4RI
 static inline word const * mzd_row_const(const mzd_t * mat, const int row){
   return mat->rows[row] ;
 }
