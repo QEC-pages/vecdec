@@ -338,6 +338,35 @@ typedef struct {
   void ufl_cnt_print(const params_t * const p);
   void ufl_cnt_update(const int which, const ufl_t * const u, const params_t * const p);
 
+  /****BAR */
+  void free_energy_differences(EnergyDifferences* U, int K);
+
+  void scale_energy_differences(EnergyDifferences *U, int K);
+
+  double log_bar_equation(const double *log_delta_U_A, const double *log_delta_U_B, 
+    int N_A, int N_B, double log_Q_ratio);
+
+  void solve_bar_ratios(EnergyDifferences *U, int K, double **log_Q_ratios);
+
+  int find_max_partition_function(double **log_Q_ratios, int K);
+
+  void generate_random_rows(int *rows_to_add, int num_rows, int total_rows);
+
+  void sample_states(csr_t *e_initial,
+    const int *home_potential_rows, int num_home_potential_rows,
+    const int *away_potential_rows, int num_away_potential_rows,
+    EnergyDifferences *U, int home_index, int away_index,
+    const params_t *p, int i);
+
+  void bar_mcmc(csr_t *mEt0_csr, csr_t *mEt_csr, const params_t *p, int i);
+
+  void mcmc_refine(csr_t *mEt0_csr, const params_t *p, int i);
+
+  mzd_t *do_decode_BAR(mzd_t *mS, params_t const *const p);
+
+
+
+
   /**
    * @brief The help message.
    *
