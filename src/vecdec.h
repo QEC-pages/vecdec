@@ -138,6 +138,7 @@ typedef struct UFL_T {
     int use_stdout; /** with mode=3 */
     int debug; /** `debug` information */
     char *finH; /** `input file` name for Hx=H (if input separately or a classical code) */
+    char *finHT; /** `input file` name for transposed Hx=H */
     char *finA; /** `input file` name for additional matrix A*e0+ H*e=s (for mode=0,1 only) with `s` given explicitly as `fdet` */
     char *finL; /** `input file` name for Lx=L (if input separately or a classical code) */
     char *finK; /** `input file` name for Lz=K (not used much) */
@@ -343,6 +344,7 @@ typedef struct UFL_T {
   "\t --morehelp\t: give more help on program conventions\n"		\
   "\t fdem=[string]\t: name of the input file with detector error model\n" \
   "\t finH=[string]\t: file with parity check matrix Hx (mm or alist)\n" \
+  "\t finHT=[string]\t: file with transposed parity check matrix Hx (mm only)\n" \
   "\t finG=[string]\t: file with dual check matrix Hz (mm or alist)\n"	\
   "\t finL=[string]\t: file with logical dual check matrix Lx (mm or alist)\n" \
   "\t finK=[string]\t: file with logical check matrix Lz (mm or alist)\n" \
@@ -365,7 +367,7 @@ typedef struct UFL_T {
   "\t\t default: 0, do not override; negative value = weight-only mode\n" \
   "\t mulP=[double]\t: scale probability values from DEM file\n"	\
   "\t\t for a quantum code specify 'fdem' OR 'finH' and ( 'finL' OR 'finG' );\n" \
-  "\t\t for classical just 'finH' (and optionally the dual matrix 'finL')\n" \
+  "\t\t for classical just 'finH' or 'finHT' (and optionally the dual matrix 'finL')\n" \
   "\t ferr=[string]\t: input file with error vectors (01 format)\n"	\
   "\t fer0=[string]\t: add'l error to correct det events 's+A*e0' (01 format)\n" \
   "\t\t where matrix 'A' is given via 'finA', 's' via 'fdet', and 'e0'\n" \
