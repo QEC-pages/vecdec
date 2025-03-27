@@ -42,7 +42,7 @@ params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50,
   .pdet=NULL, .pobs=NULL,  .perr=NULL,  
   .mode=-1, .submode=0, .use_stdout=0, 
   .LLRmin=0, .LLRmax=0, .codewords=NULL, .num_cws=0,
-  .finH=NULL, .finL=NULL, .finG=NULL, .finK=NULL, .finP=NULL,
+  .finH=NULL, .finHT=NULL, .finL=NULL, .finG=NULL, .finK=NULL, .finP=NULL,
   .finC=NULL, .outC=NULL, 
   .finU=NULL, .outU=NULL, 
   .vP=NULL, .vLLR=NULL, .mH=NULL, .mHt=NULL,
@@ -767,7 +767,8 @@ int do_energ_verify(const qllr_t * const vE, const mzd_t * const mE, const param
  */
 void init_Ht(params_t *p){
   const int n = p->nvar;
-  p->mHt = csr_transpose(p->mHt, p->mH);
+  if(p->mHt == NULL)
+    p->mHt = csr_transpose(p->mHt, p->mH);
   //! construct v-v graph 
   //  csr_t *vv_gr = do_vv_graph(p->mH, p->mHt, p);
   if(p->mode < 2){
@@ -1164,6 +1165,18 @@ int var_init(int argc, char **argv, params_t *p){
         p->finH = argv[++i]; /**< allow space before file name */
       if (p->debug&4)
 	printf("# read %s, finH=%s\n",argv[i],p->finH);
+      if (p->finHT)
+	ERROR("finH=%s and finHT=%s: specify only H or HT but not both matrices",p->finH,p->finHT);
+    }
+    else if (0==strncmp(argv[i],"finHT=",6)){ /** `finHT` */
+      if(strlen(argv[i])>6)
+        p->finHT = argv[i]+6;
+      else
+        p->finHT = argv[++i]; /**< allow space before file name */
+      if (p->debug&4)
+	printf("# read %s, finHT=%s\n",argv[i],p->finHT);
+      if (p->finH)
+	ERROR("finH=%s and finHT=%s: specify only H or HT but not both matrices",p->finH,p->finHT);
     }
     else if (0==strncmp(argv[i],"finA=",5)){ /** `finA` */
       if(strlen(argv[i])>5)
@@ -1387,10 +1400,10 @@ int var_init(int argc, char **argv, params_t *p){
 
   tinymt64_init(&tinymt,p->seed);
 
-  if((! p->fdem) && (! p->finH))
+  if((! p->fdem) && (! p->finH) && (! p->finHT))
     ERROR("Please specify the DEM file 'fdem' or check matrix file 'finH'\n");
-  if((p->fdem) && (p->finH))
-    ERROR("Please specify fdem=%s OR finH=%s but not both\n",p->fdem, p->finH);
+  if((p->fdem) && ((p->finH) || (p->finHT)))
+    ERROR("Please only one of fdem=%s , finH=%s , finHT=%s \n",p->fdem, p->finH, p->finHT);
 
   if(p->fdem){
     if((p->finL)||(p->finP)||(p->finH))
@@ -1412,13 +1425,19 @@ int var_init(int argc, char **argv, params_t *p){
 
   }
 
-  if(p->finH){
+  if((p->finH)||(p->finHT)){
     if(! p->finL){
       if(((p->fobs) || (p->fdet)) && ((p->perr == NULL) && (p->fer0 == NULL)))
 	ERROR("Without L matrix, cannot specify fdet=%s or fobs=%s\n",
 	      p->fdet ? p->fdet : "",  p->fobs ? p->fobs : "");      
     }
-    p->mH=csr_mm_read(p->finH, p->mH, 0, p->debug);
+    if(p->finH){
+      p->mH=csr_mm_read(p->finH, p->mH, 0, p->debug);
+    }
+    else{ /** `p->finHT` specified */
+      p->mHt=csr_mm_read(p->finHT, p->mHt, 0, p->debug);
+      p->mH = csr_transpose(p->mH, p->mHt);
+    }
     p->rankH = rank_csr(p->mH);
     if((! p->finL) && (! p->finG)){ /** only `H` matrix specified */
       p->classical=1;
@@ -1428,6 +1447,7 @@ int var_init(int argc, char **argv, params_t *p){
     p->nvar = p->mH->cols;
     p->nchk = p->mH->rows;
   }
+
   /** at this point we should have `H` matrix for sure */
   if(p->mH == NULL)
     ERROR("Must specify H matrix using 'finH=' or 'fdem=' argument!");
@@ -2531,12 +2551,19 @@ int main(int argc, char **argv){
 				p->minW_rec, p->maxW ? p->maxW : p->minW_rec+p->dW, p->debug);
 	    //	  csr_out(p->mK);
 	  }
-	  else{
-	    if ((p->mG)&&(p->mH)){
-	      p->mK=Lx_for_CSS_code(p->mG,p->mH);
+	  else{ /** TODO: enable K matrix creation from codewords */
+	    if(p->classical){
+	      mzd_t *mat = mzd_generator_from_csr(NULL, p->mH);
+	      p->mK = csr_from_mzd(NULL, mat);
+	      mzd_free(mat);
 	    }
-	    else
-	      ERROR("use mode=3.3 or specify the codewords file `finC=...` or generator matrix `finG=...`");
+	    else{
+	      if ((p->mG)&&(p->mH)){
+		p->mK=Lx_for_CSS_code(p->mG,p->mH);
+	      }
+	      else
+		ERROR("use mode=3.3 or specify the codewords file `finC=...` or generator matrix `finG=...`");
+	    }
 	  }
 	  comment[0]='K';
 	}
