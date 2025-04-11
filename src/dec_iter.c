@@ -391,9 +391,10 @@ int do_serialC_BP(qllr_t * outLLR, const mzd_t * const srow,
   for (int itry=0; itry<p->bpretry; itry++){
 
     //  if(p->debug &1)    printf("randomizing initial node order\n");
-    pivots = mzp_rand(pivots); /* LAPAC-style random node permutation */
-    perm   = perm_p(perm, pivots,0); /* actual permutation */
-    
+    if(!(p->submode & 32)){
+      pivots = mzp_rand(pivots); /* LAPAC-style random node permutation */
+      perm   = perm_p(perm, pivots,0); /* actual permutation */
+    }
     /** init V->C messages to bare LLR */
     bp_init_VC(mesVtoC,H,LLR);
 

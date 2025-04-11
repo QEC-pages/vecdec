@@ -4,20 +4,19 @@ WARN = -Wall -Wsign-compare -Wextra -Wimplicit-fallthrough=0
 # use `-ggdb3` for use with valgrind
 ## EXTRA may be set on the command line, e.g., "EXTRA=''" or "EXTRA='-pg -DNDEBUG'"
 # EXTRA = -DNDEBUG -Wno-unused-variable -Wno-unused-parameter  
-# OPT  = -g -march=native -mtune=native -O3 ${PRODUCTION}
+# OPT  = -g -march=native -mtune=native -O3 
 EXTRA=-DNDEBUG
 VER=-DUSE_QLLR
 # use -DNDEBUG to disable assert, -Wfatal-errors to stop at 1st error
 # to compile on Mac you may need to disable '-march=native` 
-OPT = -g -march=native -mtune=native -O3 ${EXTRA}
+OPT = -g -march=native -mtune=native -O3 
 #OPT = -g -mtune=native -O3 ${EXTRA}
-CFLAGS = ${OPT} ${VER} ${WARN}
 
-# use '-DNEW_M4RI' switch if you have newer M4RI library, e.g., from
-# https://github.com/malb/m4ri
+# if you have M4RI library outside normal search path
+# uncomment the line below (you may edit the location if necessary)
+# INC = -I../../m4ri -L../../m4ri/.libs
 #
-# CC = gcc  -I../../m4ri -L../../m4ri/.libs -DNEW_M4RI
-# CPP = g++  -I../../m4ri -L../../m4ri/.libs -DNEW_M4RI
+CFLAGS = ${OPT} ${VER} ${WARN} ${INC} ${EXTRA}
 CC = gcc
 CPP = g++
 
@@ -75,6 +74,7 @@ zip: ${src}
 	zip -9 -o vecdec.zip ${src} ../Doxyfile ../README.md
 
 give_help:
+	@echo  "\e[36m make -j all \e[0m" "   to compile all programs in the collection"
 	@echo  "\e[36m make vecdec \e[0m" "   to compile \`vecdec\` \e[32m a simple vectorized decoder\e[0m"
 	@echo  "\e[36m make clean \e[0m   " "to\e[31m remove\e[0m object files and such"
 	@echo  "\e[36m make veryclean \e[0m" "also\e[31m remove\e[0m executables and zip file"
