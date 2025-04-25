@@ -1,4 +1,4 @@
-WARN = -Wall -Wsign-compare -Wextra -Wimplicit-fallthrough=0
+WARN = -Wall -Wsign-compare -Wextra -Wimplicit-fallthrough -Wno-expansion-to-defined
 # add -Warray-bounds=2 for run-time memory checks (does it actually work?)
 # OPT  = -O2 -g -pg # for use with gprof
 # use `-ggdb3` for use with valgrind
@@ -8,15 +8,19 @@ WARN = -Wall -Wsign-compare -Wextra -Wimplicit-fallthrough=0
 EXTRA=-DNDEBUG
 VER=-DUSE_QLLR
 # use -DNDEBUG to disable assert, -Wfatal-errors to stop at 1st error
-# to compile on Mac you may need to disable '-march=native` 
-OPT = -g -march=native -mtune=native -O3 
-#OPT = -g -mtune=native -O3 ${EXTRA}
+
+# use '-DOLD_M4RI' compiler switch if you have an older M4RI library, e.g.,
+# version 20140914 or earlier 
+# ADD = -DOLD_M4RI
+
+# to compile on Mac you may need to remove '-march=native'
+OPT = -g -march=native -mtune=native -O3 ${ADD} ${EXTRA}
 
 # if you have M4RI library outside normal search path
 # uncomment the line below (you may edit the location if necessary)
 # INC = -I../../m4ri -L../../m4ri/.libs
 #
-CFLAGS = ${OPT} ${VER} ${WARN} ${INC} ${EXTRA}
+CFLAGS = ${OPT} ${VER} ${WARN} ${INC} 
 CC = gcc
 CPP = g++
 
