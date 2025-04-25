@@ -11,7 +11,8 @@ VER=-DUSE_QLLR
 
 # use '-DOLD_M4RI' compiler switch if you have an older M4RI library, e.g.,
 # version 20140914 or earlier 
-# ADD = -DOLD_M4RI
+# apparently this is the case on `ubuntu-latest` at `github`
+ADD = -DOLD_M4RI
 
 # to compile on Mac you may need to remove '-march=native'
 OPT = -g -march=native -mtune=native -O3 ${ADD} ${EXTRA}
