@@ -1,5 +1,8 @@
 # opening DEM file examples/surf_d5.dem
 # read DEM examples/surf_d5.dem: rows_H=120 rows_L=1 cols=1679; nz_H=5008 nz_L=140
+# CSS code n=1679 k=1
+# H=Hx[120,1679] nz=5008 rank=120
+# L=Lx[1,1679] nz=140 rank=1
 # Output H=Hx L=Lx matrices and probabilities vector
 # writing H=Hx matrix [ 120 x 1679 ] to 	bigH.mmx
 # writing L=Lx matrix [ 1 x 1679 ] to 	bigL.mmx

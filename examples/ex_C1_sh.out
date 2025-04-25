@@ -1,3 +1,8 @@
+# CSS code n=40 k=10
+# H=Hx[16,40] nz=80 rank=15
+# G=Hz[16,40] nz=80 rank=15
+# L=Lx[10,40] nz=97 rank=10
+# LLR calculation unit uses quantized LLR
 # mode=0, running vecdec RIS decoder : generating errors internally
 # mode=0 submode=0: use RIS decoder
 # RIS decoder parameters: steps=1000 swait=0 lerr=-1
@@ -5,7 +10,6 @@
 # uW=1, adding errors of weight up to 1 to syndrome hash
 # uX=0, will not use partially matched errors for pre-decoding
 # stored 40 errors / 40 distinct syndrome vectors in hash
-# starting round 1 of 1
 # generated 1000 det/obs pairs
 # P_FAIL N_TOT FAIL S_TOT : C_TRIVIAL S_TRIVIAL   C_LOW S_LOW  C_CLUS S_CLUS : FAIL_RIS N_RIS S_RIS
       0.042 1000 42 958 : 446 446 	 356 356 	 12 12 : 42 186 144 

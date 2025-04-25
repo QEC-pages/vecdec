@@ -138,6 +138,7 @@ typedef struct UFL_T {
     int use_stdout; /** with mode=3 */
     int debug; /** `debug` information */
     char *finH; /** `input file` name for Hx=H (if input separately or a classical code) */
+    char *finHT; /** `input file` name for transposed Hx=H */
     char *finA; /** `input file` name for additional matrix A*e0+ H*e=s (for mode=0,1 only) with `s` given explicitly as `fdet` */
     char *finL; /** `input file` name for Lx=L (if input separately or a classical code) */
     char *finK; /** `input file` name for Lz=K (not used much) */
@@ -173,11 +174,13 @@ typedef struct UFL_T {
     int classical; /** `1` if this is a classical code? */
     int internal; /** `1` to generate obs/det internally, `2` to generate from `err` file */
     long long int seed;  /** rng `seed`, set<=0 for automatic */
-    double useP; /** global error probability `overriding` values in the `DEM` file (default: 0, no override) */
+    double useP; /** global error probability `overriding` values in the `DEM` file (default: 0, no override)
+		  negative value means weight-only mode (no probabilities specified) */
     double mulP; /** scale error probability values in the `DEM` file (default: 0, no scaling) */
     double *vP; /** probability vector (total of `n`) */
     qllr_t *vLLR; /** vector of LLRs (total of `n`) */
-    int minW; /** minimum weight of a codeword or error vector found */
+    int minW_rec; /** minimum weight of a codeword or error vector found */
+    int maxW_rec; /** max weight of a codeword or error vector found */
     int dW; /** if non-negative, weight over `minW` to keep the CW or error vector in a hash (default: `0`, `minW` only) */
     int maxW; /** if non-zero, skip any vectors above this weight (default `0`, no upper limit) */
     qllr_t minE; /** minimum energy of a codeword or error vector found */
@@ -255,7 +258,7 @@ typedef struct UFL_T {
   mzp_t * sort_by_llr(mzp_t *perm, const qllr_t vLLR[], params_t const * const p);
 
   /** @brief prepare an ordered pivot-skip list of length `n-rank` */
-  mzp_t * do_skip_pivs(const size_t rank, const mzp_t * const pivs);
+  mzp_t * do_skip_pivs(mzp_t * skip_pivs, mzp_t * const pivs_srtd, const int rank, const mzp_t * const pivs);
 
   /** functions defined in `dec_iter.c` ******************************************** */
   void cnt_out(int print_banner, const params_t * const p);
@@ -341,6 +344,7 @@ typedef struct UFL_T {
   "\t --morehelp\t: give more help on program conventions\n"		\
   "\t fdem=[string]\t: name of the input file with detector error model\n" \
   "\t finH=[string]\t: file with parity check matrix Hx (mm or alist)\n" \
+  "\t finHT=[string]\t: file with transposed parity check matrix Hx (mm only)\n" \
   "\t finG=[string]\t: file with dual check matrix Hz (mm or alist)\n"	\
   "\t finL=[string]\t: file with logical dual check matrix Lx (mm or alist)\n" \
   "\t finK=[string]\t: file with logical check matrix Lz (mm or alist)\n" \
@@ -360,9 +364,10 @@ typedef struct UFL_T {
   "\t\t for pre-decoding (default: '0', no limit)\n"			\
   "\t epsilon=[double]\t: small probability cutoff (default: 1e-8)\n"	\
   "\t useP=[double]\t: fixed probability value (override values in DEM file)\n"	\
+  "\t\t default: 0, do not override; negative value = weight-only mode\n" \
   "\t mulP=[double]\t: scale probability values from DEM file\n"	\
   "\t\t for a quantum code specify 'fdem' OR 'finH' and ( 'finL' OR 'finG' );\n" \
-  "\t\t for classical just 'finH' (and optionally the dual matrix 'finL')\n" \
+  "\t\t for classical just 'finH' or 'finHT' (and optionally the dual matrix 'finL')\n" \
   "\t ferr=[string]\t: input file with error vectors (01 format)\n"	\
   "\t fer0=[string]\t: add'l error to correct det events 's+A*e0' (01 format)\n" \
   "\t\t where matrix 'A' is given via 'finA', 's' via 'fdet', and 'e0'\n" \
@@ -491,6 +496,8 @@ typedef struct UFL_T {
   "\t\t\t .8 (bit 3) with serial, use V-based order (not C-based)\n"	\
   "\t\t\t .16 (bit 4) with serial, randomize node order in each round \n" \
   "\t\t\t     (by default randomize only once per run)\n"		\
+  "\t\t\t .32 (bit 5) with serial, suppress all node order randomization\n" \
+  "\t\t\t     (must have bpretry=1 and bit 4 not set in submode)\n"		\
   "\t For convenience, 'submode=0' is equivalent to 'submode=3'. \n"	\
   "\t This decoder may experience convergence issues.\n" \
   "\t Accuracy and performance are determined by parameters \n" \

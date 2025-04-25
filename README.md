@@ -32,19 +32,53 @@ scripts in `vecdec/examples` and `vecdec/input` directories.
 
 ## Installation 
 
+### Libraries and related programs
 The program uses `m4ri` library for binary linear algebra.
 To install this library on a Ubuntu system, run
     `sudo apt-get install libm4ri-dev`
-    
-To run scripts in `vecdec/examples` directory, you will need to install
-command-line versions of [Stim](https://github.com/quantumlib/Stim) and
-[PyMatching](https://github.com/oscarhiggott/PyMatching).
-    
+	
+Alternatively, download `m4ri` library from
+[github](https://github.com/malb/m4ri/) using, e.g., 
+```
+git clone https://github.com/malb/m4ri/
+```
+and follow the instructions to compile and install it.  You may need
+to edit your `C_INCLUDE_PATH`, `CPLUS_INCLUDE_PATH`, or `LIBRARY_PATH`
+if you install outside normal directory structure.
+Alternatively, you can also set `INC` variable in the `Makefile`, or set it during 
+compilation as an argument to `make` (this assumes `m4ri` was compiled
+but not installed in `../../m4ri` directory relative the
+`vecdec/src`):
+```
+make -j all DINC="-I../../m4ri -L../../m4ri/.libs"
+```
+
+To run scripts in `vecdec/examples` directory, you will also need to
+install command-line versions of  
+[Stim](https://github.com/quantumlib/Stim) and  
+[PyMatching](https://github.com/oscarhiggott/PyMatching).  
+
+### Compilation
+
+Get the source code from
+[https://github.com/QEC-pages/vecdec](https://github.com/QEC-pages/vecdec),
+e.g., using `git`, and compile by running 
+```
+git clone https://github.com/QEC-pages/vecdec
+cd vecdec/src
+make -j all
+```
+
+The program should compile without warnings on a reasonably recent
+Linux system.
+
 For compilation *help*, change to the (vecdec/src/) directory and just run w/o
-arguments  
+arguments 
     `make`
-Since the program  is experimental, I recommend compiling with  
-    `make vecdec EXTRA=""`  
+
+Normal compilation defines the variable `NDEBUG`.
+If you run into trouble, you way want to recompile without it, by running
+    `make clean && make vecdec EXTRA=""`  
 This will enable additional integrity checks, and a lot of optional
 debugging information.  Some of the additional checks may be
 expensive; the program runs slower in this mode.
@@ -268,8 +302,18 @@ with RIS (`mode=0`) decoder.
 ## LER and code distance estimator
 
 This section describes operation with the command-line switch `mode=2`.
-(**TODO:** update the submode options.  Description below applies to
-current `mode=2.1`).
+Summary of additional mode options:
+* Without any submode specified, the program just tries to find a
+  minimum-weight codeword.  In this regime, it is recommended to add
+  `useP=-1` to the command line, to skip energy calculations. 
+* With submode 1 (i.e., `mode=2.1`), the program will use the computed
+  codewords to estimate the fail probability.  Two quantities will be
+  computed: the sum of estimated fail probabilities over the codewords
+  and the maximum single-codeword fail probability.  The results are
+  not expected to be accurate since estimated prefactors will be used.
+* The submode 2 (i.e., `mode=2.2`) is similar, except that exact
+  prefactors will be used (for a codeword of weight `w` a prefactor is
+  computed by examining all $2^w$ binary error patterns).
 
 Given the error model, i.e., the matrices $H$, $L$, and the vector of column
 probability values $p_i$, the program tries to enumerate the likely binary
@@ -278,7 +322,8 @@ while the associate log-likelihood probability ratio (LLR)
 $\sum_i c_i \ln(1/p_i-1)$
 is not too large. 
 
-To this end, it stores the list of codewords found in a hash, and
+The following gives a more detailed description for `mode=2.1`:
+The program stores the list of codewords found in a hash, and
 outputs four numbers: 
 - The sum of estimated contributions to the logical error probability
   from all codewords found, $\displaystyle\sum_c\prod_{i\in
