@@ -11,9 +11,12 @@
 #define SWAPINT(a,b) do{ int t=a; a=b; b=t; } while(0)
 
 /** `kludge` to work around the differences between old and new m4ri libraries */
-#if defined(OLD_M4RI)
-static inline word const * mzd_row_const(const mzd_t * mat, const int row){
-  return mat->rows[row] ;
+static inline word const * mzd_row_cons(const mzd_t * mat, const int row){
+  //  return mat->rows[row] ;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdiscarded-qualifiers"
+  return mzd_row(mat,row);
+#pragma GCC diagnostic pop
 }
 
 /**

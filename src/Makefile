@@ -9,9 +9,8 @@ EXTRA=-DNDEBUG
 VER=-DUSE_QLLR
 # use -DNDEBUG to disable assert, -Wfatal-errors to stop at 1st error
 
-# use '-DOLD_M4RI' compiler switch if you have an older M4RI library, e.g.,
-# version 20140914 or earlier 
-# ADD = -DOLD_M4RI
+# define this on the command line for any other compilation options 
+# ADD = 
 
 # to compile on Mac you may need to remove '-march=native'
 OPT = -g -march=native -mtune=native -O3 ${ADD} ${EXTRA}
