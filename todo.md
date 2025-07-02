@@ -594,15 +594,16 @@ observable or soft-out row), and rows not-yet decoded.
        neighboring errors (Would it be sufficient to cover all
        weight-two clusters?  Why not?)
  - [ ] generalization for tree-like connected clusters of higher weight.
- - [ ] For `dist_m4ri`, add a mode for computing the confinement.
+ - [x] For `dist_m4ri`, add a mode for computing the confinement.
        Namely, store all errors/syndrome combinations by syndrome and
        the corresponding minimum weight error.
  - [ ] Come up with a notion of a distance suitable for SS two-step
        and SS one-step decoding.  At what minimum error/syndrome
        weight would a non-trivial error show up? (That would cause the
        decoding to fail).
- - [ ] Can we come up with a some sort of a *locality distance*?  That
-       is, error weight to guarantee decoding cluster locality.
+ - [ ] Can we come up with a some sort of a *locality distance*?  That is, error
+       weight to guarantee decoding cluster locality, when using window size
+       $T$.
  - [ ] Write a separate program for PRE+BP+OSD decoding, to save on
        matrix rewriting.  Try partial cluster matching (with the
        partially matched vectors correctly participating in the weight
@@ -614,3 +615,16 @@ observable or soft-out row), and rows not-yet decoded.
 ## new items 2014/11/19
 
 - [ ] make sure programs work with p=0.5 (and also with p>0.5)
+
+## new items 2025/07/02
+
+- [ ] update / generate cluster list when running a decoder (when original error
+      vectors are available).  Namely, for every decoding error, subtract the
+      original error vector, decompose the difference to connected clusters, and
+      pick irreducible non-trivial codewords; update in the hash and finally
+      save updated list to a file.
+- [ ] Make sure two probability vectors can be read in mode=2, along with the
+      reference fail rate, to generate better prediction.
+- [x] ~~For experiments, randomly select certain fraction of codewords (e.g.,
+      when reading from a file), study what would be sufficient.~~ (do it
+      separately, using `shuf` on the `nz` file.)
