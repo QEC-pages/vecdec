@@ -35,14 +35,15 @@ params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50,
   .uW=1, .uX=0, .uR=0, //.uEdbl=-1, .uE=-1,
   .numU=0, .numE=0, .maxU=0,
   .hashU_error=NULL, .hashU_syndr=NULL, .permHe=NULL,
-  .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8, .useP=0, .mulP=0, .dmin=0,
+  .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8,
+  .useP=0, .mulP=0, .useQ=0, .refQ=0, .dmin=0,
   .debug=1, .fdem=NULL, .fout="tmp",
   .fdet=NULL, .fobs=NULL,  .ferr=NULL,
   .gdet=NULL, .gobs=NULL, // .gerr=NULL,
   .pdet=NULL, .pobs=NULL,  .perr=NULL,  
   .mode=-1, .submode=0, .use_stdout=0, 
   .LLRmin=0, .LLRmax=0, .codewords=NULL, .num_cws=0,
-  .finH=NULL, .finHT=NULL, .finL=NULL, .finG=NULL, .finK=NULL, .finP=NULL,
+  .finH=NULL, .finHT=NULL, .finL=NULL, .finG=NULL, .finK=NULL, .finP=NULL, .finQ=NULL,
   .finC=NULL, .outC=NULL, 
   .finU=NULL, .outU=NULL, 
   .vP=NULL, .vLLR=NULL, .mH=NULL, .mHt=NULL,
@@ -67,7 +68,7 @@ params_t prm_default={  .steps=50,
   .uW=1, .uX=0, .uR=0, //.uEdbl=-1, .uE=-1,
   .maxU=0, .bpalpha=1, .bpbeta=1,
   .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8, .useP=0, .mulP=0, .dmin=0,
-  .debug=1, .fout="tmp", .ferr=NULL,
+  .useQ=0, .refQ=0, .debug=1, .fout="tmp", .ferr=NULL,
   .mode=-1, .submode=0, .use_stdout=0, 
 };
 
@@ -1103,6 +1104,16 @@ int var_init(int argc, char **argv, params_t *p){
       if (p->debug&4)
 	printf("# read %s, mulP=%g\n",argv[i],p-> mulP);
     }
+    else if (sscanf(argv[i],"useQ=%lg",&val)==1){ /** `useQ` */
+      p->useQ = val;
+      if (p->debug&4)
+	printf("# read %s, useQ=%g\n",argv[i],p-> useQ);
+    }
+    else if (sscanf(argv[i],"refQ=%lg",&val)==1){ /** `refQ` */
+      p->refQ = val;
+      if (p->debug&4)
+	printf("# read %s, refQ=%g\n",argv[i],p-> refQ);
+    }
     else if (sscanf(argv[i],"dE=%lg",&val)==1){ /** `dE` */
       p -> dEdbl = val;
       if (p->debug&4){
@@ -1199,6 +1210,14 @@ int var_init(int argc, char **argv, params_t *p){
         p->finP = argv[++i]; /**< allow space before file name */
       if (p->debug&4)
 	printf("# read %s, finP=%s\n",argv[i],p->finP);
+    }
+    else if (0==strncmp(argv[i],"finQ=",5)){ /** `finQ` probabilities */
+      if(strlen(argv[i])>5)
+        p->finQ = argv[i]+5;
+      else
+        p->finQ = argv[++i]; /**< allow space before file name */
+      if (p->debug&4)
+	printf("# read %s, finQ=%s\n",argv[i],p->finQ);
     }
     else if (0==strncmp(argv[i],"finL=",5)){ /** `finL` logical */
       if(strlen(argv[i])>5)
@@ -1580,6 +1599,28 @@ int var_init(int argc, char **argv, params_t *p){
       p->vP = NULL;
     }
   }
+
+  if(p->useQ > 0){/** override probability values */
+    if(!p->vQ){
+      p->vQ=malloc(p->nvar * sizeof(double));
+      if(!p->vQ)
+	ERROR("memory allocation failed");
+    }
+    double *ptr=p->vQ;
+    for(int i=0;i<p->nvar;i++, ptr++)
+      *ptr = p->useQ;    
+  }
+  else if (p->finQ){/** read probabilities */
+    if (p->useQ < 0)
+      ERROR("useQ=%g negative incompatible with finQ=%s\n",p->useQ,p->finQ);
+    int rows=0, cols=0, siz=0;
+    p->vQ = dbl_mm_read(p->finQ, &rows, &cols, &siz, NULL);
+    if ((rows != 1) || (cols != p->nvar))
+      ERROR("expected rows=%d cols=%d have %d %d",1,p->nvar, rows,cols);
+    if(p->debug&1)
+      printf("# read %d probability values from %s\n", cols, p->finQ);
+  }
+  
   if((!p->vP)&&(p->useP >= 0))
     ERROR("probabilities missing, specify 'fdem', 'finP', or 'useP'");
 
@@ -1719,9 +1760,16 @@ int var_init(int argc, char **argv, params_t *p){
     if((p->fdet!=NULL)||(p->fobs!=NULL) ||(p->ferr!=NULL))
       ERROR(" mode=%d, must not specify 'ferr' or 'fobs' or 'fdet' files\n",
 	    p->mode);
-    if (p->submode>3)
+    if (p->submode>7)
       ERROR(" mode=%d : submode='%d' unsupported\n",
 	    p->mode, p->submode);
+    if (p->submode & 4){
+      if (((p->useQ==NULL)&&(p->finQ==NULL))||(p->refQ==0)){
+        printf("have  finQ=%s useQ=%g refQ=%g\n");
+        ERROR(" mode=%d : submode='%d' must specify alt Q probabilities\n",
+	    p->mode, p->submode);
+      }
+    }
     break;
     
   case 3: /** read in DEM file and output the H, L, G, K matrices and P vector */
