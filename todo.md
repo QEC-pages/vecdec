@@ -623,6 +623,9 @@ observable or soft-out row), and rows not-yet decoded.
       original error vector, decompose the difference to connected clusters, and
       pick irreducible non-trivial codewords; update in the hash and finally
       save updated list to a file.
+  - [x] with `mode=0`
+  - [ ] with `mode=1`
+  - [ ] make sure it respects `dW` parameter
 - [x] Make sure two probability vectors can be read in mode=2, along with the
       reference fail rate, to generate better prediction.
 - [x] ~~For experiments, randomly select certain fraction of codewords (e.g.,
