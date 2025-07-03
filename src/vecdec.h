@@ -144,7 +144,7 @@ typedef struct UFL_T {
     char *finK; /** `input file` name for Lz=K (not used much) */
     char *finG; /** `input file` name for Hz=G (must use separate input) */
     char *finP; /** `input file` name for P (if input separately or a classical code) */
-    char *finQ; /** `input file` name for Q (extra set of probabilities for mode `2.4`) */
+    char *finQ; /** `input file` name for Q (extra set of probabilities for mode `2.8`) */
     char *finC; /** `input file` name for `C` (list of non-trivial CWs for decoding) */
     char *outC; /** `output file` name for `C` (list of non-trivial CWs for decoding) */
     char *fout; /** `output file name`  header for files creaded with `mode=3` */
@@ -177,12 +177,13 @@ typedef struct UFL_T {
     long long int seed;  /** rng `seed`, set<=0 for automatic */
     double useP; /** global error probability `overriding` values in the `DEM` file (default: 0, no override)
 		  negative value means weight-only mode (no probabilities specified) */
-    double useQ; /** global error probability for use with mode `2.4` file (default: 0, not specified) */
+    double useQ; /** global error probability for use with mode `2.8` file (default: 0, not specified) */
     double mulP; /** scale error probability values in the `DEM` file (default: 0, no scaling) */
     double *vP; /** probability vector (total of `n`) */
-    double *vQ; /** alternative probability vector (total of `n`) for use with mode `2.4` */
+    double *vQ; /** alternative probability vector (total of `n`) for use with mode `2.8` */
     double refQ; /** reference fail rate corresponding to `Q` probabilities */
     qllr_t *vLLR; /** vector of LLRs (total of `n`) */
+    qllr_t *vLLRQ; /** vector of LLRs for the reference distribution (total of `n`) */
     int minW_rec; /** minimum weight of a codeword or error vector found */
     int maxW_rec; /** max weight of a codeword or error vector found */
     int dW; /** if non-negative, weight over `minW` to keep the CW or error vector in a hash (default: `0`, `minW` only) */
@@ -353,7 +354,7 @@ typedef struct UFL_T {
   "\t finL=[string]\t: file with logical dual check matrix Lx (mm or alist)\n" \
   "\t finK=[string]\t: file with logical check matrix Lz (mm or alist)\n" \
   "\t finP=[string]\t: input file for probabilities (mm or a column of doubles)\n" \
-  "\t finQ=[string]\t: input file for alt probabilities (for use with mode 2.4)\n" \
+  "\t finQ=[string]\t: input file for alt probabilities (for use with mode 2.8)\n" \
   "\t finA=[string]\t: additional matrix to correct syndromes (mm or alist)\n" \
   "\t finC=[string]\t: input file name for codewords in `nzlist` format\n" \
   "\t\t (space is OK in front of file names to enable shell completion)\n" \
@@ -373,8 +374,8 @@ typedef struct UFL_T {
   "\t mulP=[double]\t: scale probability values from DEM file\n"	\
   "\t\t for a quantum code specify 'fdem' OR 'finH' and ( 'finL' OR 'finG' );\n" \
   "\t\t for classical just 'finH' or 'finHT' (and optionally the dual matrix 'finL')\n" \
-  "\t useQ=[double]\t: alt fixed probability value for use with mode 2.4\n" \
-  "\t refQ=[double]\t: reference error probability for use with mode 2.4\n" \
+  "\t useQ=[double]\t: alt fixed probability value for use with mode 2.8\n" \
+  "\t refQ=[double]\t: reference error probability for use with mode 2.8\n" \
   "\t ferr=[string]\t: input file with error vectors (01 format)\n"	\
   "\t fer0=[string]\t: add'l error to correct det events 's+A*e0' (01 format)\n" \
   "\t\t where matrix 'A' is given via 'finA', 's' via 'fdet', and 'e0'\n" \
@@ -532,8 +533,9 @@ typedef struct UFL_T {
   "\tSubmode bitmap values:\n"						\
   "\t\t\t .1 (bit 0) calculate original fail probability estimate\n"	\
   "\t\t\t .2 (bit 1) calculate exact greedy probability estimate\n"	\
-  "\t\t\t .4 (bit 2) use refence probability `refQ` to calculate fail\n"\
-  "\t\t\t\t probability estimate\n"                                     \
+  "\t\t\t .4 (bit 2) reserved\n"					\
+  "\t\t\t .8 (bit 3) use reference `refQ/finQ/useQ` to calculate fail\n"\
+  "\t\t\t\t probability estimates (as opposed to direct summations)\n"	\
   "\t Use up to 'steps' random information set (RIS) steps\n"		\
   "\t unless no new codewords (fault vectors) have been found for 'swait' steps.\n" \
   "\t Use 'steps=0' to just use the codewords from the file \n"		\
@@ -543,13 +545,13 @@ typedef struct UFL_T {
   "\t If 'outC' is set, write full list of CWs to this file.\n"		\
   "\t If 'finC' is set, read initial set of CWs from this file.\n"	\
   "\t Accuracy and performance are determined by parameters \n"		\
-  "\t 'steps' (number of BP rounds), 'lerr' (OSD level, defaul=-1, no OSD).\n" \
+  "\t 'steps' (number of RIS rounds), 'lerr' (OSD level, defaul=-1, no OSD).\n" \
   "\t Specify a single DEM file 'fdem', or 'finH', 'finL', and 'finP'\n" \
   "\t separately (either 'finL' or 'finG' is needed for a quantum code).\n" \
   "\t Use 'useP' to override error probability values in DEM file.   \n" \
   "\t Use 'mulP' to scale error probability values from DEM file.   \n" \
   "\t Similarly, use 'finQ' or 'useQ' arguments to specify alternative\n" \
-  "\t probability vectors with mode 2.4\n"                              \
+  "\t probability vectors with mode 2.8\n"                              \
   "\n"
 
 #define HELP3 /** help for `mode=3` */  \

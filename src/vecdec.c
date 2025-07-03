@@ -46,7 +46,7 @@ params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50,
   .finH=NULL, .finHT=NULL, .finL=NULL, .finG=NULL, .finK=NULL, .finP=NULL, .finQ=NULL,
   .finC=NULL, .outC=NULL, 
   .finU=NULL, .outU=NULL, 
-  .vP=NULL, .vLLR=NULL, .mH=NULL, .mHt=NULL,
+  .vP=NULL, .vQ=NULL, .vLLR=NULL, .vLLRQ=NULL, .mH=NULL, .mHt=NULL,
   .mL=NULL, .mLt=NULL,  .mA=NULL, .mAt=NULL,
   .internal=0, 
   .file_err=NULL,  .file_det=NULL, .file_obs=NULL,
@@ -101,18 +101,18 @@ static inline int is_subvec(const one_vec_t *const one, const one_vec_t *const t
 
 
 /** @brief calculate the probability of codeword in `one_vec_t` */
-static inline double do_prob_one_vec(const one_vec_t * const pvec, const params_t * const p){
+static inline double do_prob_one_vec(const one_vec_t * const pvec, const double * const valP){
   double ans=1;
   const int * idx = pvec->arr;
   for(int i=0; i< pvec->weight; i++, idx++){
-    const double vP = p->vP[*idx];
-    ans *= 2*sqrt(vP*(1 - vP));
+    const double vP = valP[*idx];
+    ans *= 2*sqrt(vP*(1.0 - vP));
   }
   return ans;
 }
 
 /** @brief calculate exact fail probability for one vector */
-static inline double do_prob_one_vec_exact(const one_vec_t * const pvec, const params_t * const p){
+static inline double do_prob_one_vec_exact(const one_vec_t * const pvec, const double * const valP){
   _maybe_unused const int max_len = sizeof(unsigned long)*8 -1; 
   double ans=0;
   const int w = pvec->weight;
@@ -127,14 +127,14 @@ static inline double do_prob_one_vec_exact(const one_vec_t * const pvec, const p
     /** TODO: speed-up this loop to calculate faster.  Use array of
      * previously computed values and only start with the last bit changed. */
     for(int i=w-1; i>=0; i--, bit>>=1, idx++){
-      const double prob = p->vP[*idx];
+      const double prob = valP[*idx];
       if(bitmap&bit){
 	prod1 *= prob;
-	prod0 *= (1-prob);
+	prod0 *= (1.0-prob);
       }
       else{ 
 	prod0 *= prob;
-	prod1 *= (1-prob);
+	prod1 *= (1.0-prob);
       }
     }
     if (prod1 > 1.000001*prod0)
@@ -378,21 +378,30 @@ int do_hash_fail_prob( params_t * const p){
   /** finally calculate and output fail probability here */
   /** TODO: use the limit on `W` and `E` (just ignore codewords outside the limit) */
   double pfail=0, pfail_two=0, pmax=0, pmax_two=0;
+  double pfaiQ=0, pfaiQ_two=0;
   int count = 0, count_min = 0, count_tot = 0;
   int minW=p->nvar + 1;
   for(pvec = p->codewords; pvec != NULL; pvec=(one_vec_t *)(pvec->hh.next)){
     if ((p->maxW==0) || ((p->maxW != 0) && (pvec->weight <= p->maxW))){
       if(p->submode &1){ /* original simple estimate */
-	double prob=do_prob_one_vec(pvec, p);
+	double prob=do_prob_one_vec(pvec, p->vP);
 	pfail += prob;
 	if(prob>pmax)
 	  pmax=prob;
       }
       if(p->submode &2){ /* exact fail prob */      
-	double prob_two=do_prob_one_vec_exact(pvec, p);
+	double prob_two=do_prob_one_vec_exact(pvec, p->vP);
 	pfail_two += prob_two;
 	if(prob_two>pmax_two)
 	  pmax_two=prob_two;
+      }
+      if(p->submode&8){/* use reference value */
+	if(p->submode &1){ /* original simple estimate */	  
+	  pfaiQ += do_prob_one_vec(pvec, p->vQ);
+	}
+	if(p->submode &2){ /* exact fail prob */      	  
+	  pfaiQ_two += do_prob_one_vec_exact(pvec, p->vQ);
+	}
       }
       if(minW > pvec->weight){
 	minW=pvec->weight;
@@ -406,13 +415,26 @@ int do_hash_fail_prob( params_t * const p){
   }  
   /** todo: prefactor calculation */
   if(p->debug&1)
-    printf("# %s%smin_weight N_min N_use N_tot\n",p->submode&1 ?"sumP(fail) maxP(fail) ":"", p->submode&2 ?"sumP_exact(fail) maxP_exact(fail) ":"" );
-  if (p->submode & 1)
-    printf("%g %g ",pfail, pmax);
-  if (p->submode & 2)
-    printf("%g %g ",pfail_two, pmax_two);
+    printf("# %s%smin_weight N_min N_use N_tot\n",
+	   p->submode&8 ?
+	   (p->submode&1 ?"refQ*sumP(fail)/sumQ(fail) ":""):
+	   (p->submode&1 ?"sumP(fail) maxP(fail) ":""),
+	   p->submode&8 ?
+	   (p->submode&2 ?"refQ*sumP_exact(fail)/sumQ_exact(fail) ":""):
+	   (p->submode&2 ?"sumP_exact(fail) maxP_exact(fail) ":""));
+  if ((p->submode & 8) == 0){
+    if (p->submode & 1)
+      printf("%g %g ",pfail, pmax);
+    if (p->submode & 2)
+      printf("%g %g ",pfail_two, pmax_two);
+  }
+  else {
+    if (p->submode & 1)
+      printf(" %g ", p->refQ * pfail/pfaiQ);
+    if (p->submode & 2)
+      printf("%g ", p->refQ * pfail_two/pfaiQ_two);
+  }
   printf("%d %d %d %d\n", minW, count_min, count, count_tot);
-  
   return minW; 
 }
 
@@ -1760,12 +1782,12 @@ int var_init(int argc, char **argv, params_t *p){
     if((p->fdet!=NULL)||(p->fobs!=NULL) ||(p->ferr!=NULL))
       ERROR(" mode=%d, must not specify 'ferr' or 'fobs' or 'fdet' files\n",
 	    p->mode);
-    if (p->submode>7)
+    if ((p->submode > 15)||(p->submode & 4))
       ERROR(" mode=%d : submode='%d' unsupported\n",
 	    p->mode, p->submode);
-    if (p->submode & 4){
-      if (((p->useQ==NULL)&&(p->finQ==NULL))||(p->refQ==0)){
-        printf("have  finQ=%s useQ=%g refQ=%g\n");
+    if (p->submode & 8){
+      if (((p->useQ==0)&&(p->finQ==NULL))||(p->refQ==0)){
+        printf("have  finQ=%s useQ=%g refQ=%g\n",p->finQ, p->useQ, p->refQ);
         ERROR(" mode=%d : submode='%d' must specify alt Q probabilities\n",
 	    p->mode, p->submode);
       }
@@ -1876,7 +1898,15 @@ int var_init(int argc, char **argv, params_t *p){
 	printf("# maxC=%lld dE=%g dW=%d maxW=%d\n",p->maxC, dbl_from_llr(p->dE), p->dW, p->maxW);
       else 
 	printf("# maxC=%lld dW=%d maxW=%d\n",p->maxC, p->dW, p->maxW);
-      printf("# calculating %s%sminimum weight\n",p->submode&1 ? "est fail prob, ":"", p->submode&1 ? "exact fail prob, ":"");
+      if(p->submode & 8){
+	printf("# use reference fail rate refQ=%g at error",p->refQ);
+	if (p->finQ)
+	  printf(" probabilities from %s\n",p->finQ);
+	else
+	  printf("probability %g\n",p->useQ);
+      }
+      printf("# calculating %s%sminimum weight\n",p->submode&1 ? "est fail prob, ":"",
+	     p->submode&1 ? "exact fail prob, ":"");
       break;
     case 3:
       if(p->submode<32){
@@ -1915,7 +1945,9 @@ void var_kill(params_t *p){
   if(p->file_err)  fclose(p->file_err);  
   if(p->file_er0)  fclose(p->file_er0);  
   if(p->vP){        free(p->vP);    p->vP = NULL;  }
+  if(p->vQ){        free(p->vQ);    p->vQ = NULL;  }
   if(p->vLLR){      free(p->vLLR);  p->vLLR = NULL;}
+  if(p->vLLRQ){     free(p->vLLRQ);  p->vLLRQ = NULL;}
   if(LLR_table){ free(LLR_table);  LLR_table = NULL;}
   
   p->mH =  csr_free(p->mH);
