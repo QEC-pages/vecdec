@@ -31,6 +31,8 @@ typedef enum EXTR_T {
   SUCC_LOWW,     //! success
   CONV_CLUS,    //! `pre-decoder` based on syndrome clusters
   PART_CLUS,    //! `pre-decoder` partial clusters used
+  PART_CONV,    //! `pre-decoder` partial clusters -> decoder converged 
+  PART_SUCC,    //! `pre-decoder` partial clusters -> decoder successful
   SUCC_CLUS,    //! success
   CONV_RIS,     //! mode=0 `RIS decoder`, always converges (attempts)
   SUCC_RIS,
@@ -167,7 +169,8 @@ typedef struct UFL_T {
     //    qllr_t uE; /** max energy of an error vector in `U` hash*/
     //    double uEdbl; /** max energy of an error vector in `U` hash*/
     int uW; /** max weight of an error vector in `U` hash (default: `2`) */
-    int uX; /** if non-zero, use partial pre-decoder cluster matches (default: `0`) */
+    int uX; /** bitmap: 1 (bit 0) try low-weight clusters; 
+	     *	        2 (bit 1) use partial pre-decoder cluster matches (default: `0`) */
     int uR; /** max distance between v-v neighbors for errors in syndrome hash (default: `4`) */
     two_vec_t *hashU_error; /** `U` hash location by error vector */
     two_vec_t *hashU_syndr; /** `U` hash location by syndrome */
@@ -225,8 +228,9 @@ typedef struct UFL_T {
     long long int line_err; /** current line of `file_err` */
     long long int line_det; /** current line of `file_det` */
     long long int line_obs; /** current line of `file_obs` */
-    mzd_t *mE0;
-    mzd_t *mE;
+    mzd_t *mE0; /** vectors to adjust `det` events, read from file `fer0` */ 
+    //    mzd_t *mE;  /** each row an original error vector created (with `outC` non-NULL) */
+    mzd_t *mEt; /** each column an original error vector from `ferr` */
     mzd_t *mHe;
     mzd_t *mLe;
     mzd_t *mHeT;
@@ -257,6 +261,31 @@ typedef struct UFL_T {
     else if (pa>pb)
       return +1; /** was `-1` */
     return 0;
+  }
+
+  /** create a sparse `vec`tor from `row` of `mat`, optionally create vector if needed */
+  static inline vec_t * vec_from_mzd_row(vec_t *vec, const mzd_t * const mat, const rci_t row){
+    if (!vec){
+      rci_t wei = mzd_weight_row(mat,row);
+      vec=vec_init(wei);
+    }
+#ifndef NDEBUG
+    else{ /** ensure we have enough non-zero positions */
+      rci_t wei = mzd_weight_row(mat,row);
+      if (wei > vec->max)
+	ERROR("provided vector does not have enough space, row=%d wei=%d max=%d\n",row,wei,vec->max);
+    }
+#endif 
+    /** convert mzd_t *srow -> vec_t *vec */
+    int idx=0, w=0;
+    const word * const rawrow = mzd_row_cons(mat,row);
+    while(((idx=nextelement(rawrow,mat->width,idx))!=-1)&&(idx<mat->ncols)){
+      vec->vec[w++]=idx;
+      if(++idx == mat->ncols)
+	break;
+    }
+    vec->wei = w;
+    return vec;
   }
 
   /** @brief return permutation = decreasing probabilities (increasing LLR) */
@@ -365,7 +394,9 @@ typedef struct UFL_T {
   "\t\t ('0': no hash but skip zero-weight syndrome vectors; '-1': do not skip)\n" \
   "\t uR=[integer]\t: max range of v-v neighbors for errors in syndrome hash\n" \
   "\t\t (use '0' for no limit; default: 4)\n"				\
-  "\t uX=[integer]\t: when non-zero, use partial cluster matches (default: 0)\n" \
+  "\t uX=[integer]\t: bitmap for cluster-based predecoder options (default: 0)\n" \
+  "\t\t 1 (bit 0) try low-weight error w/o cluster decomp (recommend with 'uR=0'); \n" \
+  "\t\t 2 (bit 1) use partial cluster matches (experimental)\n"		\
   "\t maxU=[long long integer]\t: max number of syndrome vectors in hash\n" \
   "\t\t for pre-decoding (default: '0', no limit)\n"			\
   "\t epsilon=[double]\t: small probability cutoff (default: 1e-8)\n"	\
@@ -465,12 +496,11 @@ typedef struct UFL_T {
   "\t\t number of syndrome vectors in the hash; no limit if 'maxU=0'.  \n"	\
   "\t\t Parameter 'uR>0' sets the limit on the graph distance between non-zero positions\n" \
   "\t\t in an error vector stored in the hash; no limit if 'uR=0'\n"	\
-  "\t\t Parameter 'uX', when non-zero, allows the use of partially matched syndrome clusters,\n" \
-  "\t\t in which case only residual error is sent to the main decoder\n" \
-  "\t\t (default: 0, use only fully matched syndrome vectors)\n"	\
-  "\t\t (partial cluster decoding mode is experimental, may not work!)\n" \
+  "\t\t Bitmap 'uX', when non-zero, enables experimental options for cluster-based\n" \
+  "\t\t predecoder: try to match syndrome as a whole (bit 0), and using partially\n" \
+  "\t\t matched syndrome clusters, in which case only residual error is sent to the\n" \
+  "\t\t  main decoder (default: 0) (use with caution, fail rates may increase!)\n" \
   "\t\t With debug&2 non-zero and uW>0, print out the confinement function\n" 
-  
   
   //  "\t\t 'finU' / 'outU' names of likely error vectors file (not implemented)\n" 
   //  "\t\t\t(the file will be overwritten if names are the same). \n"

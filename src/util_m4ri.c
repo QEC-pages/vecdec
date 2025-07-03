@@ -35,28 +35,13 @@ void mzd_row_print_sparse(const mzd_t * const A, const int row){
     //  }
 }
 
-
 size_t mzd_weight(const mzd_t * const A){
   size_t count = 0;
-  if(A->width == 1) {
-    for(rci_t i = 0; i < A->nrows; ++i)
-      for(rci_t j = 0; j < A->ncols; ++j)
-	if(mzd_read_bit(A, i, j))
-	  ++count;
-    return (count);
-  }
-  for(rci_t i = 0; i < A->nrows; ++i) {
-    const word * const truerow = mzd_row_cons(A,i);
-    for(wi_t j = 0; j < A->width - 1; j ++)
-      count += m4ri_bitcount(truerow[j]);
-
-    for(int j = 0; j < A->ncols % m4ri_radix; ++j)
-      if(mzd_read_bit(A, i, m4ri_radix * (A->ncols / m4ri_radix) + j))
-	++count;
-  }
-
-  return count ;
+  for(rci_t i = 0; i < A->nrows; ++i)
+    count += mzd_weight_row(A,i);
+  return (count);
 }
+
 
 int mzd_row_is_zero(const mzd_t  * const A, const int i) {
   const word mask_end = A->high_bitmask;
@@ -1156,23 +1141,27 @@ int *do_sparse_rnd_vec(int *siz, int *num, int *vec, const int nvec, const doubl
 }
 
 /** @brief create a sample of errors to play with.
+ *  @param mEt matrix with `nvec` cols to store the actual error vectors, or `NULL`
  *  @param mHe matrix with `nvec` columns to return the syndrome `H*e`
  *  @param mLe matrix with `nvec` columns for logical error `L*e`
  *  @param Ht, Lt the initial matrices (transposed)
  * @return 0
  */
-int do_errors(mzd_t *mHe, mzd_t *mLe, const csr_t * const Ht, const csr_t * const Lt,
+int do_errors(mzd_t *mEt, mzd_t *mHe, mzd_t *mLe, const csr_t * const Ht, const csr_t * const Lt,
 	      const double vP[]){
   
   assert((mHe!=NULL) && (mLe!=NULL)); /** sanity check */
   assert(mHe->ncols == mLe->ncols);   /** how many errors to produce */
   assert((Lt!=NULL) && (Lt->cols == mLe->nrows));     /** rows `L` */
   assert((Ht!=NULL) && (Ht->cols == mHe->nrows));     /** rows `H` */
+  assert((mEt==NULL) || (mEt->nrows == Ht->rows));    /** optionally keep the errors */
+  assert((mEt==NULL) || (mEt->ncols == mHe->ncols));
   assert(vP!=NULL);
   
   int max = 100;  /** initial size of `vec` */
   int * vec = malloc(max * sizeof(int));
-
+  if (mEt)
+    mzd_set_ui(mEt,0); /** zero the matrix to store errors */
   mzd_set_ui(mHe,0); /** zero matrix */
   mzd_set_ui(mLe,0); /** zero matrix */
   int nvec = mHe->ncols;
@@ -1180,6 +1169,12 @@ int do_errors(mzd_t *mHe, mzd_t *mLe, const csr_t * const Ht, const csr_t * cons
   for(int i=0; i < Ht->rows; i++){
     int ivec=0;
     vec = do_sparse_rnd_vec(&max, &ivec, vec, nvec, vP[i]);
+
+    /** optionally flip the bits in the mEt row `i` */
+    if(mEt){
+      for(int j=0; j < ivec; j++)
+	mzd_flip_bit(mEt,i,vec[j]);
+    }
 
     /** flip the bits in `mHe` row by row to speed it up */
     for(int ir = Ht->p[i]; ir < Ht->p[i+1]; ir++){

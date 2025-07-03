@@ -148,13 +148,35 @@ csr_t * csr_from_mzd(csr_t *mat, const mzd_t * const orig);
  * TODO: see if sparsity of Lx can be improved.
  */
 
-  csr_t * Lx_for_CSS_code(const csr_t * const Hx, const csr_t *const Hz);
+csr_t * Lx_for_CSS_code(const csr_t * const Hx, const csr_t *const Hz);
 
 /** 
- * number of set bits in a matrix.  
+ * number of set bits in row `i` of matrix `A`.  
  * TODO: what is the problem with built-in version?  
  */
+static inline size_t mzd_weight_row(const mzd_t * const A, const int i){
+  size_t count = 0;
+  assert(i >= 0 && i < A->nrows);
+  if(A->width == 1) {
+    for(rci_t j = 0; j < A->ncols; ++j)
+      if(mzd_read_bit(A, i, j))
+	++count;
+    return (count);
+  }
+  const word * const truerow = mzd_row_cons(A,i);
+  for(wi_t j = 0; j < A->width - 1; j ++)
+    count += m4ri_bitcount(truerow[j]);
+
+  for(int j = 0; j < A->ncols % m4ri_radix; ++j)
+    if(mzd_read_bit(A, i, m4ri_radix * (A->ncols / m4ri_radix) + j))
+      ++count;
+
+  return count ;
+}
+
+  /** total weight (number of non-zero bits) of matrix A */
 size_t mzd_weight(const mzd_t *A);
+
 
   void mzd_row_print_sparse(const mzd_t * const A, const int row);  
 
@@ -516,12 +538,13 @@ void make_err(mzd_t *row, double p);
 
 
   /** @brief create a sample of errors to play with.
+   *  @param mEt matrix with `nvec` cols to return the actual error vectors, or `NULL`
    *  @param mHe matrix with `nvec` columns to return the syndrome `H*e`
    *  @param mLe matrix with `nvec` columns for logical error `L*e`
    *  @param Ht, Lt the initial matrices (transposed)
    * @return 0
    */
-  int do_errors(mzd_t *mHe, mzd_t *mLe, const csr_t * const Ht, const csr_t * const Lt,
+  int do_errors(mzd_t *mEt, mzd_t *mHe, mzd_t *mLe, const csr_t * const Ht, const csr_t * const Lt,
 		const double vP[]);
 
 /** @brief calculate the rank of the csr matrix `M` */

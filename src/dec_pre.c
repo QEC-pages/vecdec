@@ -801,31 +801,24 @@ int dec_ufl_one(const mzd_t * const srow, params_t * const p){
   /** clean up */
   dec_ufl_clear(ufl);
 
-  /** convert mzd_t *srow -> vec_t *svec */
-  int idx=0, w=0;
-  const word * const rawrow = mzd_row_cons(srow,0);
-  while(((idx=nextelement(rawrow,srow->width,idx))!=-1)&&(idx<srow->ncols)){
-    svec->vec[w++]=idx;
-    if(++idx == srow->ncols)
-      break;
-  }
-  svec->wei = w;
-
-  //#ifndef NDEBUG
+  svec = vec_from_mzd_row(svec, srow, 0);
+  
+#ifndef NDEBUG
   if(p->debug&32){
     printf("# decoding w_s=%d\n",svec->wei);
     if(p->debug&64)
       vec_print(svec);
   }
-  //#endif
+#endif
   two_vec_t *tmp;
-  if(svec->wei == 0){
+  if(svec->wei == 0){ /** zero syndrome vector */
     cnt[CONV_TRIVIAL]++;
     ans = 1; /** trivial syndrome */
     ufl->syndr->wei =0;
     ufl->error->wei =0;
+    goto all_done;
   }
-  else{  /** `look up the entire syndrome -- a bit faster` */
+  if (p->uX & 1){ /** `look up the entire syndrome` -- a bit faster but may fail with surface code */
     HASH_FIND(hh, p->hashU_syndr, svec->vec, svec->wei*sizeof(int), tmp);
     if(tmp){
       ans = 2; /** low weight match */
@@ -836,26 +829,23 @@ int dec_ufl_one(const mzd_t * const srow, params_t * const p){
       for(int i=0; i<tmp->w_s; i++)
 	ufl->syndr->vec[i] = tmp->arr[i];
       ufl->syndr->wei = tmp->w_s;
-    }
-    else{ /** try to match as several clusters */
-      dec_ufl_start(svec, ufl, p);
-      clus = ufl->num_prop;
-      res=dec_ufl_lookup(ufl, p);
-      if(res){
-	ans = 3; /** cluster lookup matched syndrome */
-	cnt[CONV_CLUS]++;
-      }
-      else{
-	//! nothing to be done here 
-	//	ERROR("insert partial decoding here\n");
-      }
+      goto all_done;
     }
   }
-
+  /** finally, try to `match as several clusters` */
+  dec_ufl_start(svec, ufl, p);
+  clus = ufl->num_prop;
+  res=dec_ufl_lookup(ufl, p);
+  if(res){
+    ans = 3; /** cluster lookup matched syndrome */
+    cnt[CONV_CLUS]++;
+  }
+  
+ all_done:  
   if(p->debug&16){
     switch(ans){
     case 0:
-      printf("# pre-decoder match failed - try partial match\n"); break;
+      printf("# pre-decoder match failed%s\n", p->uX & 2 ?" - try partial match":""); break;
     case 1:
       printf("# trivial syndrome vector w_s=0\n"); break;
     case 2:
