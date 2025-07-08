@@ -618,7 +618,7 @@ observable or soft-out row), and rows not-yet decoded.
 
 ## new items 2025/07/02
 
-- [ ] update / generate cluster list when running a decoder (when original error
+- [x] update / generate cluster list when running a decoder (when original error
       vectors are available).  Namely, for every decoding error, subtract the
       original error vector, decompose the difference to connected clusters, and
       pick irreducible non-trivial codewords; update in the hash and finally
@@ -631,7 +631,7 @@ observable or soft-out row), and rows not-yet decoded.
 - [x] ~~For experiments, randomly select certain fraction of codewords (e.g.,
       when reading from a file), study what would be sufficient.~~ (do it
       separately, using `shuf` on the `nz` file.)
-- [ ] experiment with exact and approximate probability values
-- [ ] add prefactor calculation for mode=2.1 (separate for odd / even weights?)
-- [ ] add mode=2.4 with more accurate and faster calculation
+- [x] experiment with exact and approximate probability values
+- [x] add prefactor calculation for mode=2.1 (separate for odd / even weights)
+- [x] add mode=2.4 with more accurate and faster calculation
 - [ ] what would be a sufficient statistics?  Experiment.
