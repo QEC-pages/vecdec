@@ -383,7 +383,7 @@ typedef struct UFL_T {
   "\t finL=[string]\t: file with logical dual check matrix Lx (mm or alist)\n" \
   "\t finK=[string]\t: file with logical check matrix Lz (mm or alist)\n" \
   "\t finP=[string]\t: input file for probabilities (mm or a column of doubles)\n" \
-  "\t finQ=[string]\t: input file for alt probabilities (for use with mode 2.8)\n" \
+  "\t finQ=[string]\t: input file for alt probabilities (for use with mode 2.16)\n" \
   "\t finA=[string]\t: additional matrix to correct syndromes (mm or alist)\n" \
   "\t finC=[string]\t: input file name for codewords in `nzlist` format\n" \
   "\t\t (space is OK in front of file names to enable shell completion)\n" \
@@ -405,8 +405,8 @@ typedef struct UFL_T {
   "\t mulP=[double]\t: scale probability values from DEM file\n"	\
   "\t\t for a quantum code specify 'fdem' OR 'finH' and ( 'finL' OR 'finG' );\n" \
   "\t\t for classical just 'finH' or 'finHT' (and optionally the dual matrix 'finL')\n" \
-  "\t useQ=[double]\t: alt fixed probability value for use with mode 2.8\n" \
-  "\t refQ=[double]\t: reference error probability for use with mode 2.8\n" \
+  "\t useQ=[double]\t: alt fixed probability value for use with mode 2.16\n" \
+  "\t refQ=[double]\t: reference error probability for use with mode 2.16\n" \
   "\t ferr=[string]\t: input file with error vectors (01 format)\n"	\
   "\t fer0=[string]\t: add'l error to correct det events 's+A*e0' (01 format)\n" \
   "\t\t where matrix 'A' is given via 'finA', 's' via 'fdet', and 'e0'\n" \
@@ -561,10 +561,11 @@ typedef struct UFL_T {
 #define HELP2 /** help for `mode=2` */  \
   " mode=2 : Generate most likely fault vectors, estimate Prob(Fail).\n" \
   "\tSubmode bitmap values:\n"						\
-  "\t\t\t .1 (bit 0) calculate original fail probability estimate\n"	\
-  "\t\t\t .2 (bit 1) calculate exact greedy probability estimate\n"	\
-  "\t\t\t .4 (bit 2) reserved\n"					\
-  "\t\t\t .8 (bit 3) use reference `refQ/finQ/useQ` to calculate fail\n"\
+  "\t\t\t .1  (bit 0) calculate original fail probability estimate\n"	\
+  "\t\t\t .2  (bit 1) fail prob estimate using average LLRs and cw count\n" \
+  "\t\t\t .4  (bit 2) calculate exact greedy probability estimate\n"	\
+  "\t\t\t .8  (bit 3) approx greedy prob estimate with prefactor\n"     \
+  "\t\t\t .16 (bit 4) use reference `refQ/finQ/useQ` to calculate fail\n" \
   "\t\t\t\t probability estimates (as opposed to direct summations)\n"	\
   "\t Use up to 'steps' random information set (RIS) steps\n"		\
   "\t unless no new codewords (fault vectors) have been found for 'swait' steps.\n" \
@@ -581,7 +582,7 @@ typedef struct UFL_T {
   "\t Use 'useP' to override error probability values in DEM file.   \n" \
   "\t Use 'mulP' to scale error probability values from DEM file.   \n" \
   "\t Similarly, use 'finQ' or 'useQ' arguments to specify alternative\n" \
-  "\t probability vectors with mode 2.8\n"                              \
+  "\t probability vectors with mode 2.16\n"                              \
   "\n"
 
 #define HELP3 /** help for `mode=3` */  \

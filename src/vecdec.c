@@ -122,6 +122,49 @@ long long binomialC(int n, int k) {
     return res;
 }
 
+double est_prob_one_wei(const int num, const int nvar, const double * const valP, const qllr_t * const valLLR){
+  double logsum=0;
+  long double sum1=0.0, sum2=0.0;
+  for(int i=0; i<nvar;i++){
+    logsum+=0.5*log(valP[i]*(1.0-valP[i]));
+    const long double vLLR = 0.5*dbl_from_llr(valLLR[i]);
+    sum1 += vLLR;
+    sum2 += vLLR*vLLR;    
+  }
+  double pref=exp(logsum*num/nvar);
+  double avg=sum1/nvar;
+  double sig=sqrt(1e-40+(sum2-sum1*sum1/nvar)/(nvar-1));
+  long double weight=0; /** sum of weight factors for different `s` */
+  for(int s=0; s<=num; s++){
+    const double eavg=avg*(2*s-num);
+    double z = (num*sig*sig-eavg)/(sig*sqrt(2.0*num));
+    double mul;
+    if(sig<1.0e-7){
+      if(num*sig*sig>eavg)       /** positive divergent argument */
+	mul=0;
+      else if (num*sig*sig<eavg) /** negative divergent argument */
+	mul=exp(num*sig*sig/2.0-eavg) * 2.0;
+      else                       /** zero argument */
+	mul=exp(num*sig*sig/2.0-eavg) * 1.0;
+    }
+    else{ 
+      if(z>10)                   /** avoid underflow */
+	mul=exp(-eavg*eavg/(2*num*sig*sig)) * 2.0/(sqrt(M_PI)*(z+sqrt(z*z*4.0/M_PI)));
+      else if (z<-20)
+	mul=exp(num*sig*sig/2.0-eavg) * 2.0;
+      else
+	mul=exp(num*sig*sig/2.0-eavg)*erfc(z);
+    }
+    weight += binomialC(num,s) * mul;
+  }
+#if 1
+  printf("# num=%d avg=%g sig=%g wei=%Lg\n",num,avg,sig,0.5*weight);
+#endif 
+  return 0.5*pref*weight;
+}
+  
+
+
 /** @brief calculate the probability of codeword in `one_vec_t` with the prefactor */
 static inline double do_prob_one_vec_prefactor(const one_vec_t * const pvec,
 					       const double * const valP, const qllr_t * const valLLR){
@@ -445,19 +488,24 @@ int do_hash_fail_prob( params_t * const p){
   }
   /** finally calculate and output fail probability here */
   /** TODO: use the limit on `E` (just ignore codewords outside the limit) */
-  double pfail=0, pfail_two=0, pfail_three=0, pmax=0, pmax_two=0, pmax_three=0;
-  double pfaiQ=0, pfaiQ_two=0, pfaiQ_three=0;
+  double pfail=0, pfail_one=0, pfail_two=0, pfail_three=0;
+  double pmax=0,  pmax_one=0,  pmax_two=0,  pmax_three=0;
+  double pfaiQ=0, pfaiQ_one=0, pfaiQ_two=0, pfaiQ_three=0;
   int count = 0, count_min = 0, count_tot = 0;
   int minW=p->nvar + 1;
+  int maxW=p->maxW;
+  if ((maxW==0)||(maxW>20)){
+    maxW=20; /** sanity check: this method would be too expensive */
+  }
   for(pvec = p->codewords; pvec != NULL; pvec=(one_vec_t *)(pvec->hh.next)){
-    if ((p->maxW==0) || ((p->maxW != 0) && (pvec->weight <= p->maxW))){
+    if (pvec->weight <= maxW){
       if(p->submode &1){ /* original simple estimate */
 	double prob=do_prob_one_vec(pvec, p->vP);
 	pfail += prob;
 	if(prob>pmax)
 	  pmax=prob;
       }
-      if(p->submode &2){ /* exact fail prob */      
+      if(p->submode &4){ /* exact fail prob */      
 	double prob_two=do_prob_one_vec_exact(pvec, p->vP);
 	/*
 	printf("w=%d est=%g exact=%g est_prefact=%g\n",
@@ -468,21 +516,21 @@ int do_hash_fail_prob( params_t * const p){
 	if(prob_two>pmax_two)
 	  pmax_two=prob_two;
       }
-      if(p->submode &4){ /* more accurate fail prob with prefactor */      
+      if(p->submode &8){ /* more accurate fail prob with prefactor */      
 	double prob_three=do_prob_one_vec_prefactor(pvec, p->vP, p->vLLR);
 	pfail_three += prob_three;
 	if(prob_three>pmax_three)
 	  pmax_three=prob_three;
       }
-      if(p->submode&8){/* use reference value */
+      if(p->submode&16){/* use reference value */
 	if(p->submode &1){ /* original simple estimate */	  
 	  pfaiQ += do_prob_one_vec(pvec, p->vQ);
 	}
-	if(p->submode &2){ /* exact fail prob for reference */
+	if(p->submode &4){ /* exact fail prob for reference */
 	  if(pvec->weight < 20) /** sanity check: this is exponentially expensive */
 	    pfaiQ_two += do_prob_one_vec_exact(pvec, p->vQ);
 	}
-	if(p->submode &4){ /* more accurate fail prob for reference */      	  
+	if(p->submode &8){ /* more accurate fail prob for reference */      	  
 	  pfaiQ_three += do_prob_one_vec_prefactor(pvec, p->vQ, p->vLLRQ);
 	}
       }
@@ -495,32 +543,53 @@ int do_hash_fail_prob( params_t * const p){
       count ++;
     }
     count_tot++;
-  }  
+  }
+  if((minW>=15)&&(p->maxW!=maxW)){
+    printf("sanity check maxW=%d may not be valid here! Original maxW=%d\n",maxW,p->maxW);
+    fprintf(stderr,"sanity check maxW=%d may not be valid here! Original maxW=%d\n",maxW,p->maxW);
+  }
+
+  if(p->submode &2){ /* estimated fail prob */      
+    pmax_one=est_prob_one_wei(minW,p->nvar, p->vP,p->vLLR);
+    pfail_one = count_min*pmax_one;
+    if(p->submode&16)/* use reference value */
+      pfaiQ_one = count_min*est_prob_one_wei(minW,p->nvar, p->vQ,p->vLLRQ);   
+  }
+
+  /** calculate averaged-out single-codeword contribution */
+  
   if(p->debug&1)
-    printf("# %s%s%smin_weight N_min N_use N_tot\n",
-	   p->submode&8 ?
-	   (p->submode&1 ?"refQ*sumP(fail)/sumQ(fail) ":""):
-	   (p->submode&1 ?"sumP(fail) maxP(fail) ":""),
-	   p->submode&8 ?
-	   (p->submode&2 ?"refQ*sumP_exact(fail)/sumQ_exact(fail) ":""):
-	   (p->submode&2 ?"sumP_exact(fail) maxP_exact(fail) ":""),
-	   p->submode&8 ?
-	   (p->submode&4 ?"refQ*sumP_accur(fail)/sumQ_accur(fail) ":""):
-	   (p->submode&4 ?"sumP_accur(fail) maxP_accur(fail) ":""));
-  if ((p->submode & 8) == 0){
+    printf("# %s%s%s%smin_weight N_min N_use N_tot\n",
+	   p->submode&16 ?
+	   (p->submode&2 ?" refQ*sumP(fail)/sumQ(fail) ":""):
+	   (p->submode&2 ?" sumP(fail) maxP(fail) ":""),
+	   p->submode&16 ?
+	   (p->submode&1 ?" refQ*aveP(fail)/aveQ(fail) ":""):
+	   (p->submode&1 ?" Nmin*aveP(fail) aveP(fail) ":""),
+	   p->submode&16 ?
+	   (p->submode&4 ?" refQ*sumP_exact(fail)/sumQ_exact(fail) ":""):
+	   (p->submode&4 ?" sumP_exact(fail) maxP_exact(fail) ":""),
+	   p->submode&16 ?
+	   (p->submode&8 ?" refQ*sumP_accur(fail)/sumQ_accur(fail) ":""):
+	   (p->submode&8 ?" sumP_accur(fail) maxP_accur(fail) ":""));
+  if ((p->submode & 16) == 0){
     if (p->submode & 1)
       printf("%g %g ",pfail, pmax);
     if (p->submode & 2)
-      printf("%g %g ",pfail_two, pmax_two);
+      printf(" %g %g ",pfail_one, pmax_one);
     if (p->submode & 4)
-      printf("%g %g ",pfail_three, pmax_three);
+      printf(" %g %g ",pfail_two, pmax_two);
+    if (p->submode & 8)
+      printf(" %g %g ",pfail_three, pmax_three);
   }
   else {
     if (p->submode & 1)
       printf(" %g ", p->refQ * pfail/pfaiQ);
     if (p->submode & 2)
-      printf("%g ", p->refQ * pfail_two/pfaiQ_two);
+      printf("%g ", p->refQ * pfail_one/pfaiQ_one);
     if (p->submode & 4)
+      printf("%g ", p->refQ * pfail_two/pfaiQ_two);
+    if (p->submode & 8)
       printf("%g ", p->refQ * pfail_three/pfaiQ_three);
   }
   printf(" %d %d %d %d\n", minW, count_min, count, count_tot);
@@ -1874,12 +1943,12 @@ int var_init(int argc, char **argv, params_t *p){
     if((p->fdet!=NULL)||(p->fobs!=NULL) ||(p->ferr!=NULL))
       ERROR(" mode=%d, must not specify 'ferr' or 'fobs' or 'fdet' files\n",
 	    p->mode);
-    if (p->submode > 15)
+    if (p->submode > 31)
       ERROR(" mode=%d : submode='%d' unsupported\n",
 	    p->mode, p->submode);
-    if (p->submode == 8)
-      p->submode = 15; /* convenience setting */
-    if (p->submode & 8){
+    if (p->submode == 16)
+      p->submode = 31; /* convenience setting */
+    if (p->submode & 16){
       if (((p->useQ==0)&&(p->finQ==NULL))||(p->refQ==0)){
         printf("have  finQ=%s useQ=%g refQ=%g\n",p->finQ, p->useQ, p->refQ);
         ERROR(" mode=%d : submode='%d' must specify alt Q probabilities\n",
@@ -1992,7 +2061,7 @@ int var_init(int argc, char **argv, params_t *p){
 	printf("# maxC=%lld dE=%g dW=%d maxW=%d\n",p->maxC, dbl_from_llr(p->dE), p->dW, p->maxW);
       else 
 	printf("# maxC=%lld dW=%d maxW=%d\n",p->maxC, p->dW, p->maxW);
-      if(p->submode & 8){
+      if(p->submode & 16){
 	printf("# use reference fail rate refQ=%g at error",p->refQ);
 	if (p->finQ)
 	  printf(" probabilities from %s\n",p->finQ);
