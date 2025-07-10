@@ -73,7 +73,8 @@ typedef struct POINT_T {
 
 typedef struct VNODE_T {
   UT_hash_handle hh;
-  int v; /** key: variable node */
+  int idx; /** key: `v`ariable node or `nvar`+`c`heck node */
+  int val; /** node value (e.g., `0` or `1`) */
   int clus; /** cluster reference */
 } vnode_t;
 
@@ -99,7 +100,6 @@ typedef struct UFL_T {
   const int nvar;
   const int nchk;
   vnode_t * nodes; /** hash storage for occupied nodes */
-  /** TODO: compare performance for taking an int array of nodes instead */
   int num_v; /** total number of used `v_nodes` (all clusters) */
   int num_c; /** total number of used `c_nodes` */
   int num_clus; /** number of defined clusters */

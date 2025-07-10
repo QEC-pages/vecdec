@@ -635,3 +635,5 @@ observable or soft-out row), and rows not-yet decoded.
 - [x] add prefactor calculation for mode=2.1 (separate for odd / even weights)
 - [x] add mode=2.4 with more accurate and faster calculation
 - [ ] what would be a sufficient statistics?  Experiment.
+- [x] `bug`: with `uX=2` invalid codewords may be written (also, syndrome
+      mismatch with DEBUG enabled) (fixed)

@@ -2015,6 +2015,9 @@ int var_init(int argc, char **argv, params_t *p){
     p->mLe = mzd_init(p->ncws,  p->nvec); /** each column `L*e` vector */
     if((p->ferr) || (p->outC))
       p->mEt = mzd_init(p->nvar, p->nvec);
+    if((p->uX&2)&&(p->outC))
+      ERROR("mode=%d submode=%d uX=%d (bit 1) and outC=%s are currently"
+            " incompatible\n", p->mode, p->submode, p->uX, p->outC);
     if(p->fer0)
       p->mE0 = mzd_init(p->mA->cols, p->nvec);
     if(p->debug &1){
@@ -2293,12 +2296,14 @@ int main(int argc, char **argv){
 	      if(p->ufl->error->wei){/** partial match */
 		status[ierr] = -1;
 		cnt[PART_CLUS]++;
-		mzd_row_add_vec(mE0,ierr,p->ufl->error,1);
+		mzd_row_add_vec(mE0,ierr,p->ufl->error,0);
 		mzd_row_add_vec(p->mHeT,ierr,p->ufl->syndr,0);
 	      }
 	    }
 	  }
 	}
+        //        mzd_print(p->mHeT);
+        //        mzd_print(mE0);
 	if(cnt_pre < ierr_tot){ /** some pre-decoder failures */
 	  long long int num = ierr_tot - cnt_pre;
 	  mzd_t *mST = mzd_init(num,p->nchk);
@@ -2306,8 +2311,10 @@ int main(int argc, char **argv){
 	    if(status[ierr] <= 0)
 	      mzd_copy_row(mST, row++,p->mHeT,ierr);
 	  }
-	  if(p->debug&2)
+	  if(p->debug&2){
 	    printf("# running RIS decoder on remaining %lld syndrome vectors\n",num);
+            mzd_print(mST);
+          }
 	  mzd_t * mS = mzd_transpose(NULL,mST);
 	  mzd_t * mE2=do_decode(mS, p); /** each row a decoded error vector */
 	  for(long long int ierr =0, row=0 ; ierr < ierr_tot; ierr++){
@@ -2399,7 +2406,7 @@ int main(int argc, char **argv){
 	  }
 	  if(ic<ierr_tot){ 
 	    if(p->outC){
-#if 0	      
+#if 1	      
 	      if(status[ic]>0){
 		printf("j=%d ic=%d status=%d vec: ",j,ic,status[ic]);
 		tmpvec = vec_from_mzd_row(tmpvec,mE0,ic);
