@@ -2015,9 +2015,9 @@ int var_init(int argc, char **argv, params_t *p){
     p->mLe = mzd_init(p->ncws,  p->nvec); /** each column `L*e` vector */
     if((p->ferr) || (p->outC))
       p->mEt = mzd_init(p->nvar, p->nvec);
-    if((p->uX&2)&&(p->outC))
-      ERROR("mode=%d submode=%d uX=%d (bit 1) and outC=%s are currently"
-            " incompatible\n", p->mode, p->submode, p->uX, p->outC);
+    //    if((p->uX&2)&&(p->outC))
+    //      ERROR("mode=%d submode=%d uX=%d (bit 1) and outC=%s are currently"
+    //            " incompatible\n", p->mode, p->submode, p->uX, p->outC);
     if(p->fer0)
       p->mE0 = mzd_init(p->mA->cols, p->nvec);
     if(p->debug &1){
@@ -2406,12 +2406,13 @@ int main(int argc, char **argv){
 	  }
 	  if(ic<ierr_tot){ 
 	    if(p->outC){
-#if 1	      
-	      if(status[ic]>0){
-		printf("j=%d ic=%d status=%d vec: ",j,ic,status[ic]);
-		tmpvec = vec_from_mzd_row(tmpvec,mE0,ic);
-		vec_print(tmpvec);
-	      }
+#ifndef NDEBUG
+              if(p->debug&32)
+                if(status[ic]>0){
+                  printf("j=%d ic=%d status=%d vec: ",j,ic,status[ic]);
+                  tmpvec = vec_from_mzd_row(tmpvec,mE0,ic);
+                  vec_print(tmpvec);
+                }
 #endif 
 	      //	      assert(status[ic] <= 0);
 	      if((p->maxC == 0)||((p->maxC > 0) && (p->num_cws < p->maxC))){
