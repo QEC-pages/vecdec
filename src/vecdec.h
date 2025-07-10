@@ -99,16 +99,19 @@ typedef struct CLUSTER_T {
 typedef struct UFL_T {
   const int nvar;
   const int nchk;
+  int wei_c; /* syndrome weight */
+  //  int wei_v;
   vnode_t * nodes; /** hash storage for occupied nodes */
   int num_v; /** total number of used `v_nodes` (all clusters) */
   int num_c; /** total number of used `c_nodes` */
+  int num_s; /** total number of used `spare` nodes in hash */
   int num_clus; /** number of defined clusters */
   int num_prop; /** number of proper (non-reference and non-deleted) clusters */
   vec_t *error; /** [`nvar`] current error vector */
   vec_t *syndr; /** [`nchk`] remaining syndrome bits */
   point_t *v_nodes; /** [`nvar`] pre-allocated nodes for `v` linked lists in clusters */
   point_t *c_nodes; /** [`nchk`] same for `c` linked lists */
-  vnode_t * spare;  /** [`nvar`] same for `hash` look-up table in `nodes`*/
+  vnode_t * spare;  /** [`nvar`+`nchk`] same for `hash` look-up table in `nodes`*/
   cluster_t clus[0];/** [`nchk`] list of clusters and associated `v` and `c` lists. */
 } ufl_t;
 

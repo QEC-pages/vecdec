@@ -26,7 +26,7 @@ ufl_t *ufl_init(const params_t * const p){
   dummy_ =(void *) &(ans->nchk); *dummy_ = p->nchk;
   ans->error = vec_init(ans->nvar);
   ans->syndr = vec_init(ans->nchk);
-  ans->spare = malloc(ans->nvar * sizeof(vnode_t));
+  ans->spare = malloc(sizeof(vnode_t) * (ans->nvar + ans->nchk));
   ans->v_nodes = malloc(sizeof(point_t) * ans->nvar);
   ans->c_nodes = malloc(sizeof(point_t) * ans->nchk);
   if ((ans->error==NULL) || (ans->syndr == NULL) ||
@@ -113,7 +113,7 @@ static inline int cluster_verify(const int cl, const cluster_t * const clus){
       if(cnt!=clus->num_poi_c)
 	printf("err %d: num_c=%d cnt=%d mismatch\n",++num_err, clus->num_poi_c, cnt);
     }
-    else{  /** no `v` nodes */
+    else{  /** no `c` nodes */
       if((clus->first_c)||(clus->last_c))
 	printf("err %d: non-null c pointers\n", ++num_err);
     }
@@ -124,6 +124,7 @@ static inline int cluster_verify(const int cl, const cluster_t * const clus){
 }
 
 /** @brief verify structural integrity of a `ufl` and its clusters */
+/** todo: insert verification of `val`ues and count of spares */
 static inline int ufl_verify(const ufl_t * const u){
   int num_err = 0;
   int num_c = 0, num_v = 0, num_prop=0;
@@ -146,8 +147,8 @@ static inline int ufl_verify(const ufl_t * const u){
     }
     cnt++;
   }
-  if((cnt != u->num_v) || (num_err))
-    ERROR("counted %d expected num_v=%d num_err=%d",cnt, u->num_v, num_err);
+  if((cnt != u->num_s) || (num_err))
+    ERROR("counted %d expected num_s=%d num_err=%d",cnt, u->num_v, num_err);
   return 0;
 }
 
@@ -158,23 +159,22 @@ static inline void ufl_print(const ufl_t *const u){
     cluster_print(i,& u->clus[i]);
   }
   vnode_t *tmp, *nod;
-  printf("# vnodes in hash: ");
+  printf("# nodes in hash: ");
   int cnt=0;
   HASH_ITER(hh, u->nodes, nod, tmp) {
     if(cnt > u->nvar)
       break;
     int cls = nod->clus;
-    printf("(%d %d",nod->idx, cls);
+    printf("(%s %d %d",nod->idx>u->nvar?"c:":"v:",nod->idx, cls);
     while((cls>0) && (cls != u->clus[cls].label)){
       cls = u->clus[cls].label;
       printf(" -> %d", cls);
     }
-    printf(") ");
+    printf(")\n");
     cnt++;
   }
-  if(cnt != u->num_v)
-    ERROR("counted %d expected num_v=%d",cnt, u->num_v);
-  printf("\n");
+  if(cnt != u->num_s)
+    ERROR("counted %d expected num_s=%d",cnt, u->num_s);
 }
 
 /** @brief merge `proper` ufl clusters `c2` into `c1` */
@@ -213,7 +213,7 @@ static inline int merge_clus(const int c1, const int c2, ufl_t * const u){
 }
 
 /** @brief add variable node `v` to cluster `cl`
- *         Note that the value of `v` is effectively 0.  We *may* want to change this.
+ *         Note that the `val`ue of `v` is 0 since these are just neighbors.
  * @return 0 if nothing was done, 1 if just added, 2 if clusters merged
  */
 static inline int add_v(const int v, const int cls, ufl_t * const u){
@@ -280,9 +280,10 @@ static inline int add_v(const int v, const int cls, ufl_t * const u){
   }
   u->clus[cl].last_v = tmp;
   u->clus[cl].num_poi_v ++;
-  vnode_t *x = &(u->spare[u->num_v ++]);
+  vnode_t *x = &(u->spare[u->num_s ++]);
+  u->num_v++;
   x->idx = v;
-  // x->val = val;
+  x->val = 0;
   x->clus = cl;
   HASH_ADD_INT(u->nodes,idx,x);
   //! `*if value*` here we may also want to flip neighboring `c`-nodes.
@@ -295,7 +296,6 @@ static inline int add_v(const int v, const int cls, ufl_t * const u){
  *         while clusters are started with `v` nodes.
  * @return 0 if nothing was done, 1 if just added, 2 if clusters merged
  */
-#if 0
 static inline int add_c(const int c, const int cls, ufl_t * const u){
   int cl = cls;
   if(cl<0)
@@ -307,14 +307,22 @@ static inline int add_c(const int c, const int cls, ufl_t * const u){
   } /** WARNING: this will not work with multiple  cluster removal / growth */
 
   vnode_t * nod;
-  HASH_FIND_INT(u->nodes, &c, nod);
+  int idx=c+u->nvar; /** index for a c-node */
+  HASH_FIND_INT(u->nodes, &idx, nod);
   if(nod){ /** vertex already in a cluster */
     assert(nod->clus >= 0); /** just in case */
+    if(nod->val){
+      nod->val=0;
+      u->wei_c--;
+    }
+    else{
+      nod->val=1;
+      u->wei_c++;
+    }
     int lbl = u->clus[nod->clus].label;
     while((lbl >= 0) &&(u->clus[lbl].label != lbl))  /** dereference */
       lbl = u->clus[lbl].label;
     if(lbl == cl){  /** same `cl`, nothing needs to be done */
-      //      printf("found %d, already in %d\n",v,cl);
       return 0;
     }
     else if (lbl < 0){
@@ -332,39 +340,41 @@ static inline int add_c(const int c, const int cls, ufl_t * const u){
 #endif
     return 2; /** merged clusters */
   }
-  /** otherwise add `v` to `cl` */
-  //  printf("not found, adding %d to %d\n",v,cl);
-  point_t *tmp = & (u->v_nodes[u->num_v]);
+  /** otherwise actually add `c` to `cl` */
+  //  printf("not found, adding %d to %d\n",c,cl);
+  point_t *tmp = & (u->c_nodes[u->num_c]);
   tmp->index = c;
   tmp->next = NULL;
-  if(u->clus[cl].last_v){
-    if((u->clus[cl].first_v == NULL) ||
-       (u->clus[cl].num_poi_v == 0)){
-      printf("invalid cluster: cl=%d last_v!=NULL num_poi_v=%d\n",cl,u->clus[cl].num_poi_v);
+  if(u->clus[cl].last_c){
+    if((u->clus[cl].first_c == NULL) ||
+       (u->clus[cl].num_poi_c == 0)){
+      printf("invalid cluster: cl=%d last_c!=NULL num_poi_c=%d\n",cl,u->clus[cl].num_poi_c);
       ufl_print(u);
       ERROR("here");
     }
-    u->clus[cl].last_v -> next = tmp;
+    u->clus[cl].last_c -> next = tmp;
   }
-  else{ /** `last_v == NULL`, empty cluster*/
-    if((u->clus[cl].num_poi_v != 0) ||
-       (u->clus[cl].first_v != NULL)){
-      printf("invalid cluster: cl=%d last_v==NULL num_poi_v=%d\n",cl,u->clus[cl].num_poi_v);
+  else{ /** `last_c == NULL`, empty cluster*/
+    if((u->clus[cl].num_poi_c != 0) ||
+       (u->clus[cl].first_c != NULL)){
+      printf("invalid cluster: cl=%d last_c==NULL num_poi_c=%d\n",cl,u->clus[cl].num_poi_c);
       ufl_print(u);
       ERROR("here");
     }
-    u->clus[cl].first_v = tmp;
+    u->clus[cl].first_c = tmp;
   }
-  u->clus[cl].last_v = tmp;
-  u->clus[cl].num_poi_v ++;
-  vnode_t *x = &(u->spare[u->num_v ++]);
-  x->v = v;
+  u->clus[cl].last_c = tmp;
+  u->clus[cl].num_poi_c ++;
+  vnode_t *x = &(u->spare[u->num_s ++]);
+  u->num_c ++;
+  x->idx = c;
+  x->val = 1;
   x->clus = cl;
-  HASH_ADD_INT(u->nodes,v,x);
-
+  idx=c+u->nvar;
+  HASH_ADD_INT(u->nodes,idx,x);
+  u->wei_c++;
   return 1; /** added vertex */
 }
-#endif 
 
 
 void dec_ufl_clear(ufl_t * const u){
@@ -378,7 +388,7 @@ void dec_ufl_clear(ufl_t * const u){
     u->clus[i].first_c = u->clus[i].last_c = NULL;
     u->clus[i].num_poi_c=0;
   }
-  u->num_v = u->num_c = u->num_clus = u->num_prop = 0;
+  u->num_v = u->num_c = u->num_clus = u->num_prop = u->wei_c = 0;
   u->error->wei = u->syndr->wei = 0;
 }
 
