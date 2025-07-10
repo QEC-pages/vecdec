@@ -73,7 +73,9 @@ typedef struct POINT_T {
 
 typedef struct VNODE_T {
   UT_hash_handle hh;
-  int idx; /** key: `v`ariable node or `nvar`+`c`heck node */
+  int idx; /** key: `v`ariable node or
+               `nvar`+`c`heck node or
+               `nvar`+`nchk`+o`b`servable node */
   int val; /** node value (e.g., `0` or `1`) */
   int clus; /** cluster reference */
 } vnode_t;
@@ -87,6 +89,9 @@ typedef struct CLUSTER_T {
    *
    *   TODO: implement negative label = deleted cluster.
    */
+  int wei_c; /** syndrome weight */
+  //  int wei_b; /** o`b`servable weight */
+  //  int wei_v;
   int num_poi_v;
   point_t *first_v; /** linked list for associated v-nodes */
   point_t *last_v;
@@ -99,8 +104,7 @@ typedef struct CLUSTER_T {
 typedef struct UFL_T {
   const int nvar;
   const int nchk;
-  int wei_c; /* syndrome weight */
-  //  int wei_v;
+  const int nobs;
   vnode_t * nodes; /** hash storage for occupied nodes */
   int num_v; /** total number of used `v_nodes` (all clusters) */
   int num_c; /** total number of used `c_nodes` */
@@ -111,7 +115,7 @@ typedef struct UFL_T {
   vec_t *syndr; /** [`nchk`] remaining syndrome bits */
   point_t *v_nodes; /** [`nvar`] pre-allocated nodes for `v` linked lists in clusters */
   point_t *c_nodes; /** [`nchk`] same for `c` linked lists */
-  vnode_t * spare;  /** [`nvar`+`nchk`] same for `hash` look-up table in `nodes`*/
+  vnode_t * spare;  /** [`nvar`+`nchk`+`nobs`] same for `hash` look-up table in `nodes`*/
   cluster_t clus[0];/** [`nchk`] list of clusters and associated `v` and `c` lists. */
 } ufl_t;
 
@@ -246,6 +250,7 @@ typedef struct UFL_T {
     vec_t *obs;  /** allocated to `mL->rows` */
     vec_t *svec; /** allocated to `nchk` */
     ufl_t *ufl;
+    vnode_t *spare; /** allocated to `nobs` */
   } params_t;
 
   extern params_t prm;
@@ -364,7 +369,14 @@ typedef struct UFL_T {
   ufl_t *ufl_free( ufl_t *s);
   void ufl_cnt_print(const params_t * const p);
   void ufl_cnt_update(const int which, const ufl_t * const u, const params_t * const p);
-
+/** @brief construct an empty ufl structure */
+ufl_t *ufl_init(const params_t * const p);
+/** @brief print out the `ufl` and its clusters */
+ void ufl_print(const ufl_t *const u);
+/** given a sparse vector (`wei` sorted variable nodes in `vec`), construct its
+ * cluster decomposition in u; return 0 if reducible */
+int ufl_decompose(const int wei, const int * const vec, ufl_t * u, params_t * p);
+    
   /**
    * @brief The help message.
    *

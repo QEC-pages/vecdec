@@ -55,8 +55,10 @@ ufl_t *ufl_init(const params_t * const p){
 
 /** @brief print the cluster (its number `cl` is for information purpose) */
 static inline void cluster_print(const int cl, const cluster_t * const u){
-  printf("# cluster %d label=%d num_v=%d num_c=%d (%s)\n",cl, u->label, u->num_poi_v, u->num_poi_c,
+  printf("# cluster %d label=%d num_v=%d num_c=%d (%s)\n",
+         cl, u->label, u->num_poi_v, u->num_poi_c,
 	 cl == u->label ? "proper" : u->label < 0? "deleted" : "reference");
+  printf("# wei_c=%d\n",u->wei_c);
   if(u->num_poi_v){
     printf("# nodes_v: ");
     int cnt=0;
@@ -154,19 +156,20 @@ static inline int ufl_verify(const ufl_t * const u){
 }
 
 /** @brief print out the `ufl` and its clusters */
-static inline void ufl_print(const ufl_t *const u){
+void ufl_print(const ufl_t *const u){
   printf("# ufl_strucure num_v=%d num_c=%d num_clus=%d\n",u->num_v, u->num_c, u->num_clus);
   for(int i=0 ; i< u->num_clus; i++){
     cluster_print(i,& u->clus[i]);
   }
   vnode_t *tmp, *nod;
-  printf("# nodes in hash: ");
+  printf("# nodes in hash:\n");
   int cnt=0;
+  assert(u->num_s <= u->nvar + u->nchk);
   HASH_ITER(hh, u->nodes, nod, tmp) {
-    if(cnt > u->nvar)
+    if(cnt > u->num_s)
       break;
     int cls = nod->clus;
-    printf("(%s %d %d",nod->idx>u->nvar?"c:":"v:",nod->idx, cls);
+    printf("(%s %d val=%d %d",nod->idx >= u->nvar?"c:":"v:",nod->idx, nod->val, cls);
     while((cls>0) && (cls != u->clus[cls].label)){
       cls = u->clus[cls].label;
       printf(" -> %d", cls);
@@ -210,6 +213,9 @@ static inline int merge_clus(const int c1, const int c2, ufl_t * const u){
   u->clus[c2].last_c = u->clus[c2].first_c = NULL;
 
   u->clus[c2].label = c1;
+
+  u->clus[c1].wei_c += u->clus[c2].wei_c;
+  u->clus[c2].wei_c = 0;
   return 0;
 }
 
@@ -312,17 +318,17 @@ static inline int add_c(const int c, const int cls, ufl_t * const u){
   HASH_FIND_INT(u->nodes, &idx, nod);
   if(nod){ /** vertex already in a cluster */
     assert(nod->clus >= 0); /** just in case */
-    if(nod->val){
-      nod->val=0;
-      u->wei_c--;
-    }
-    else{
-      nod->val=1;
-      u->wei_c++;
-    }
     int lbl = u->clus[nod->clus].label;
     while((lbl >= 0) &&(u->clus[lbl].label != lbl))  /** dereference */
       lbl = u->clus[lbl].label;
+    if(nod->val){
+      nod->val=0;
+      u->clus[lbl].wei_c--;
+    }
+    else{
+      nod->val=1;
+      u->clus[lbl].wei_c++;
+    }
     if(lbl == cl){  /** same `cl`, nothing needs to be done */
       return 0;
     }
@@ -368,15 +374,43 @@ static inline int add_c(const int c, const int cls, ufl_t * const u){
   u->clus[cl].num_poi_c ++;
   vnode_t *x = &(u->spare[u->num_s ++]);
   u->num_c ++;
-  x->idx = c;
+  x->idx = c + u->nvar;
   x->val = 1;
   x->clus = cl;
-  idx=c+u->nvar;
+  //  idx=c+u->nvar;
   HASH_ADD_INT(u->nodes,idx,x);
-  u->wei_c++;
+  u->clus[cl].wei_c++;
   return 1; /** added vertex */
 }
 
+#if 0
+/** insert / update `val` of the o`b`servable node `b` in hash */
+void add_b(const int b, const int cls, ufl_t * const u){
+  int cl = cls;
+  if(cl<0)
+    ERROR("deleted cluster %d encountered\n",cl);
+  while(u->clus[cl].label != cl){  /** dereference */
+    cl = u->clus[cl].label;
+    if(cl<0)
+      ERROR("deleted cluster %d encountered\n",cl);
+  } /** WARNING: this will not work with multiple  cluster removal / growth */
+  vnode_t * nod;
+  int idx = b + u->nvar + i->nobs; /** index for a b-node */
+  HASH_FIND_INT(u->nodes, &idx, nod);
+  if(nod){ /** already in hash */
+    if(nod->val){
+      nod->val=0;
+      u->clus[lbl].wei_c--;
+    }
+    else{
+      nod->val=1;
+      u->clus[lbl].wei_c++;
+    }
+
+  }
+
+}
+#endif 
 
 void dec_ufl_clear(ufl_t * const u){
   vnode_t *nod, *tmp;
@@ -388,9 +422,11 @@ void dec_ufl_clear(ufl_t * const u){
     u->clus[i].num_poi_v=0;
     u->clus[i].first_c = u->clus[i].last_c = NULL;
     u->clus[i].num_poi_c=0;
+    u->clus[i].wei_c = 0;
+    //    u->clus[i].wei_b = 0;
   }
   u->num_v = u->num_c = u->num_s = 0;
-  u->num_clus = u->num_prop = u->wei_c = 0;
+  u->num_clus = u->num_prop = 0;
   u->error->wei = u->syndr->wei = 0;
 }
 
@@ -1051,17 +1087,101 @@ void dec_ufl_exercise(params_t * const p){
 
 
 /** given a sparse vector (`wei` sorted variable nodes in `vec`), construct its
- * cluster decomposition in u; return 0 if reducible */
-ufl_t * ufl_decompose(const int wei, const int * const vec, ufl_t * u, params_t * p){
+ * cluster decomposition in u; return 1 if reducible */
+int ufl_decompose(const int wei, const int * const vec, ufl_t * u, params_t * p){
   if(!u) u=ufl_init(p);
-  /**
-   * 0. v=arr[0]
-   * 1. add `v` to cluster 0
-   * 2. for all neighboring checks `c`, add `c` to cluster; add all neighboring `v`
-   *    nodes to hash
-   * 3. for all `v` in arr not yet processed, search in hash, if there, remove from
-   *    hash (or label as added), goto `1`.
-   * 4. If there are no more `v` nodes that can be added (or if the syndrome weight is 0),
-   *    verify observable for cluster 0, if trivial, clear the cluster, otherwise start new cluster, ...
-   */
+  dec_ufl_clear(u);
+  printf("at start of ufl_decompose ##################\n");
+  for (int iv=0; iv< wei; iv++){
+    u->num_clus ++;
+    u->num_prop ++;
+    u->num_v ++;
+    point_t *tmp = & u->v_nodes[iv];
+    int v = tmp->index = vec[iv];
+    printf("# adding v=%d to cluster %d\n",v,iv);
+    tmp->next = NULL;
+    u->clus[iv].label = iv;
+    u->clus[iv].first_v = u->clus[iv].last_v = tmp;
+    u->clus[iv].num_poi_v = 1;
+    u->clus[iv].first_c = u->clus[iv].last_c = NULL;
+    u->clus[iv].num_poi_c = 0;
+    assert(v < u->nvar);
+    for(int ic = p->mHt->p[v]; ic < p->mHt->p[v+1]; ic++){
+      int c = p->mHt->i[ic]; /** check node index */
+      printf("adding c=%d to cluster %d\n",c,iv);
+      add_c(c,iv,u);
+    }
+#ifndef NDEBUG
+    ufl_verify(u);
+    if(p->debug & 32){
+      printf("# in ufl_decompose\n# s: ");
+      vec_t *s = vec_from_arr(wei,vec);
+      vec_print(s);
+      ufl_print(u);
+      printf("\n");
+    }
+#endif
+  }
+  /** now go over each cluster (it is expected to have syndrome=0)
+   *  and calculate the o`b`servables. */
+  if(p->classical){ /** should we decompose into smaller codewords? */
+    if(u->num_prop >1)
+      return 1;
+    return 0;
+  }
+  if (p->mLt == NULL)
+    ERROR("expected to have logical matrix 'mLt' defined, exiting!");
+  if (p->spare == NULL)
+    p->spare = malloc(sizeof(vnode_t) * (p->ncws));
+  vnode_t * spare = p->spare;
+  cluster_t *clus = u->clus;
+  vnode_t *hash=NULL, *nod, *tmp_nod;
+  for(int cl=0; cl<u->num_clus; cl++, clus++){
+    if (clus->label == cl){/* proper cluster */      
+      if(clus->wei_c){
+        ufl_print(u);
+        ERROR("cluster %d expected to have zero syndrome weight, wei_c=%d",cl,clus->wei_c);
+      }
+      int wei_b=0, num_b=0;
+      for(point_t * tmp = clus->first_v; tmp != NULL; tmp = tmp ->next){
+        const int v = tmp->index;
+        for(int ib = p->mLt->p[v]; ib < p->mLt->p[v+1]; ib++){
+          int b = p->mLt->i[ib]; /** o`b`servable node index */
+          HASH_FIND_INT(hash,&b, nod);
+          if(nod){ /* have already seen this */
+            nod->val ^= 1;
+            wei_b += nod->val ? 1 : -1;
+          }
+          else{
+            nod = & spare[num_b++];
+            nod->idx=b;
+            nod->val=1;
+            nod->clus = cl;
+            HASH_ADD_INT(hash,idx,nod);
+            wei_b ++; /* new observable node */
+          }
+          printf("added/updated b=%d @ cluster %d, val=%d wei_b=%d\n",b,cl,nod->val,wei_b);
+        }
+      }
+      /** clear the hash */
+      HASH_ITER(hh, hash, nod, tmp_nod) {
+        HASH_DEL(hash,nod);
+      }
+      if((wei_b)&&(u->num_prop==1))
+        return 0;
+      else{
+        printf("######### cluster=%d num_prop=%d wei_b=%d\n",cl,u->num_prop,wei_b);
+        ufl_print(u);
+      } 
+    }
+  }
+
+  return 1; /** some trivial clusters, or two non-trivial clusters */
 }
+  
+/*
+ * 4. If there are no more `v` nodes that can be added (or if the syndrome
+ *    weight is 0), verify observable for cluster 0, if trivial, clear the
+ *    cluster, otherwise start new cluster, ...
+ */
+

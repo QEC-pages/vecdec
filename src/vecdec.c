@@ -59,7 +59,7 @@ params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50,
   .nzH=0, .nzL=0,
   .buffer=NULL, .buffer_size = 0, .v0=NULL, .v1=NULL,
   .err=NULL, .svec=NULL, .obs=NULL,
-  .ufl=NULL
+  .ufl=NULL, .spare=NULL
 };
 
 params_t prm_default={  .steps=50, 
@@ -602,6 +602,23 @@ void do_hash_clear(params_t *const p){
   HASH_ITER(hh, p->codewords, cw, tmp) {
     HASH_DEL(p->codewords, cw);
     free(cw);
+  }
+}
+
+/** @brief try decomposing codewords in hash */
+void do_hash_decomp(params_t *const p){
+  one_vec_t *cw, *tmp;
+  ufl_t *ufl = ufl_init(p);
+  //  size_t keylen=0;
+  HASH_ITER(hh, p->codewords, cw, tmp){
+    int reduc = ufl_decompose(cw->weight, cw->arr, ufl, p);
+    if(reduc){
+      printf("reducible! ");
+      print_one_vec(cw);
+      ufl_print(ufl);
+      HASH_DEL(p->codewords, cw);
+      free(cw);
+    }
   }
 }
 
@@ -2137,6 +2154,8 @@ void var_kill(params_t *p){
   if(p->ufl) ufl_free(p->ufl);
   if(p->hashU_syndr)
     kill_clusters(p);
+  if(p->spare)
+    free(p->spare);
 }
 
 int do_err_vecs(params_t * const p){
@@ -2229,6 +2248,7 @@ int main(int argc, char **argv){
     if(p->debug&1)
       printf("# %lld codewords read from %s ...",p->num_cws, p->finC);
     do_hash_verify_CW(p->mHt, p->mLt, p);
+    do_hash_decomp(p);
     if(p->debug&1)
       printf("all verified\n");
     do_hash_min(p); /** set values `minE` and `minW` from stored CWs */
