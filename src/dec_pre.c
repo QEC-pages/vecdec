@@ -142,13 +142,14 @@ static inline int ufl_verify(const ufl_t * const u){
   vnode_t *nod, *tmp;
   int cnt=0;
   HASH_ITER(hh, u->nodes, nod, tmp) {
-    if(cnt > u->nvar){
+    if(cnt > u->nvar + u ->nchk){
       num_err++; break;
     }
     cnt++;
   }
   if((cnt != u->num_s) || (num_err))
-    ERROR("counted %d expected num_s=%d num_err=%d",cnt, u->num_v, num_err);
+    ERROR("counted %d expected num_s=%d num_v=%d num_c=%d num_err=%d",cnt,
+          u->num_s, u->num_v, u->num_c, num_err);
   return 0;
 }
 
@@ -388,7 +389,8 @@ void dec_ufl_clear(ufl_t * const u){
     u->clus[i].first_c = u->clus[i].last_c = NULL;
     u->clus[i].num_poi_c=0;
   }
-  u->num_v = u->num_c = u->num_clus = u->num_prop = u->wei_c = 0;
+  u->num_v = u->num_c = u->num_s = 0;
+  u->num_clus = u->num_prop = u->wei_c = 0;
   u->error->wei = u->syndr->wei = 0;
 }
 
