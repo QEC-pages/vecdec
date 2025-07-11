@@ -90,7 +90,7 @@ typedef struct CLUSTER_T {
    *   TODO: implement negative label = deleted cluster.
    */
   int wei_c; /** syndrome weight */
-  //  int wei_b; /** o`b`servable weight */
+  int wei_b; /** o`b`servable weight */
   //  int wei_v;
   int num_poi_v;
   point_t *first_v; /** linked list for associated v-nodes */
@@ -372,11 +372,11 @@ typedef struct UFL_T {
 /** @brief construct an empty ufl structure */
 ufl_t *ufl_init(const params_t * const p);
 /** @brief print out the `ufl` and its clusters */
- void ufl_print(const ufl_t *const u);
+void ufl_print(const ufl_t *const u, const int bitmap);
 /** given a sparse vector (`wei` sorted variable nodes in `vec`), construct its
  * cluster decomposition in u; return 0 if reducible */
 int ufl_decompose(const int wei, const int * const vec, ufl_t * u, params_t * p);
-    
+int do_clus_error(const int cl, ufl_t * const u, const int clear);    
   /**
    * @brief The help message.
    *

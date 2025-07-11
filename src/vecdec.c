@@ -610,15 +610,64 @@ void do_hash_decomp(params_t *const p){
   one_vec_t *cw, *tmp;
   ufl_t *ufl = ufl_init(p);
   //  size_t keylen=0;
+  long long int cnt_reduc=0, cnt_add=0, cnt_orig=p->num_cws;
   HASH_ITER(hh, p->codewords, cw, tmp){
     int reduc = ufl_decompose(cw->weight, cw->arr, ufl, p);
     if(reduc){
-      printf("reducible! ");
-      print_one_vec(cw);
-      ufl_print(ufl);
+      cnt_reduc++;
+      if(p->debug&1){
+        printf("reducible! ");
+        print_one_vec(cw);
+        ufl_print(ufl,2);
+      }
       HASH_DEL(p->codewords, cw);
-      free(cw);
+      p->num_cws --; 
+
+      for(int cl=0, prop=0; cl < ufl->num_clus && prop < ufl->num_prop; cl++){
+        if(cl == ufl->clus[cl].label){
+          prop++;
+          if(ufl->clus[cl].wei_b){
+            do_clus_error(cl,ufl,1);
+            cw=one_vec_init(cw,ufl->error->wei, ufl->error->vec);
+            const size_t keylen = cw->weight * sizeof(rci_t);
+            one_vec_t *pvec=NULL;
+            HASH_FIND(hh, p->codewords, cw->arr, keylen, pvec);
+            if(!pvec){ /** vector not found, inserting */	
+              if(p->debug&1){
+                printf("cl=%d inserting ",cl);
+                print_one_vec(cw);                
+              }
+              qllr_t energ=0;
+              if(p->useP>=0)
+                for(int i=0; i < cw->weight; i++) 
+                  energ += p->vLLR[cw -> arr[i]];
+              cw->energ=energ;
+	
+              HASH_ADD(hh, p->codewords, arr, keylen, cw); /** store in the `hash` */
+              cnt_add ++;
+              p->num_cws ++; 
+              if(p->minE > cw->energ)
+                p->minE = cw->energ;
+              if(p->minW_rec > cw->weight)
+                p->minW_rec = cw->weight;
+              if(p->maxW_rec < cw->weight)
+                p->maxW_rec = cw->weight;
+              cw=NULL; /** the `cw` is used in the hash, can't be reused */
+            }
+            else if(p->debug&1){
+                printf("cl=%d already there ",cl);
+                print_one_vec(cw);                
+            }
+          }
+        }
+      }
+      if(cw)
+        free(cw);
     }
+  }
+  if(p->debug&1){
+    printf("do_hash_decomp(): processed %lld cw's, %lld reducible, wrote back %lld, tot=%lld\n",
+           cnt_orig,cnt_reduc,cnt_add,p->num_cws);
   }
 }
 
