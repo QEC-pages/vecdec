@@ -615,7 +615,7 @@ void do_hash_decomp(params_t *const p){
     int reduc = ufl_decompose(cw->weight, cw->arr, ufl, p);
     if(reduc){
       cnt_reduc++;
-      if(p->debug&1){
+      if(p->debug&2){
         printf("reducible! ");
         print_one_vec(cw);
         ufl_print(ufl,2);
@@ -654,7 +654,7 @@ void do_hash_decomp(params_t *const p){
                 p->maxW_rec = cw->weight;
               cw=NULL; /** the `cw` is used in the hash, can't be reused */
             }
-            else if(p->debug&1){
+            else if(p->debug&2){
                 printf("cl=%d already there ",cl);
                 print_one_vec(cw);                
             }

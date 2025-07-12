@@ -1142,7 +1142,8 @@ int ufl_decompose(const int wei, const int * const vec, ufl_t * u, params_t * p)
               HASH_ADD_INT(hash,idx,nod);
               wei_b ++; /* new observable node */
             }
-            printf("added/updated b=%d @ cluster %d, val=%d wei_b=%d\n",b,cl,nod->val,wei_b);
+            if(p->debug&32)
+              printf("added/updated b=%d @ cluster %d, val=%d wei_b=%d\n",b,cl,nod->val,wei_b);
           }
         }
         /** clear the hash */
