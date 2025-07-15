@@ -157,7 +157,7 @@ double est_prob_one_wei(const int num, const int nvar, const double * const valP
     }
     weight += binomialC(num,s) * mul;
   }
-#if 1
+#if 0
   printf("# num=%d avg=%g sig=%g wei=%Lg\n",num,avg,sig,0.5*weight);
 #endif 
   return 0.5*pref*weight;

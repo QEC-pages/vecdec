@@ -310,10 +310,13 @@ int main(int argc, char **argv){
 
   const size_t siz=1000;
   char comment[siz+1];
-  snprintf(comment,siz,"QC block matrix [%d,%d] ell=%d",p->rows,p->cols, p->ell);
+  int rank = rank_csr(p->mat);
+  snprintf(comment,siz,"QC block matrix [%d,%d] ell=%d rank=%d",p->rows,p->cols, p->ell, rank);
   comment[siz]='\0';/** sanity check */
   csr_mm_write(p->out,"" /** no extension */, p->mat, comment);
   if(p->mat) csr_free(p->mat);
+  if(p->debug&1)
+    printf("# wrote %s to %s\n",comment,p->out);
   return 0;
 }
 
