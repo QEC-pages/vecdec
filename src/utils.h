@@ -185,6 +185,33 @@ static inline int by_syndrome(void *a, void *b){
   /** @brief print entire `one_vec_t` structure by pointer */
   void print_one_vec(const one_vec_t * const pvec);
 
+/** @brierf init `one_vec_t` structure from an array of integers */
+static inline one_vec_t * one_vec_init(one_vec_t *vec, const int wei, const int arr[]){
+  if ((vec!=NULL)&&(vec->weight < wei)){
+    free(vec);
+    vec=NULL;
+  }
+  if(vec==NULL){
+    vec = calloc(sizeof(one_vec_t) + wei*sizeof(int), sizeof(char));
+    if(!vec)
+      ERROR("memory allocation");
+  }
+  
+  vec->weight = wei;
+  vec->cnt = 1;
+  for(int i=0; i<wei; i++)
+    vec->arr[i] = arr[i];
+#ifndef NDEBUG
+  for(int i=1; i<wei; i++){ /** verify entry just read */
+    if((vec->arr[i-1] < 0) || (vec->arr[i-1] >= vec->arr[i])){
+      printf("invalid entry of weight w=%d\n",wei);
+      ERROR("expected strictly increasing positive entries");
+    }   
+  }
+#endif
+  return vec;
+}
+
   /** @brief compare two `one_vec_t` structures by energy */
   static inline int by_energy(void *a, void *b){
   const one_vec_t *pa = (one_vec_t *) a;

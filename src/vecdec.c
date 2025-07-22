@@ -32,20 +32,21 @@ params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50,
   .lerr=-1, .maxosd=100, .swait=0, .maxC=0,
   .dW=0, .minW_rec=INT_MAX, .maxW_rec=0, .maxW=0, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
   .bpalpha=1, .bpbeta=1, .bpgamma=0.5, .bpretry=1, 
-  .uW=1, .uX=0, .uR=0, //.uEdbl=-1, .uE=-1,
+  .uW=2, .uX=0, .uR=1, //.uEdbl=-1, .uE=-1,
   .numU=0, .numE=0, .maxU=0,
   .hashU_error=NULL, .hashU_syndr=NULL, .permHe=NULL,
-  .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8, .useP=0, .mulP=0, .dmin=0,
+  .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8,
+  .useP=0, .mulP=0, .useQ=0, .refQ=0, .dmin=0,
   .debug=1, .fdem=NULL, .fout="tmp",
   .fdet=NULL, .fobs=NULL,  .ferr=NULL,
   .gdet=NULL, .gobs=NULL, // .gerr=NULL,
   .pdet=NULL, .pobs=NULL,  .perr=NULL,  
   .mode=-1, .submode=0, .use_stdout=0, 
   .LLRmin=0, .LLRmax=0, .codewords=NULL, .num_cws=0,
-  .finH=NULL, .finHT=NULL, .finL=NULL, .finG=NULL, .finK=NULL, .finP=NULL,
+  .finH=NULL, .finHT=NULL, .finL=NULL, .finG=NULL, .finK=NULL, .finP=NULL, .finQ=NULL,
   .finC=NULL, .outC=NULL, 
   .finU=NULL, .outU=NULL, 
-  .vP=NULL, .vLLR=NULL, .mH=NULL, .mHt=NULL,
+  .vP=NULL, .vQ=NULL, .vLLR=NULL, .vLLRQ=NULL, .mH=NULL, .mHt=NULL,
   .mL=NULL, .mLt=NULL,  .mA=NULL, .mAt=NULL,
   .internal=0, 
   .file_err=NULL,  .file_det=NULL, .file_obs=NULL,
@@ -54,20 +55,20 @@ params_t prm={ .nchk=-1, .nvar=-1, .ncws=-1, .steps=50,
   .file_perr=NULL,  .file_pdet=NULL, .file_pobs=NULL,
   .line_err=0,   .line_er0=0,  .line_det=0, .line_obs=0,
   .mE0=NULL,
-  .mE=NULL, .mHe=NULL, .mLe=NULL, .mHeT=NULL, .mLeT=NULL,
+  .mEt=NULL, .mHe=NULL, .mLe=NULL, .mHeT=NULL, .mLeT=NULL,
   .nzH=0, .nzL=0,
   .buffer=NULL, .buffer_size = 0, .v0=NULL, .v1=NULL,
   .err=NULL, .svec=NULL, .obs=NULL,
-  .ufl=NULL
+  .ufl=NULL, .spare=NULL
 };
 
 params_t prm_default={  .steps=50, 
   .lerr=-1, .maxosd=100, .bpgamma=0.5, .bpretry=1, .swait=0, .maxC=0,
   .dW=0, .minW_rec=INT_MAX, .maxW_rec=-1, .maxW=0, .dE=-1, .dEdbl=-1, .minE=INT_MAX,
-  .uW=1, .uX=0, .uR=0, //.uEdbl=-1, .uE=-1,
+  .uW=2, .uX=0, .uR=1, //.uEdbl=-1, .uE=-1,
   .maxU=0, .bpalpha=1, .bpbeta=1,
   .nvec=1024, .ntot=1, .nfail=0, .seed=0, .epsilon=1e-8, .useP=0, .mulP=0, .dmin=0,
-  .debug=1, .fout="tmp", .ferr=NULL,
+  .useQ=0, .refQ=0, .debug=1, .fout="tmp", .ferr=NULL,
   .mode=-1, .submode=0, .use_stdout=0, 
 };
 
@@ -94,53 +95,164 @@ static inline int is_subvec(const one_vec_t *const one, const one_vec_t *const t
   return 1;
 }
 
-/** @brief remove all entries from hash which contain smaller weight vector as subvectors
- * 
- */
-
 
 /** @brief calculate the probability of codeword in `one_vec_t` */
-static inline double do_prob_one_vec(const one_vec_t * const pvec, const params_t * const p){
+static inline double do_prob_one_vec(const one_vec_t * const pvec, const double * const valP){
   double ans=1;
   const int * idx = pvec->arr;
   for(int i=0; i< pvec->weight; i++, idx++){
-    const double vP = p->vP[*idx];
-    ans *= 2*sqrt(vP*(1 - vP));
+    const double vP = valP[*idx];
+    ans *= 2*sqrt(vP*(1.0 - vP));
   }
   return ans;
 }
 
+/** @brief calculate binomial coefficient `C(n, k)` */
+long long binomialC(int n, int k) {
+    long long res = 1;
+    if (k > n - k)     // C(n, k) = C(n, n-k)
+        k = n - k;    
+
+    // Calculate recursively [n * (n-1) * ... * (n-k+1)] / [1 * 2 * ... k]
+    int nn = n; 
+    for (int i = 1; i <= k; ++i, nn--) {
+      res *= nn;
+      res /= i;
+    }
+    return res;
+}
+
+double est_prob_one_wei(const int num, const int nvar, const double * const valP, const qllr_t * const valLLR){
+  double logsum=0;
+  long double sum1=0.0, sum2=0.0;
+  for(int i=0; i<nvar;i++){
+    logsum+=0.5*log(valP[i]*(1.0-valP[i]));
+    const long double vLLR = 0.5*dbl_from_llr(valLLR[i]);
+    sum1 += vLLR;
+    sum2 += vLLR*vLLR;    
+  }
+  double pref=exp(logsum*num/nvar);
+  double avg=sum1/nvar;
+  double sig=sqrt(1e-40+(sum2-sum1*sum1/nvar)/(nvar-1));
+  long double weight=0; /** sum of weight factors for different `s` */
+  for(int s=0; s<=num; s++){
+    const double eavg=avg*(2*s-num);
+    double z = (num*sig*sig-eavg)/(sig*sqrt(2.0*num));
+    double mul;
+    if(sig<1.0e-7){
+      if(num*sig*sig>eavg)       /** positive divergent argument */
+	mul=0;
+      else if (num*sig*sig<eavg) /** negative divergent argument */
+	mul=exp(num*sig*sig/2.0-eavg) * 2.0;
+      else                       /** zero argument */
+	mul=exp(num*sig*sig/2.0-eavg) * 1.0;
+    }
+    else{ 
+      if(z>10)                   /** avoid underflow */
+	mul=exp(-eavg*eavg/(2*num*sig*sig)) * 2.0/(sqrt(M_PI)*(z+sqrt(z*z*4.0/M_PI)));
+      else if (z<-20)
+	mul=exp(num*sig*sig/2.0-eavg) * 2.0;
+      else
+	mul=exp(num*sig*sig/2.0-eavg)*erfc(z);
+    }
+    weight += binomialC(num,s) * mul;
+  }
+#if 0
+  printf("# num=%d avg=%g sig=%g wei=%Lg\n",num,avg,sig,0.5*weight);
+#endif 
+  return 0.5*pref*weight;
+}
+  
+
+
+/** @brief calculate the probability of codeword in `one_vec_t` with the prefactor */
+static inline double do_prob_one_vec_prefactor(const one_vec_t * const pvec,
+					       const double * const valP, const qllr_t * const valLLR){
+  double ans=1;
+  const int * idx = pvec->arr;
+  long double sum1=0, sum2=0; 
+  const int num = pvec->weight;
+  for(int i=0; i< num; i++, idx++){
+    const double vP = valP[*idx];    
+    ans *= sqrt(vP*(1.0 - vP));
+    /** we need half-LLRs here! */
+    const long double vLLR = 0.5*dbl_from_llr(valLLR[*idx]);
+    sum1 += vLLR;
+    sum2 += vLLR*vLLR;
+  }
+  double avg=sum1/num;
+  double sig=sqrt((sum2-sum1*sum1/num)/(num-1));
+  long double weight=0; /** sum of weight factors for different `s` */
+  for(int s=0; s<=num; s++){
+    const double eavg=avg*(2*s-num);
+    double z = (num*sig*sig-eavg)/(sig*sqrt(2.0*num));
+    double mul;
+    if(sig<1.0e-7){
+      if(num*sig*sig>eavg)       /** positive divergent argument */
+	mul=0;
+      else if (num*sig*sig<eavg) /** negative divergent argument */
+	mul=exp(num*sig*sig/2.0-eavg) * 2.0;
+      else                       /** zero argument */
+	mul=exp(num*sig*sig/2.0-eavg) * 1.0;
+    }
+    else{ 
+      if(z>10)                   /** avoid underflow */
+	mul=exp(-eavg*eavg/(2*num*sig*sig)) * 2.0/(sqrt(M_PI)*(z+sqrt(z*z*4.0/M_PI)));
+      else if (z<-20)
+	mul=exp(num*sig*sig/2.0-eavg) * 2.0;
+      else
+	mul=exp(num*sig*sig/2.0-eavg)*erfc(z);
+    }
+    weight += binomialC(num,s) * mul;
+  }
+#if 0
+  for(int i=0; i<num; i++)
+    printf("%g%s",valP[pvec->arr[i]], i+1==num ?"\n":" ");
+  for(int i=0; i<num; i++)
+    printf("%g%s",dbl_from_llr(valLLR[pvec->arr[i]]), i+1==num ?"\n":" ");
+  
+  printf("num=%d avg=%g sig=%g wei=%Lg\n",num,avg,sig,0.5*weight);
+#endif 
+  return 0.5*ans*weight;
+}
+
+
 /** @brief calculate exact fail probability for one vector */
-static inline double do_prob_one_vec_exact(const one_vec_t * const pvec, const params_t * const p){
-  _maybe_unused const int max_len = sizeof(unsigned long)*8 -1; 
-  double ans=0;
+static inline double do_prob_one_vec_exact(const one_vec_t * const pvec, const double * const valP){
+  const int max_len = sizeof(unsigned long)*8 -1; 
+  long double ans=0;
+  long double tot0=0, tot1=0;
   const int w = pvec->weight;
-  assert(w<=max_len);
-  const unsigned long min = 1;
+  if(w>max_len)
+    return 0.0;
   const unsigned long max = (1<<w)-1;
   /** TODO: accurately estimate limits using `min_llr` and `max_llar` */
-  for(unsigned long bitmap=min; bitmap<max; bitmap++){
+  for(unsigned long bitmap=1; bitmap<=max; bitmap++){
     double prod0=1, prod1=1;
     unsigned long bit = 1<<(w-1);
     const int *idx = pvec->arr;
     /** TODO: speed-up this loop to calculate faster.  Use array of
      * previously computed values and only start with the last bit changed. */
     for(int i=w-1; i>=0; i--, bit>>=1, idx++){
-      const double prob = p->vP[*idx];
+      const double prob = valP[*idx];
       if(bitmap&bit){
-	prod1 *= prob;
-	prod0 *= (1-prob);
+	prod0 *= prob;
+	prod1 *= (1.0-prob);
       }
       else{ 
-	prod0 *= prob;
-	prod1 *= (1-prob);
+	prod1 *= prob;
+	prod0 *= (1.0-prob);
       }
     }
+    tot0+=prod0;
+    tot1+=prod1;
     if (prod1 > 1.000001*prod0)
       ans += prod0;
-    else if ((prod1 < 1.000001*prod0) && (prod1 > 0.999999*prod0))
+    else if (prod1 > 0.999999*prod0)
       ans += 0.5*prod0; /** almost the same; added for numerical stability */
-  }
+    //    printf("bitmap=%lu prod0=%g prod1=%g sum=%g tot0=%Lg tot1=%Lg ans=%Lg\n",
+    // 	    bitmap,    prod0,   prod1,prod0+prod1,tot0,  tot1,    ans);
+  } 
   return ans;
 }
  
@@ -375,23 +487,52 @@ int do_hash_fail_prob( params_t * const p){
 	print_one_vec(pvec);
   }
   /** finally calculate and output fail probability here */
-  /** TODO: use the limit on `W` and `E` (just ignore codewords outside the limit) */
-  double pfail=0, pfail_two=0, pmax=0, pmax_two=0;
+  /** TODO: use the limit on `E` (just ignore codewords outside the limit) */
+  double pfail=0, pfail_one=0, pfail_two=0, pfail_three=0;
+  double pmax=0,  pmax_one=0,  pmax_two=0,  pmax_three=0;
+  double pfaiQ=0, pfaiQ_one=0, pfaiQ_two=0, pfaiQ_three=0;
   int count = 0, count_min = 0, count_tot = 0;
   int minW=p->nvar + 1;
+  int maxW=p->maxW;
+  if ((maxW==0)||(maxW>20)){
+    maxW=20; /** sanity check: this method would be too expensive */
+  }
   for(pvec = p->codewords; pvec != NULL; pvec=(one_vec_t *)(pvec->hh.next)){
-    if ((p->maxW==0) || ((p->maxW != 0) && (pvec->weight <= p->maxW))){
+    if (pvec->weight <= maxW){
       if(p->submode &1){ /* original simple estimate */
-	double prob=do_prob_one_vec(pvec, p);
+	double prob=do_prob_one_vec(pvec, p->vP);
 	pfail += prob;
 	if(prob>pmax)
 	  pmax=prob;
       }
-      if(p->submode &2){ /* exact fail prob */      
-	double prob_two=do_prob_one_vec_exact(pvec, p);
+      if(p->submode &4){ /* exact fail prob */      
+	double prob_two=do_prob_one_vec_exact(pvec, p->vP);
+	/*
+	printf("w=%d est=%g exact=%g est_prefact=%g\n",
+	       pvec->weight,do_prob_one_vec(pvec,p->vP),
+	       prob_two,do_prob_one_vec_prefactor(pvec, p->vP, p->vLLR));
+	*/
 	pfail_two += prob_two;
 	if(prob_two>pmax_two)
 	  pmax_two=prob_two;
+      }
+      if(p->submode &8){ /* more accurate fail prob with prefactor */      
+	double prob_three=do_prob_one_vec_prefactor(pvec, p->vP, p->vLLR);
+	pfail_three += prob_three;
+	if(prob_three>pmax_three)
+	  pmax_three=prob_three;
+      }
+      if(p->submode&16){/* use reference value */
+	if(p->submode &1){ /* original simple estimate */	  
+	  pfaiQ += do_prob_one_vec(pvec, p->vQ);
+	}
+	if(p->submode &4){ /* exact fail prob for reference */
+	  if(pvec->weight < 20) /** sanity check: this is exponentially expensive */
+	    pfaiQ_two += do_prob_one_vec_exact(pvec, p->vQ);
+	}
+	if(p->submode &8){ /* more accurate fail prob for reference */      	  
+	  pfaiQ_three += do_prob_one_vec_prefactor(pvec, p->vQ, p->vLLRQ);
+	}
       }
       if(minW > pvec->weight){
 	minW=pvec->weight;
@@ -402,16 +543,56 @@ int do_hash_fail_prob( params_t * const p){
       count ++;
     }
     count_tot++;
-  }  
-  /** todo: prefactor calculation */
-  if(p->debug&1)
-    printf("# %s%smin_weight N_min N_use N_tot\n",p->submode&1 ?"sumP(fail) maxP(fail) ":"", p->submode&2 ?"sumP_exact(fail) maxP_exact(fail) ":"" );
-  if (p->submode & 1)
-    printf("%g %g ",pfail, pmax);
-  if (p->submode & 2)
-    printf("%g %g ",pfail_two, pmax_two);
-  printf("%d %d %d %d\n", minW, count_min, count, count_tot);
+  }
+  if((minW>=15)&&(p->maxW!=maxW)){
+    printf("sanity check maxW=%d may not be valid here! Original maxW=%d\n",maxW,p->maxW);
+    fprintf(stderr,"sanity check maxW=%d may not be valid here! Original maxW=%d\n",maxW,p->maxW);
+  }
+
+  if(p->submode &2){ /* estimated fail prob */      
+    pmax_one=est_prob_one_wei(minW,p->nvar, p->vP,p->vLLR);
+    pfail_one = count_min*pmax_one;
+    if(p->submode&16)/* use reference value */
+      pfaiQ_one = count_min*est_prob_one_wei(minW,p->nvar, p->vQ,p->vLLRQ);   
+  }
+
+  /** calculate averaged-out single-codeword contribution */
   
+  if(p->debug&1)
+    printf("# %s%s%s%smin_weight N_min N_use N_tot\n",
+	   p->submode&16 ?
+	   (p->submode&2 ?" refQ*sumP(fail)/sumQ(fail) ":""):
+	   (p->submode&2 ?" sumP(fail) maxP(fail) ":""),
+	   p->submode&16 ?
+	   (p->submode&1 ?" refQ*aveP(fail)/aveQ(fail) ":""):
+	   (p->submode&1 ?" Nmin*aveP(fail) aveP(fail) ":""),
+	   p->submode&16 ?
+	   (p->submode&4 ?" refQ*sumP_exact(fail)/sumQ_exact(fail) ":""):
+	   (p->submode&4 ?" sumP_exact(fail) maxP_exact(fail) ":""),
+	   p->submode&16 ?
+	   (p->submode&8 ?" refQ*sumP_accur(fail)/sumQ_accur(fail) ":""):
+	   (p->submode&8 ?" sumP_accur(fail) maxP_accur(fail) ":""));
+  if ((p->submode & 16) == 0){
+    if (p->submode & 1)
+      printf("%g %g ",pfail, pmax);
+    if (p->submode & 2)
+      printf(" %g %g ",pfail_one, pmax_one);
+    if (p->submode & 4)
+      printf(" %g %g ",pfail_two, pmax_two);
+    if (p->submode & 8)
+      printf(" %g %g ",pfail_three, pmax_three);
+  }
+  else {
+    if (p->submode & 1)
+      printf(" %g ", p->refQ * pfail/pfaiQ);
+    if (p->submode & 2)
+      printf("%g ", p->refQ * pfail_one/pfaiQ_one);
+    if (p->submode & 4)
+      printf("%g ", p->refQ * pfail_two/pfaiQ_two);
+    if (p->submode & 8)
+      printf("%g ", p->refQ * pfail_three/pfaiQ_three);
+  }
+  printf(" %d %d %d %d\n", minW, count_min, count, count_tot);
   return minW; 
 }
 
@@ -421,6 +602,72 @@ void do_hash_clear(params_t *const p){
   HASH_ITER(hh, p->codewords, cw, tmp) {
     HASH_DEL(p->codewords, cw);
     free(cw);
+  }
+}
+
+/** @brief try decomposing codewords in hash */
+void do_hash_decomp(params_t *const p){
+  one_vec_t *cw, *tmp;
+  ufl_t *ufl = ufl_init(p);
+  //  size_t keylen=0;
+  long long int cnt_reduc=0, cnt_add=0, cnt_orig=p->num_cws;
+  HASH_ITER(hh, p->codewords, cw, tmp){
+    int reduc = ufl_decompose(cw->weight, cw->arr, ufl, p);
+    if(reduc){
+      cnt_reduc++;
+      if(p->debug&2){
+        printf("reducible! ");
+        print_one_vec(cw);
+        ufl_print(ufl,2);
+      }
+      HASH_DEL(p->codewords, cw);
+      p->num_cws --; 
+
+      for(int cl=0, prop=0; cl < ufl->num_clus && prop < ufl->num_prop; cl++){
+        if(cl == ufl->clus[cl].label){
+          prop++;
+          if(ufl->clus[cl].wei_b){
+            do_clus_error(cl,ufl,1);
+            cw=one_vec_init(cw,ufl->error->wei, ufl->error->vec);
+            const size_t keylen = cw->weight * sizeof(rci_t);
+            one_vec_t *pvec=NULL;
+            HASH_FIND(hh, p->codewords, cw->arr, keylen, pvec);
+            if(!pvec){ /** vector not found, inserting */	
+              if(p->debug&1){
+                printf("cl=%d inserting ",cl);
+                print_one_vec(cw);                
+              }
+              qllr_t energ=0;
+              if(p->useP>=0)
+                for(int i=0; i < cw->weight; i++) 
+                  energ += p->vLLR[cw -> arr[i]];
+              cw->energ=energ;
+	
+              HASH_ADD(hh, p->codewords, arr, keylen, cw); /** store in the `hash` */
+              cnt_add ++;
+              p->num_cws ++; 
+              if(p->minE > cw->energ)
+                p->minE = cw->energ;
+              if(p->minW_rec > cw->weight)
+                p->minW_rec = cw->weight;
+              if(p->maxW_rec < cw->weight)
+                p->maxW_rec = cw->weight;
+              cw=NULL; /** the `cw` is used in the hash, can't be reused */
+            }
+            else if(p->debug&2){
+                printf("cl=%d already there ",cl);
+                print_one_vec(cw);                
+            }
+          }
+        }
+      }
+      if(cw)
+        free(cw);
+    }
+  }
+  if(p->debug&1){
+    printf("do_hash_decomp(): processed %lld cw's, %lld reducible, wrote back %lld, tot=%lld\n",
+           cnt_orig,cnt_reduc,cnt_add,p->num_cws);
   }
 }
 
@@ -715,8 +962,6 @@ int do_LLR_dist(params_t  * const p, const int classical){
 
   }/** end of `steps` random window */
 
-  /** TODO: prefactor calculation */
-
  alldone: /** early termination label */
 
   /** clean up */
@@ -779,10 +1024,15 @@ void init_Ht(params_t *p){
 	if(p->uR==0)
 	  printf("# uW=%d, adding errors of weight up to %d to syndrome hash\n",p->uW, p->uW);
 	else 
-	  printf("# uW=%d, adding error clusters of w <= %d and radius <= uR=%d to syndrome hash\n",p->uW, p->uW, p->uR);
+	  printf("# uW=%d, adding error clusters of w <= %d and radius <= uR=%d \n"
+                 "#   between v-v neighbors to syndrome hash\n",p->uW, p->uW, p->uR);
 	if(p->maxU)
 	  printf("# maximum number of error syndromes in hash maxU=%lld\n",p->maxU);
-	printf("# uX=%d, will %s use partially matched errors for pre-decoding\n",p->uX,p->uX==0? "not":"");
+	printf("# uX=%d,%s",p->uX, p->uX > 0 ? "":" disable experimental options for cluster decoding\n");
+	if (p->uX & 1)
+	  printf("%sbit 0 set, try matching entire syndrome as a single cluster\n",p->uX & 2?"\t":" ");
+	if (p->uX & 2)
+	  printf("%sbit 1 set, pass partially matched errors to main decoder\n",p->uX & 1 ?"#\t":" ");
       }
     }
     p->v0 = vec_init(p->nchk);
@@ -797,7 +1047,7 @@ void init_Ht(params_t *p){
   //  p->vP=inP;
   p->LLRmin=1e9;
   p->LLRmax=-1e9;
-  if(p->useP >=0){
+  if(p->useP >=0){/* init LLR values */
     if(!(p->vLLR = malloc(n*sizeof(qllr_t))))
       ERROR("memory allocation!");
     for(int i=0;  i < n; i++){
@@ -812,6 +1062,14 @@ void init_Ht(params_t *p){
   if(p->LLRmin<=0)
     ERROR("LLR values should be positive!  LLRmin=%g LLRmax=%g",
 	  dbl_from_llr(p->LLRmin),dbl_from_llr(p->LLRmax));
+  if(p->vQ){ /* init LLR values for the Q distribution */
+    if(!(p->vLLRQ = malloc(n*sizeof(qllr_t))))
+      ERROR("memory allocation!");
+    for(int i=0;  i < n; i++){
+      qllr_t val=llr_from_P(p->vQ[i]);
+      p->vLLRQ[i] = val;
+    }
+  }
   if(p->debug & 2){/** `print` out the entire error model ******************** */
     if(p->useP >=0)
       printf("# error model read: r=%d k=%d n=%d LLR min=%g max=%g\n",
@@ -990,8 +1248,6 @@ int var_init(int argc, char **argv, params_t *p){
       p -> maxC = lldbg;
       if (p->debug&4)
 	printf("# read %s, maxC=%lld\n",argv[i],p-> maxC);
-      if(p->mode<2)
-	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
     }
     else if (sscanf(argv[i],"maxU=%lld",&lldbg)==1){ /** `maxU` */
       p -> maxU = lldbg;
@@ -1032,12 +1288,8 @@ int var_init(int argc, char **argv, params_t *p){
       p->uX = dbg;
       if (p->debug&4){
 	printf("# read %s, uX=%d\n",argv[i],p->uX);
-	if (p->uX < 0)
+	if ((p->uX < 0)||(p->uX>3))
 	  ERROR("invalid uX value");
-	else if (p->uX == 0)
-	  printf("# will only use full clusters for predecoding \n");
-	else
-	  printf("# will use partial clusters for predecoding\n");
       }	
       if(p->mode>=2)
 	ERROR("mode=%d, this parameter %s is irrelevant\n",p->mode,argv[i]);
@@ -1102,6 +1354,16 @@ int var_init(int argc, char **argv, params_t *p){
       p->mulP = val;
       if (p->debug&4)
 	printf("# read %s, mulP=%g\n",argv[i],p-> mulP);
+    }
+    else if (sscanf(argv[i],"useQ=%lg",&val)==1){ /** `useQ` */
+      p->useQ = val;
+      if (p->debug&4)
+	printf("# read %s, useQ=%g\n",argv[i],p-> useQ);
+    }
+    else if (sscanf(argv[i],"refQ=%lg",&val)==1){ /** `refQ` */
+      p->refQ = val;
+      if (p->debug&4)
+	printf("# read %s, refQ=%g\n",argv[i],p-> refQ);
     }
     else if (sscanf(argv[i],"dE=%lg",&val)==1){ /** `dE` */
       p -> dEdbl = val;
@@ -1199,6 +1461,14 @@ int var_init(int argc, char **argv, params_t *p){
         p->finP = argv[++i]; /**< allow space before file name */
       if (p->debug&4)
 	printf("# read %s, finP=%s\n",argv[i],p->finP);
+    }
+    else if (0==strncmp(argv[i],"finQ=",5)){ /** `finQ` probabilities */
+      if(strlen(argv[i])>5)
+        p->finQ = argv[i]+5;
+      else
+        p->finQ = argv[++i]; /**< allow space before file name */
+      if (p->debug&4)
+	printf("# read %s, finQ=%s\n",argv[i],p->finQ);
     }
     else if (0==strncmp(argv[i],"finL=",5)){ /** `finL` logical */
       if(strlen(argv[i])>5)
@@ -1580,6 +1850,28 @@ int var_init(int argc, char **argv, params_t *p){
       p->vP = NULL;
     }
   }
+
+  if(p->useQ > 0){/** override probability values */
+    if(!p->vQ){
+      p->vQ=malloc(p->nvar * sizeof(double));
+      if(!p->vQ)
+	ERROR("memory allocation failed");
+    }
+    double *ptr=p->vQ;
+    for(int i=0;i<p->nvar;i++, ptr++)
+      *ptr = p->useQ;    
+  }
+  else if (p->finQ){/** read probabilities */
+    if (p->useQ < 0)
+      ERROR("useQ=%g negative incompatible with finQ=%s\n",p->useQ,p->finQ);
+    int rows=0, cols=0, siz=0;
+    p->vQ = dbl_mm_read(p->finQ, &rows, &cols, &siz, NULL);
+    if ((rows != 1) || (cols != p->nvar))
+      ERROR("expected rows=%d cols=%d have %d %d",1,p->nvar, rows,cols);
+    if(p->debug&1)
+      printf("# read %d probability values from %s\n", cols, p->finQ);
+  }
+  
   if((!p->vP)&&(p->useP >= 0))
     ERROR("probabilities missing, specify 'fdem', 'finP', or 'useP'");
 
@@ -1594,7 +1886,6 @@ int var_init(int argc, char **argv, params_t *p){
     LLR_table = init_LLR_tables(p->d1,p->d2,p->d3);
     p->dE = llr_from_dbl(p->dEdbl);
   }
-  //  p->uE = llr_from_dbl(p->uEdbl);
   
   switch(p->mode){
   case 1: /** both `mode=1` (BP) and `mode=0` */
@@ -1719,9 +2010,18 @@ int var_init(int argc, char **argv, params_t *p){
     if((p->fdet!=NULL)||(p->fobs!=NULL) ||(p->ferr!=NULL))
       ERROR(" mode=%d, must not specify 'ferr' or 'fobs' or 'fdet' files\n",
 	    p->mode);
-    if (p->submode>3)
+    if (p->submode > 31)
       ERROR(" mode=%d : submode='%d' unsupported\n",
 	    p->mode, p->submode);
+    if (p->submode == 16)
+      p->submode = 31; /* convenience setting */
+    if (p->submode & 16){
+      if (((p->useQ==0)&&(p->finQ==NULL))||(p->refQ==0)){
+        printf("have  finQ=%s useQ=%g refQ=%g\n",p->finQ, p->useQ, p->refQ);
+        ERROR(" mode=%d : submode='%d' must specify alt Q probabilities\n",
+	    p->mode, p->submode);
+      }
+    }
     break;
     
   case 3: /** read in DEM file and output the H, L, G, K matrices and P vector */
@@ -1780,8 +2080,11 @@ int var_init(int argc, char **argv, params_t *p){
   if(p->mode<=1){ /* vecdec RIS or BP decoder */
     p->mHe = mzd_init(p->nchk, p->nvec); /** each column a syndrome vector `H*e` */
     p->mLe = mzd_init(p->ncws,  p->nvec); /** each column `L*e` vector */
-    if(p->ferr)
-      p->mE = mzd_init(p->nvar, p->nvec);
+    if((p->ferr) || (p->outC))
+      p->mEt = mzd_init(p->nvar, p->nvec);
+    //    if((p->uX&2)&&(p->outC))
+    //      ERROR("mode=%d submode=%d uX=%d (bit 1) and outC=%s are currently"
+    //            " incompatible\n", p->mode, p->submode, p->uX, p->outC);
     if(p->fer0)
       p->mE0 = mzd_init(p->mA->cols, p->nvec);
     if(p->debug &1){
@@ -1828,7 +2131,15 @@ int var_init(int argc, char **argv, params_t *p){
 	printf("# maxC=%lld dE=%g dW=%d maxW=%d\n",p->maxC, dbl_from_llr(p->dE), p->dW, p->maxW);
       else 
 	printf("# maxC=%lld dW=%d maxW=%d\n",p->maxC, p->dW, p->maxW);
-      printf("# calculating %s%sminimum weight\n",p->submode&1 ? "est fail prob, ":"", p->submode&1 ? "exact fail prob, ":"");
+      if(p->submode & 16){
+	printf("# use reference fail rate refQ=%g at error",p->refQ);
+	if (p->finQ)
+	  printf(" probabilities from %s\n",p->finQ);
+	else
+	  printf("probability %g\n",p->useQ);
+      }
+      printf("# calculating %s%sminimum weight\n",p->submode&1 ? "est fail prob, ":"",
+	     p->submode&1 ? "exact fail prob, ":"");
       break;
     case 3:
       if(p->submode<32){
@@ -1867,7 +2178,9 @@ void var_kill(params_t *p){
   if(p->file_err)  fclose(p->file_err);  
   if(p->file_er0)  fclose(p->file_er0);  
   if(p->vP){        free(p->vP);    p->vP = NULL;  }
+  if(p->vQ){        free(p->vQ);    p->vQ = NULL;  }
   if(p->vLLR){      free(p->vLLR);  p->vLLR = NULL;}
+  if(p->vLLRQ){     free(p->vLLRQ);  p->vLLRQ = NULL;}
   if(LLR_table){ free(LLR_table);  LLR_table = NULL;}
   
   p->mH =  csr_free(p->mH);
@@ -1878,7 +2191,7 @@ void var_kill(params_t *p){
     p->mLt = csr_free(p->mLt);
   if(p->mG)
     p->mG = csr_free(p->mG);
-  if(p->mE) mzd_free(p->mE);
+  if(p->mEt) mzd_free(p->mEt);
   if(p->mHe) mzd_free(p->mHe);
   if(p->mLe) mzd_free(p->mLe);
   if(p->mHeT) mzd_free(p->mHeT);
@@ -1891,6 +2204,8 @@ void var_kill(params_t *p){
   if(p->ufl) ufl_free(p->ufl);
   if(p->hashU_syndr)
     kill_clusters(p);
+  if(p->spare)
+    free(p->spare);
 }
 
 int do_err_vecs(params_t * const p){
@@ -1922,24 +2237,30 @@ int do_err_vecs(params_t * const p){
     }
     break;
   case 1: /** generate errors internally */
-    do_errors(p->mHe,p->mLe,p->mHt, p->mLt, p->vP);
+    if(p->outC)
+      do_errors(p->mEt, p->mHe,p->mLe,p->mHt, p->mLt, p->vP);    
+    else
+      do_errors(NULL, p->mHe,p->mLe,p->mHt, p->mLt, p->vP);
     if(p->debug&1)
-      printf("# generated %d det/obs pairs\n",p->mHe->ncols);
+      printf("# generated %d %sdet/obs pairs\n",p->mHe->ncols,p->outC ? "error vectors and ":"");
     if((p->debug&128)&&(p->nvar <= 256)&&(p->nvec <= 256)&&(p->debug &512)){
+      if(p->outC){
+	printf("Error vectors (by column):\n");
+	mzd_print(p->mEt);
+      }	
       printf("He:\n");
       mzd_print(p->mHe);
       printf("Le:\n");
       mzd_print(p->mLe);
     }
-
     break;
   case 2: /** read errors from file and generate corresponding `obs` and `det` matrices */
-    il1=read_01(p->mE,p->file_err, &p->line_err, p->ferr, 1, p->debug);
+    il1=read_01(p->mEt,p->file_err, &p->line_err, p->ferr, 1, p->debug);
     if(p->debug&1)
       printf("# read %d errors from file %s\n",il1,p->ferr);
-    csr_mzd_mul(p->mHe,p->mH,p->mE,1);
+    csr_mzd_mul(p->mHe,p->mH,p->mEt,1);
     if(p->mL)
-      csr_mzd_mul(p->mLe,p->mL,p->mE,1);
+      csr_mzd_mul(p->mLe,p->mL,p->mEt,1);
     if(p->fer0){
       il2=read_01(p->mE0,p->file_er0, &p->line_er0, p->fer0, 1, p->debug);
       if(il1!=il2)
@@ -1970,6 +2291,22 @@ int main(int argc, char **argv){
   /** initialize variables, read in the DEM file, initialize sparse matrices */
   var_init(argc,argv,  p);
   init_Ht(p);
+  vec_t *tmpvec = NULL;
+
+  if(p->finC){
+    p->num_cws = nzlist_read(p->finC,p);
+    if(p->debug&1)
+      printf("# %lld codewords read from %s ...",p->num_cws, p->finC);
+    do_hash_verify_CW(p->mHt, p->mLt, p);
+    do_hash_decomp(p);
+    if(p->debug&1)
+      printf("all verified\n");
+    do_hash_min(p); /** set values `minE` and `minW` from stored CWs */
+    if ((p->debug&1)&&(p->mode==2))
+      printf("# minW=%d so far\n",p->minW_rec);    
+  }
+  if(p->outC)
+    tmpvec = vec_init(p->nvar); 
 
   long long int ierr_tot=0, rounds=(long long int )ceil((double) p->ntot / (double) p->nvec);
   if(((p->mode == 0) || (p->mode == 1)) && (p->debug & 2))
@@ -2006,7 +2343,7 @@ int main(int argc, char **argv){
 	status = calloc(ierr_tot,sizeof(int)); /** non-zero value = success pre_dec */
 	if(!status) ERROR("memory allocation");
 	p->mHeT = mzd_transpose(p->mHeT,p->mHe);
-	mE0=mzd_init(p->nvec,p->nvar);
+	mE0=mzd_init(p->nvec,p->nvar);  /** place to put predicted error vectors, by row */
 	long long int cnt_pre = 0;
 	for(long long int ierr = 0; ierr < ierr_tot; ierr++){ /** cycle over errors */
 	  mzd_copy_row(srow,0,p->mHeT,ierr); /** syndrome row in question */
@@ -2025,31 +2362,39 @@ int main(int argc, char **argv){
 	    }
 	  }
 	  else{  /** pre-decoder failed */
-	    if(p->uX){
+	    if(p->uX & 2){
 	      if(p->ufl->error->wei){/** partial match */
+		status[ierr] = -1;
 		cnt[PART_CLUS]++;
-		mzd_row_add_vec(mE0,ierr,p->ufl->error,1);
+		mzd_row_add_vec(mE0,ierr,p->ufl->error,0);
 		mzd_row_add_vec(p->mHeT,ierr,p->ufl->syndr,0);
 	      }
 	    }
 	  }
 	}
+        //        mzd_print(p->mHeT);
+        //        mzd_print(mE0);
 	if(cnt_pre < ierr_tot){ /** some pre-decoder failures */
 	  long long int num = ierr_tot - cnt_pre;
 	  mzd_t *mST = mzd_init(num,p->nchk);
 	  for(long long int ierr =0, row=0 ; ierr < ierr_tot; ierr++){
-	    if(!status[ierr])
+	    if(status[ierr] <= 0)
 	      mzd_copy_row(mST, row++,p->mHeT,ierr);
 	  }
-	  if(p->debug&2)
+	  if(p->debug&2){
 	    printf("# running RIS decoder on remaining %lld syndrome vectors\n",num);
+            mzd_print(mST);
+          }
 	  mzd_t * mS = mzd_transpose(NULL,mST);
 	  mzd_t * mE2=do_decode(mS, p); /** each row a decoded error vector */
 	  for(long long int ierr =0, row=0 ; ierr < ierr_tot; ierr++){
-	    if(!status[ierr]){
+	    if(status[ierr] <= 0){
 	      mzd_combine_even_in_place(mE0, ierr,0, mE2, row++,0);
-	      status[ierr]=4;
-	      cnt[CONV_RIS]++;
+	      if (status[ierr] == -1)
+		cnt[PART_CONV]++;
+	      else
+		status[ierr] = 4; /** did not use `partial cluster` match */
+	      cnt[CONV_RIS]++; /** total RIS converged count, partial or not */
 	    }
 	  }
 	  mzd_free(mE2);
@@ -2068,10 +2413,13 @@ int main(int argc, char **argv){
 	mE0=do_decode(p->mHe, p); /** each row a decoded error vector */
 #endif /* NDEBUG */
 	cnt[CONV_RIS] += ierr_tot;
-      }  
+      }
+      /** all decoding is done.  Update */
       mzd_t *mE0t = mzd_transpose(NULL, mE0);
-      mzd_free(mE0); mE0=NULL;
-        
+      if(p->mEt){
+	mzd_add(p->mEt, p->mEt, mE0t);
+	mzd_transpose(mE0, p->mEt);
+      }	
 #ifndef NDEBUG
       mzd_t *prodHe = csr_mzd_mul(NULL,p->mH,mE0t,1);
       if(p->pdet)
@@ -2110,40 +2458,59 @@ int main(int argc, char **argv){
 	rci_t j=0;
 	for(rci_t ic=0; ic < ierr_tot; ic++){
 	  rci_t ir=0;
-	  if(mzd_find_pivot(prodLe, ir, ic, &ir, &ic)){
-	    //	    printf("# j=%d pivot at %d\n",j, ic);
-	    cnt[SUCC_TOT] += ic - j;
-	    while(j<ic){ /** success */
-	      switch(status[j++]){
-	      case 1 : cnt[SUCC_TRIVIAL]++; break;
-	      case 2 : cnt[SUCC_LOWW]++; break;
-	      case 3 : cnt[SUCC_CLUS]++; break;
-	      case 4 : cnt[SUCC_RIS]++;  break;
-	      default: ERROR("unexpected");
+	  if(!mzd_find_pivot(prodLe, ir, ic, &ir, &ic))
+	    ic = ierr_tot; /** otherwise it is set OK */
+	  //	  printf("# j=%d %s %d\n",j, ic < ierr_tot ? "pivot at" : "no more pivots, last column", ic);
+	  cnt[SUCC_TOT] += ic - j;
+	  while(j<ic){ /** success */	      
+	    switch(status[j]){
+	    case -1: cnt[PART_SUCC]++; cnt[SUCC_RIS]++; status[j]=5; break;
+	      /** `PART_SUCC` included in total `SUCC_RIS` */
+	    case 1 : cnt[SUCC_TRIVIAL]++; break;
+	    case 2 : cnt[SUCC_LOWW]++; break;
+	    case 3 : cnt[SUCC_CLUS]++; break;
+	    case 4 : cnt[SUCC_RIS]++;  break;
+	    default: ERROR("unexpected");
+	    }
+	    j++;
+	  }
+	  if(ic<ierr_tot){ 
+	    if(p->outC){
+#ifndef NDEBUG
+              if(p->debug&32)
+                if(status[ic]>0){
+                  printf("j=%d ic=%d status=%d vec: ",j,ic,status[ic]);
+                  tmpvec = vec_from_mzd_row(tmpvec,mE0,ic);
+                  vec_print(tmpvec);
+                }
+#endif 
+	      //	      assert(status[ic] <= 0);
+	      if((p->maxC == 0)||((p->maxC > 0) && (p->num_cws < p->maxC))){
+		if((p->maxW == 0) || ((p->maxW > 0) && (tmpvec->wei <= p->maxW))){
+		  tmpvec = vec_from_mzd_row(tmpvec,mE0,ic);
+		  do_hash_check(tmpvec->vec,tmpvec->wei,p);
+		}
 	      }
 	    }
 	    j++;
 	    fails++;
-	  }
-	  else /** no more pivots */
-	    break;            
-	}
-	cnt[SUCC_TOT] += ierr_tot - j;      
-	while(j<ierr_tot){ /** success */
-	  switch(status[j++]){
-	  case 1 : cnt[SUCC_TRIVIAL]++; break;
-	  case 2 : cnt[SUCC_LOWW]++; break;
-	  case 3 : cnt[SUCC_CLUS]++; break;
-	  case 4 : cnt[SUCC_RIS]++;  break;
-	  default: ERROR("unexpected");
 	  }
 	}
       }
       else{ /** no pre-decoding */
 	for(rci_t ic=0; ic < ierr_tot; ic++){
 	  rci_t ir=0;
-	  if(mzd_find_pivot(prodLe, ir, ic, &ir, &ic))
-	    fails++;	
+	  if(mzd_find_pivot(prodLe, ir, ic, &ir, &ic)){
+	    if(p->outC){
+	      if((p->maxC == 0)||((p->maxC > 0) && (p->num_cws < p->maxC))){
+		if((p->maxW == 0) || ((p->maxW > 0) && (tmpvec->wei <= p->maxW))){
+		  tmpvec = vec_from_mzd_row(tmpvec,mE0,ic);
+		  do_hash_check(tmpvec->vec,tmpvec->wei,p);
+		}
+	      }
+	    }
+	    fails++;
+	  }
 	  else /** no more pivots */
 	    break;
 	}      
@@ -2153,11 +2520,13 @@ int main(int argc, char **argv){
       /** update the global counts */
       synd_fail += fails;
       cnt[TOTAL] += ierr_tot;
+      mzd_free(mE0); mE0=NULL;
       mzd_free(prodLe); prodLe=NULL;
       if (status){ free(status); status=NULL; }
       if((p->nfail > 0) && (synd_fail >= p->nfail))
 	break;
-    }
+    } /** end of the `iround` loop */
+    
     if (!((p->fdet)&&(p->fobs==NULL)&&(p->perr))){ /** except in the case of partial decoding */
       if(p->steps > 0){  /** otherwise results are invalid as we assume syndromes to match */
 	cnt_out(p->debug&1,p);
@@ -2200,9 +2569,9 @@ int main(int argc, char **argv){
 	if((p->debug&8)&&(p->debug&512)){
 	  printf("############# non-trivial error %lld of %lld:\n",ierr+1,ierr_tot);
 	  if(p->nvar <= 256){
-	    if(p->mE) /** print column as row */	      
+	    if(p->mEt) /** print column as row */	      
 	      for(int i=0; i<p->nvar; i++)
-		printf("%s%d%s",i==0?"[":" ",mzd_read_bit(p->mE,i,ierr),i+1<p->nvar?"":"]\n");
+		printf("%s%d%s",i==0?"[":" ",mzd_read_bit(p->mEt,i,ierr),i+1<p->nvar?"":"]\n");
 	    mzd_print_row(p->mHeT,ierr);
 	    mzd_print_row(p->mLeT,ierr);
 	    out_llr("i",p->nvar,p->vLLR);
@@ -2277,7 +2646,8 @@ int main(int argc, char **argv){
 	  if((p->debug&8)&&(p->nvar <= 256)&&(p->debug&512))
 	    printf("# pre-decoder failed, try BP\n");
 #endif /* NDEBUG */
-	  if((p->uW > 0)&&(p->uX)&&(p->ufl->error->wei)){ /** `pre`-decoding and `partial cluster match` */
+	  if((p->uW > 0)&&(p->uX & 2)&&(p->ufl->error->wei)){
+	    /** `pre`-decoding and `partial cluster match` */
 	    mzd_row_add_vec(srow,0,p->ufl->syndr,0); /** modify syndrome vector / do `not` clear */
 	    cnt[PART_CLUS]++;
 	  }
@@ -2286,7 +2656,8 @@ int main(int argc, char **argv){
 	  cnt[NUMB_BP]++;
 	  int conv = do_dec_bp_one(ans,srow,p);
 	  int conv_BP = conv>>1, conv_OSD = conv%2;
-	  if((p->uW > 0)&&(p->uX)&&(p->ufl->error->wei)) /** `pre`-decoding and `partial cluster match` */
+	  if((p->uW > 0)&&(p->uX & 2)&&(p->ufl->error->wei))
+	    /** `pre`-decoding and `partial cluster match` */
 	    for(int ic = 0; ic < p->ufl->error->wei; ic++){
 	      int i = p->ufl->error->vec[ic];	      
 	      assert((i >= 0)&&(i < p->nvar));
@@ -2352,17 +2723,6 @@ int main(int argc, char **argv){
   case 2: /** `mode=2` */
     if(p->debug&1)
       printf("# mode=%d, estimating fail probability in %d steps\n",p->mode, p->steps);
-    if(p->finC){
-      p->num_cws = nzlist_read(p->finC,p);
-      if(p->debug&1)
-	printf("# %lld codewords read from %s ...",p->num_cws, p->finC);
-      do_hash_verify_CW(p->mHt, p->mLt, p);
-      if(p->debug&1)
-	printf("all verified\n");
-      do_hash_min(p); /** set values `minE` and `minW` from stored CWs */
-      if (p->debug&1)
-	printf("# minW=%d so far\n",p->minW_rec);
-    }
     do_LLR_dist(p, p->classical);
     //    do_hash_fail_prob(p); /** output results */
     if(p->steps){
@@ -2378,27 +2738,8 @@ int main(int argc, char **argv){
 	  printf("# done\n");
       }
     }
-    do_hash_fail_prob(p); /** output results */    
-    if(p->outC){
-      char * name;
-      if(p->fdem)
-	name=p->fdem;
-      else if (p->finH)
-	name=p->finH;
-      else
-	name="(unknown source)";
-      size_t size = 1 + snprintf(NULL, 0, "# codewords computed from '%s', maxW=%d ", name, p->maxW);
-      char *buf = malloc(size * sizeof(char));
-      if(!buf)
-	ERROR("memory allocation");
-      snprintf(buf, size, "# codewords computed from '%s', maxW=%d ", name, p->maxW);
-      
-      long long cnt=nzlist_write(p->outC, buf, p);
-      if(p->debug & 1)
-	printf("# wrote %lld computed codewords to file %s\n",cnt,p->outC);
-      free(buf);
-    }
-    do_hash_clear(p);
+    do_hash_fail_prob(p); /** calculate the actual probabilities and output results */    
+
     break;
     
   case 3: /** read in DEM file and output the H, L, G matrices and P vector */
@@ -2424,12 +2765,6 @@ int main(int argc, char **argv){
 	      p->mode,p->submode);
       if((p->classical)||(!(p->mL)))
 	ERROR("mode=%d submode=32 (bit 5 set) must be a quantum code for matrix transformation",p->mode);
-      p->num_cws = nzlist_read(p->finC, p);
-      if(p->debug&1)
-	printf("# %lld codewords read from %s ...",p->num_cws, p->finC);
-      do_hash_verify_CW(p->mHt, NULL, p);
-      if(p->debug&1)
-	printf("all verified\n");
       do_hash_min(p); /** set values `minE` and `minW` from stored CWs */
       if(p->minW_rec > 3)
 	ERROR("minW=%d, codewords of weight <= 3 required for matrix transformation\n",p->minW_rec);
@@ -2615,6 +2950,27 @@ int main(int argc, char **argv){
     break;
   }
 
+  if(p->outC){
+    char * name;
+    if(p->fdem)
+      name=p->fdem;
+    else if (p->finH)
+      name=p->finH;
+    else
+      name="(unknown source)";
+    size_t size = 1 + snprintf(NULL, 0, "# codewords computed from '%s', maxW=%d ", name, p->maxW);
+    char *buf = malloc(size * sizeof(char));
+    if(!buf)
+      ERROR("memory allocation");
+    snprintf(buf, size, "# codewords computed from '%s', maxW=%d ", name, p->maxW);
+      
+    long long cnt=nzlist_write(p->outC, buf, p);
+    if(p->debug & 1)
+      printf("# wrote %lld computed codewords to file %s\n",cnt,p->outC);
+    free(buf);
+  }
+  do_hash_clear(p);
+  if(tmpvec) free(tmpvec);
   var_kill(p);
   return 0;
 }

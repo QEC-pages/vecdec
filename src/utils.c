@@ -66,13 +66,17 @@ int nzlist_w_append(FILE *f, const one_vec_t * const vec){
 
 /** @brief prepare to read from an `NZLIST` file; return NULL if no file found */
 FILE * nzlist_r_open(const char fnam[], long long int *lineno){
-  int cnt;
   FILE *f=fopen(fnam,"r");
   if(!f)
     return(NULL);
+#if 0
+  int cnt;
   if((EOF == fscanf(f,"%%%% NZLIST %n",&cnt)) || (cnt<9))
     ERROR("invalid signature line, expected '%%%% NZLIST'");
-  *lineno=2;  
+  *lineno=2;
+#else /* treat signature line as comment */
+  *lineno=1;
+#endif   
   char c=fgetc(f); /** are there comments to skip? */  //  putchar(c);
   while(c=='%'){ /** `comment line` starting with '%' */
     do{

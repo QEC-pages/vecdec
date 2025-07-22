@@ -287,19 +287,31 @@ stored in a hash.  The initial syndrome vector is decomposed into
 connected clusters based on syndrome connectivity graph; the look up
 decoding is attempted for each cluster separately.  
 
-The errors in hash are controlled by parameters `uW` (maximum error
-weight; use `0` to just skip zero-syndrome vectors and `-1` to skip
-the pre-decoder altogether), `uR` (maximum graph distance between
-non-zero bits in stored error vectors; use `0` for no limit), and
-`maxU` (maximum number of vectors in the hash; the default value is
-`0` for no limit).  In addition, with `uX=0` (the default value), no
-partial matching will be attempted.  With `uX=1`, when complete error
-vector cannot be matched, all matched clusters will be removed from
-the detector event vector before sending it to the main decoder.  This
-appears to help with BP (`mode=1`) decoder and cause additional fails
-with RIS (`mode=0`) decoder.
+The errors in hash are controlled by parameters `uW` (maximum error weight; use
+`0` to just skip zero-syndrome vectors and `-1` to skip the pre-decoder
+altogether; default value is `2`), `uR` (maximum v-v graph distance between
+non-zero bits in stored error vectors; use `0` for no limit; default value is
+`1`), and `maxU` (maximum number of vectors in the hash; the default value is
+`0` for no limit).  
+
+The bitmap parameter `uX` controls additional options which may or may not
+improve the decoding; the default value is `0`.
+ - With non-zero bit-0 (e.g., `uX=1`), the program will attempt to match the
+   entire syndrome as a single `low-weight` error; this may give a better
+   decoding accuracy for some codes and, in some cases, a marginal speed-up (the
+   cluster-matching pre-decoder is usually fast).
+ - With non-zero bit-1 (e.g., `uX=2`), if some of the clusters failed to match,
+   the program will remove the matched clusters and pass to the decoder only the
+   unmatched clusters.  This may improve the decoding probability accuracy,
+   e.g., with a BP decoder which tends to fail often due to degeneracy.  Also,
+   this option is not recommended for surface codes, but may work well for codes
+   with larger syndrome distances where mismatched clusters are
+   not as likely.
 
 ## LER and code distance estimator
+
+**This information it currently out of date.  Please see the output of `vecdec
+--help` and `vecdec mode=2 --help` for reference.**
 
 This section describes operation with the command-line switch `mode=2`.
 Summary of additional mode options:
@@ -406,77 +418,90 @@ corresponding output:
 
 ### run `./vecdec --help`
 ```bash
-./vecdec:  vecdec - vectorized decoder and LER estimator
-  usage: ./vecdec param=value [[param=value] ... ]
-         Command line arguments are processed in the order given except
-         for 'mode' and 'debug' (these are processed first).
-         Supported parameters:
-         --help         : give this help (also '-h' or just 'help')
-         mode=[integer] help            : help for specific mode
-         --morehelp     : give more help on program conventions
-         fdem=[string]  : name of the input file with detector error model
-         finH=[string]  : file with parity check matrix Hx (mm or alist)
-         finG=[string]  : file with dual check matrix Hz (mm or alist)
-         finL=[string]  : file with logical dual check matrix Lx (mm or alist)
-         finK=[string]  : file with logical check matrix Lz (mm or alist)
-         finP=[string]  : input file for probabilities (mm or a column of doubles)
-         finA=[string]  : additional matrix to correct syndromes (mm or alist)
-         finC=[string]  : input file name for codewords in `nzlist` format
-                 (space is OK in front of file names to enable shell completion)
-         outC=[string]  : output file name for codewords in `nzlist` format
-                         (if same as finC, the file will be updated)
-         maxC=[long long int]   : max number of codewords to read/write/store
-         epsilon=[double]       : small probability cutoff (default: 1e-8)
-         useP=[double]  : fixed probability value (override values in DEM file)
-                 for a quantum code specify 'fdem' OR 'finH' and ( 'finL' OR 'finG' );
-                 for classical just 'finH' (and optionally the dual matrix 'finL')
-         ferr=[string]  : input file with error vectors (01 format)
-         fer0=[string]  : add'l error to correct det events 's+A*e0' (01 format)
-                 where matrix 'A' is given via 'finA', 's' via 'fdet', and 'e0'
-                 are the additional error vectors.
-         fobs=[string]  : input file with observables (01 matching lines in fdet)
-         fdet=[string]  : input file with detector events (01 format)
-                 specify either 'ferr' OR a pair of 'ferr' and 'fdet' (or none for internal)
-         gobs, gdet=[string]    : out file for generated vectors (01 format)
-         perr, pobs, pdet=[string]      : out file for predicted vectors (01 format)
-         pads=[integer] : if non-zero, pad vectors from `fdet` file with zeros (0)
-         fout=[string]  : header for output file names ('tmp', see 'mode=3')
-         steps=[integer]        : num of RIS or BP decoding steps (default: 50)
-         lerr =[integer]        : OSD search level (-1, only implemented with `mode=0`, `1`)
-         maxosd=[integer]       : max column for OSD2 and above (100)
-         bpgamma=[float]        : average LLR scaling coefficient for BP (default 0.5)
-         bpretry=[integer]      : retry BP up to this many times per syndrome (1)
-         swait=[integer]        : Gauss steps w/o new errors to stop (0, do not stop)
-         nvec =[integer]        : max vector size for decoding (default: 1024)
-                         (list size for distance or energy calculations)
-         ntot =[long long int]  : total syndromes to generate (default: 1)
-         nfail=[long long int]  : total fails to terminate (0, do not terminate)
-         dW=[integer]   : if 'dW>=0', may keep vectors of weight up to 'minW+dW' (0)
-         maxW=[integer] : if non-zero, skip any vectors above this weight (0)
-         dE=[double]    : if 'dE>=0', may keep vectors of energy up to 'minE+dE'
-                         (default value: -1, no upper limit on energy)
-         dmin=[integer] : terminate distance calculation immediately when
-                         a vector of weight 'W<=dmin' is found, return '-w' (default: 0)
-         seed= [long long int]  : RNG seed or automatic if <=0 (default: 0)
-         qllr1=[integer]        : if 'USE_QLLR' is set, parameter 'd1' (12)
-         qllr2=[integer]        : if 'USE_QLLR' is set, parameter 'd2' (300)
-         qllr3=[integer]        : if 'USE_QLLR' is set, parameter 'd3' (7)
-                 These are used to speed-up LLR calculations, see 'qllr.h'
-                 Use 'qllr2=0' for min-sum.
-         mode=int[.int] : operation mode[.submode] (default: 0.0)
-                * 0: use basic vectorized (random information set) decoder
-                * 1: Belief Propagation decoder.
-                * 2: Generate most likely fault vectors, estimate Prob(Fail).
-                * 3: Read in the DEM file and optionally write the corresponding
-                         G, K, H, and L matrices and the probability vector P.
-         debug=[integer]        : bitmap for aux information to output (default: 1)
-                *   0: clear the entire debug bitmap to 0.
-                *   1: output misc general info (on by default)
-                *   2: output matrices for verification
-                         see the source code for more options
-         See program documentation for input file syntax.
-         Multiple 'debug' parameters are XOR combined except for 0.
-         Use debug=0 as the 1st argument to suppress all debug messages.
+./src/vecdec:  vecdec - vectorized decoder and LER estimator
+  usage: ./src/vecdec param=value [[param=value] ... ]
+	 Command line arguments are processed in the order given except
+	 for 'mode' and 'debug' (these are processed first).
+	 Supported parameters:
+	 --help		: give this help (also '-h' or just 'help')
+	 mode=[integer] help		: help for specific mode
+	 --morehelp	: give more help on program conventions
+	 fdem=[string]	: name of the input file with detector error model
+	 finH=[string]	: file with parity check matrix Hx (mm or alist)
+	 finHT=[string]	: file with transposed parity check matrix Hx (mm only)
+	 finG=[string]	: file with dual check matrix Hz (mm or alist)
+	 finL=[string]	: file with logical dual check matrix Lx (mm or alist)
+	 finK=[string]	: file with logical check matrix Lz (mm or alist)
+	 finP=[string]	: input file for probabilities (mm or a column of doubles)
+	 finQ=[string]	: input file for alt probabilities (for use with mode 2.16)
+	 finA=[string]	: additional matrix to correct syndromes (mm or alist)
+	 finC=[string]	: input file name for codewords in `nzlist` format
+		 (space is OK in front of file names to enable shell completion)
+	 outC=[string]	: output file name for codewords in `nzlist` format
+			 (if same as finC, the file will be updated)
+	 maxC=[long long int]	: max number of codewords to read/write/store
+	 uW=[integer]	: max weight of an error cluster in hash (default: 2)
+		 ('0': no hash but skip zero-weight syndrome vectors; '-1': do not skip)
+	 uR=[integer]	: max range of v-v neighbors for errors in syndrome hash
+		 (use '0' for no limit; recommended default: 1)
+	 uX=[integer]	: bitmap for cluster-based predecoder options (default: 0)
+		 1 (bit 0) try low-weight error w/o cluster decomp (recommend with 'uR=0'); 
+		 2 (bit 1) use partial cluster matches (experimental)
+	 maxU=[long long integer]	: max number of syndrome vectors in hash
+		 for pre-decoding (default: '0', no limit)
+	 epsilon=[double]	: small probability cutoff (default: 1e-8)
+	 useP=[double]	: fixed probability value (override values in DEM file)
+		 default: 0, do not override; negative value = weight-only mode
+	 mulP=[double]	: scale probability values from DEM file
+		 for a quantum code specify 'fdem' OR 'finH' and ( 'finL' OR 'finG' );
+		 for classical just 'finH' or 'finHT' (and optionally the dual matrix 'finL')
+	 useQ=[double]	: alt fixed probability value for use with mode 2.16
+	 refQ=[double]	: reference error probability for use with mode 2.16
+	 ferr=[string]	: input file with error vectors (01 format)
+	 fer0=[string]	: add'l error to correct det events 's+A*e0' (01 format)
+		 where matrix 'A' is given via 'finA', 's' via 'fdet', and 'e0'
+		 are the additional error vectors.
+	 fobs=[string]	: input file with observables (01 matching lines in fdet)
+	 fdet=[string]	: input file with detector events (01 format)
+		 specify either 'ferr' OR a pair of 'ferr' and 'fdet' (or none for internal)
+	 gobs, gdet=[string]	: out file for generated vectors (01 format)
+	 perr, pobs, pdet=[string]	: out file for predicted vectors (01 format)
+	 fout=[string]	: header for output file names ('tmp', see 'mode=3')
+	 steps=[integer]	: num of RIS or BP decoding steps (default: 50)
+	 lerr =[integer]	: OSD search level (-1, only implemented with `mode=0`, `1`)
+	 maxosd=[integer]	: max column for OSD2 and above (100)
+	 bpgamma=[float]	: average LLR scaling coefficient for BP (default 0.5)
+	 bpretry=[integer]	: retry BP up to this many times per syndrome (1)
+	 swait=[integer]	: Gauss steps w/o new errors to stop (0, do not stop)
+	 nvec =[integer]	: max vector size for decoding (default: 1024)
+			 (list size for distance or energy calculations)
+	 ntot =[long long int]	: total syndromes to generate (default: 1)
+	 nfail=[long long int]	: total fails to terminate (0, do not terminate)
+	 dW=[integer]	: if 'dW>=0', may keep vectors of weight up to 'minW+dW' (0)
+	 maxW=[integer]	: if non-zero, skip any vectors above this weight (0)
+	 dE=[double]	: if 'dE>=0', may keep vectors of energy up to 'minE+dE'
+			 (default value: -1, no upper limit on energy)
+	 dmin=[integer]	: terminate distance calculation immediately when
+			 a vector of weight 'W<=dmin' is found, return '-w' (default: 0)
+	 seed= [long long int]	: RNG seed or automatic if <=0 (default: 0)
+	 qllr1=[integer]	: if 'USE_QLLR' is set, parameter 'd1' (12)
+	 qllr2=[integer]	: if 'USE_QLLR' is set, parameter 'd2' (300)
+	 qllr3=[integer]	: if 'USE_QLLR' is set, parameter 'd3' (7)
+		 These are used to speed-up LLR calculations, see 'qllr.h'
+		 Use 'qllr2=0' for min-sum.
+	 mode=int[.int]	: operation mode[.submode] (default: 0.0)
+		* 0: use basic vectorized (random information set) decoder
+		* 1: Belief Propagation decoder.
+		* 2: Generate most likely fault vectors, estimate Prob(Fail).
+		* 3: Read in the DEM file and optionally write the corresponding 
+			 G, K, H, and L matrices and the probability vector P.
+	 debug=[integer]	: bitmap for aux information to output (default: 1)
+		*   0: clear the entire debug bitmap to 0.
+		*   1: output misc general info (on by default)
+		*   2: additional info; calculate code confinement
+			 see the source code for more options
+	 See program documentation for input file syntax.
+	 Multiple 'debug' parameters are XOR combined except for 0.
 ```
 
 ### run `./vecdec mode=0 --help`
@@ -491,13 +516,24 @@ corresponding output:
 	 Specify a single DEM file 'fdem', or 'finH', 'finL', and 'finP'
 	 separately (either 'finL' or 'finG' is needed for a quantum code).
 	 Use 'useP' to override error probability values in DEM file.   
+	 Use 'mulP' to scale error probability values from DEM file.   
 	 Errors can be generated internally or read from 01 file 'ferr'.
 	 Alternatively, files with detector events and observables 
 	 can be specified via 'fdet' and 'fobs'. 
-	 Long lines in these files may be silently truncated. 
-	 Use 'pads=1' to pad lines in 'fdet' file with zeros.
 	 Set 'nfail' and/or 'swait' for early termination.
 	 Total of 'ntot' errors will be read or generated in chunks of 'nvec'.
+	                                                       
+
+	 With 'uW' non-negative, use hash storage to store likely syndrome
+		 vectors to speed up the decoding.  Parameter 'maxU>0' sets the limit on the
+		 number of syndrome vectors in the hash; no limit if 'maxU=0'.  
+		 Parameter 'uR>0' sets the limit on the v-v graph distance between non-zero positions
+		 in an error vector stored in the hash; no limit if 'uR=0'
+		 Bitmap 'uX', when non-zero, enables experimental options for cluster-based
+		 predecoder: try to match syndrome as a whole (bit 0), and using partially
+		 matched syndrome clusters, in which case only residual error is sent to the
+		  main decoder (default: 0) (use with caution, fail rates may increase!)
+		 With debug&2 non-zero and uW>0, print out the confinement function
 ```
 
 ### run `./vecdec mode=1 --help`
@@ -510,6 +546,8 @@ corresponding output:
 			 .8 (bit 3) with serial, use V-based order (not C-based)
 			 .16 (bit 4) with serial, randomize node order in each round 
 			     (by default randomize only once per run)
+			 .32 (bit 5) with serial, suppress all node order randomization
+			     (must have bpretry=1 and bit 4 not set in submode)
 	 For convenience, 'submode=0' is equivalent to 'submode=3'. 
 	 This decoder may experience convergence issues.
 	 Accuracy and performance are determined by parameters 
@@ -524,35 +562,52 @@ corresponding output:
 	 Specify a single DEM file 'fdem', or 'finH', 'finL', and 'finP'
 	 separately (either 'finL' or 'finG' is needed for a quantum code).
 	 Use 'useP' to override error probability values in DEM file.   
+	 Use 'mulP' to scale error probability values from DEM file.   
 	 Errors can be generated internally or read from 01 file 'ferr'.
 	 Alternatively, files with detector events and observables 
 	 can be specified via 'fdet' and 'fobs'. 
-	 Long lines in these files may be silently truncated. 
-	 Use 'pads=1' to pad lines in 'fdet' file with zeros.
 	 Set 'nfail' and/or 'swait' for early termination.
 	 Total of 'ntot' errors will be read or generated in chunks of 'nvec'.
+	                                                       
+
+	 With 'uW' non-negative, use hash storage to store likely syndrome
+		 vectors to speed up the decoding.  Parameter 'maxU>0' sets the limit on the
+		 number of syndrome vectors in the hash; no limit if 'maxU=0'.  
+		 Parameter 'uR>0' sets the limit on the v-v graph distance between non-zero positions
+		 in an error vector stored in the hash; no limit if 'uR=0'
+		 Bitmap 'uX', when non-zero, enables experimental options for cluster-based
+		 predecoder: try to match syndrome as a whole (bit 0), and using partially
+		 matched syndrome clusters, in which case only residual error is sent to the
+		  main decoder (default: 0) (use with caution, fail rates may increase!)
+		 With debug&2 non-zero and uW>0, print out the confinement function
 ```
 
 ### run `./vecdec mode=2 --help`
 ```sh
  mode=2 : Generate most likely fault vectors, estimate Prob(Fail).
 	Submode bitmap values:
-			 .1 (bit 0) calculate original fail probability estimate
-			 .2 (bit 1) calculate exact greedy probability estimate
+			 .1  (bit 0) calculate original fail probability estimate
+			 .2  (bit 1) fail prob estimate using average LLRs and cw count
+			 .4  (bit 2) calculate exact greedy probability estimate
+			 .8  (bit 3) approx greedy prob estimate with prefactor
+			 .16 (bit 4) use reference `refQ/finQ/useQ` to calculate fail
+				 probability estimates (as opposed to direct summations)
 	 Use up to 'steps' random information set (RIS) steps
 	 unless no new codewords (fault vectors) have been found for 'swait' steps.
 	 Use 'steps=0' to just use the codewords from the file 
-	 Keep vectors of weight up to 'dW' above min weight found.
-	       and energy up to 'dE' above minimum E found (sum of LLRs).
+	 With `dW>=0`, keep vectors of weight up to 'dW' above min weight found.
+	 With `dE>=0`, keep vectors of energy up to 'dE' above minimum E found (sum of LLRs).
 	 When 'maxC' is non-zero, generate up to 'maxC' unique codewords.
 	 If 'outC' is set, write full list of CWs to this file.
 	 If 'finC' is set, read initial set of CWs from this file.
 	 Accuracy and performance are determined by parameters 
-	 'steps' (number of BP rounds), 'lerr' (OSD level, defaul=-1, on OSD).
-	 and 'maxosd', the number of columns for OSD in levels 2 and above.
+	 'steps' (number of RIS rounds), 'lerr' (OSD level, defaul=-1, no OSD).
 	 Specify a single DEM file 'fdem', or 'finH', 'finL', and 'finP'
 	 separately (either 'finL' or 'finG' is needed for a quantum code).
 	 Use 'useP' to override error probability values in DEM file.   
+	 Use 'mulP' to scale error probability values from DEM file.   
+	 Similarly, use 'finQ' or 'useQ' arguments to specify alternative
+	 probability vectors with mode 2.16
 ```
 
 ### run `./vecdec mode=3 --help`
@@ -578,7 +633,7 @@ corresponding output:
 
 ### run `./vecdec --morehelp`
 ```sh
-   Matrices used by ./vecdec:
+   Matrices used by ./src/vecdec:
 	 We have a CSS code with binary generator matrices Hx=H, Hz=G,
 	 and logical-operator generating matrices Lx=L and Lz=K.  These
 	 matrices have 'n' columns each and satisfy orthogonality properties
@@ -590,17 +645,23 @@ corresponding output:
 	 contains matrices Hx and Lx, and the error probability vector P.
 	 The same code can be obtained by specifying the matrices 
 	 independently, via separate files.
+
    The dual CSS matrix Hz can be specified instead of Lx.
 	 In such a case, the internal error generator must be used
 	 (an attempt to specify 'fdet' and 'fobs' files will result in an error).
+
    For a classical code, just give the parity check matrix Hx=H.
 	 In this case G matrix is trivial (has zero rank), and
-	 Lx has all rows of weight '1'. 
+	 Lx has all rows of weight '1'.  
 	 Only the internal error generator can be used for classical codes
 	                                                       
-	 Parameter(s) used by all modes:                     
+   Note: detection events (syndrome bits) are given by the product 'H*e'
+	       observables are given by 'L*e'
+	                                                          
+	 Parameter(s) used by all modes:                         
 	 seed=[integer] : when negative or zero, combine provided value
 		 with 'time(null)' and 'pid()' for more randomness.
+	                                                       
 ```		 
 
 

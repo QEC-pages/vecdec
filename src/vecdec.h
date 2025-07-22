@@ -31,6 +31,8 @@ typedef enum EXTR_T {
   SUCC_LOWW,     //! success
   CONV_CLUS,    //! `pre-decoder` based on syndrome clusters
   PART_CLUS,    //! `pre-decoder` partial clusters used
+  PART_CONV,    //! `pre-decoder` partial clusters -> decoder converged 
+  PART_SUCC,    //! `pre-decoder` partial clusters -> decoder successful
   SUCC_CLUS,    //! success
   CONV_RIS,     //! mode=0 `RIS decoder`, always converges (attempts)
   SUCC_RIS,
@@ -71,7 +73,10 @@ typedef struct POINT_T {
 
 typedef struct VNODE_T {
   UT_hash_handle hh;
-  int v; /** key: variable node */
+  int idx; /** key: `v`ariable node or
+               `nvar`+`c`heck node or
+               `nvar`+`nchk`+o`b`servable node */
+  int val; /** node value (e.g., `0` or `1`) */
   int clus; /** cluster reference */
 } vnode_t;
 
@@ -84,6 +89,9 @@ typedef struct CLUSTER_T {
    *
    *   TODO: implement negative label = deleted cluster.
    */
+  int wei_c; /** syndrome weight */
+  int wei_b; /** o`b`servable weight */
+  //  int wei_v;
   int num_poi_v;
   point_t *first_v; /** linked list for associated v-nodes */
   point_t *last_v;
@@ -96,17 +104,18 @@ typedef struct CLUSTER_T {
 typedef struct UFL_T {
   const int nvar;
   const int nchk;
+  const int nobs;
   vnode_t * nodes; /** hash storage for occupied nodes */
-  /** TODO: compare performance for taking an int array of nodes instead */
   int num_v; /** total number of used `v_nodes` (all clusters) */
   int num_c; /** total number of used `c_nodes` */
+  int num_s; /** total number of used `spare` nodes in hash */
   int num_clus; /** number of defined clusters */
   int num_prop; /** number of proper (non-reference and non-deleted) clusters */
   vec_t *error; /** [`nvar`] current error vector */
   vec_t *syndr; /** [`nchk`] remaining syndrome bits */
   point_t *v_nodes; /** [`nvar`] pre-allocated nodes for `v` linked lists in clusters */
   point_t *c_nodes; /** [`nchk`] same for `c` linked lists */
-  vnode_t * spare;  /** [`nvar`] same for `hash` look-up table in `nodes`*/
+  vnode_t * spare;  /** [`nvar`+`nchk`+`nobs`] same for `hash` look-up table in `nodes`*/
   cluster_t clus[0];/** [`nchk`] list of clusters and associated `v` and `c` lists. */
 } ufl_t;
 
@@ -144,6 +153,7 @@ typedef struct UFL_T {
     char *finK; /** `input file` name for Lz=K (not used much) */
     char *finG; /** `input file` name for Hz=G (must use separate input) */
     char *finP; /** `input file` name for P (if input separately or a classical code) */
+    char *finQ; /** `input file` name for Q (extra set of probabilities for mode `2.8`) */
     char *finC; /** `input file` name for `C` (list of non-trivial CWs for decoding) */
     char *outC; /** `output file` name for `C` (list of non-trivial CWs for decoding) */
     char *fout; /** `output file name`  header for files creaded with `mode=3` */
@@ -166,8 +176,9 @@ typedef struct UFL_T {
     //    qllr_t uE; /** max energy of an error vector in `U` hash*/
     //    double uEdbl; /** max energy of an error vector in `U` hash*/
     int uW; /** max weight of an error vector in `U` hash (default: `2`) */
-    int uX; /** if non-zero, use partial pre-decoder cluster matches (default: `0`) */
-    int uR; /** max distance between v-v neighbors for errors in syndrome hash (default: `4`) */
+    int uX; /** bitmap: 1 (bit 0) try low-weight clusters; 
+	     *	        2 (bit 1) use partial pre-decoder cluster matches (default: `0`) */
+    int uR; /** max distance between v-v neighbors for errors in syndrome hash (default: `1`) */
     two_vec_t *hashU_error; /** `U` hash location by error vector */
     two_vec_t *hashU_syndr; /** `U` hash location by syndrome */
     int *permHe; /** permutation vector for syndrome bits when hashU is used */
@@ -176,9 +187,13 @@ typedef struct UFL_T {
     long long int seed;  /** rng `seed`, set<=0 for automatic */
     double useP; /** global error probability `overriding` values in the `DEM` file (default: 0, no override)
 		  negative value means weight-only mode (no probabilities specified) */
+    double useQ; /** global error probability for use with mode `2.8` file (default: 0, not specified) */
     double mulP; /** scale error probability values in the `DEM` file (default: 0, no scaling) */
     double *vP; /** probability vector (total of `n`) */
+    double *vQ; /** alternative probability vector (total of `n`) for use with mode `2.8` */
+    double refQ; /** reference fail rate corresponding to `Q` probabilities */
     qllr_t *vLLR; /** vector of LLRs (total of `n`) */
+    qllr_t *vLLRQ; /** vector of LLRs for the reference distribution (total of `n`) */
     int minW_rec; /** minimum weight of a codeword or error vector found */
     int maxW_rec; /** max weight of a codeword or error vector found */
     int dW; /** if non-negative, weight over `minW` to keep the CW or error vector in a hash (default: `0`, `minW` only) */
@@ -220,8 +235,9 @@ typedef struct UFL_T {
     long long int line_err; /** current line of `file_err` */
     long long int line_det; /** current line of `file_det` */
     long long int line_obs; /** current line of `file_obs` */
-    mzd_t *mE0;
-    mzd_t *mE;
+    mzd_t *mE0; /** vectors to adjust `det` events, read from file `fer0` */ 
+    //    mzd_t *mE;  /** each row an original error vector created (with `outC` non-NULL) */
+    mzd_t *mEt; /** each column an original error vector from `ferr` */
     mzd_t *mHe;
     mzd_t *mLe;
     mzd_t *mHeT;
@@ -234,6 +250,7 @@ typedef struct UFL_T {
     vec_t *obs;  /** allocated to `mL->rows` */
     vec_t *svec; /** allocated to `nchk` */
     ufl_t *ufl;
+    vnode_t *spare; /** allocated to `nobs` */
   } params_t;
 
   extern params_t prm;
@@ -252,6 +269,31 @@ typedef struct UFL_T {
     else if (pa>pb)
       return +1; /** was `-1` */
     return 0;
+  }
+
+  /** create a sparse `vec`tor from `row` of `mat`, optionally create vector if needed */
+  static inline vec_t * vec_from_mzd_row(vec_t *vec, const mzd_t * const mat, const rci_t row){
+    if (!vec){
+      rci_t wei = mzd_weight_row(mat,row);
+      vec=vec_init(wei);
+    }
+#ifndef NDEBUG
+    else{ /** ensure we have enough non-zero positions */
+      rci_t wei = mzd_weight_row(mat,row);
+      if (wei > vec->max)
+	ERROR("provided vector does not have enough space, row=%d wei=%d max=%d\n",row,wei,vec->max);
+    }
+#endif 
+    /** convert mzd_t *srow -> vec_t *vec */
+    int idx=0, w=0;
+    const word * const rawrow = mzd_row_cons(mat,row);
+    while(((idx=nextelement(rawrow,mat->width,idx))!=-1)&&(idx<mat->ncols)){
+      vec->vec[w++]=idx;
+      if(++idx == mat->ncols)
+	break;
+    }
+    vec->wei = w;
+    return vec;
   }
 
   /** @brief return permutation = decreasing probabilities (increasing LLR) */
@@ -327,7 +369,14 @@ typedef struct UFL_T {
   ufl_t *ufl_free( ufl_t *s);
   void ufl_cnt_print(const params_t * const p);
   void ufl_cnt_update(const int which, const ufl_t * const u, const params_t * const p);
-
+/** @brief construct an empty ufl structure */
+ufl_t *ufl_init(const params_t * const p);
+/** @brief print out the `ufl` and its clusters */
+void ufl_print(const ufl_t *const u, const int bitmap);
+/** given a sparse vector (`wei` sorted variable nodes in `vec`), construct its
+ * cluster decomposition in u; return 0 if reducible */
+int ufl_decompose(const int wei, const int * const vec, ufl_t * u, params_t * p);
+int do_clus_error(const int cl, ufl_t * const u, const int clear);    
   /**
    * @brief The help message.
    *
@@ -349,6 +398,7 @@ typedef struct UFL_T {
   "\t finL=[string]\t: file with logical dual check matrix Lx (mm or alist)\n" \
   "\t finK=[string]\t: file with logical check matrix Lz (mm or alist)\n" \
   "\t finP=[string]\t: input file for probabilities (mm or a column of doubles)\n" \
+  "\t finQ=[string]\t: input file for alt probabilities (for use with mode 2.16)\n" \
   "\t finA=[string]\t: additional matrix to correct syndromes (mm or alist)\n" \
   "\t finC=[string]\t: input file name for codewords in `nzlist` format\n" \
   "\t\t (space is OK in front of file names to enable shell completion)\n" \
@@ -358,8 +408,10 @@ typedef struct UFL_T {
   "\t uW=[integer]\t: max weight of an error cluster in hash (default: 2)\n" \
   "\t\t ('0': no hash but skip zero-weight syndrome vectors; '-1': do not skip)\n" \
   "\t uR=[integer]\t: max range of v-v neighbors for errors in syndrome hash\n" \
-  "\t\t (use '0' for no limit; default: 4)\n"				\
-  "\t uX=[integer]\t: when non-zero, use partial cluster matches (default: 0)\n" \
+  "\t\t (use '0' for no limit; recommended default: 1)\n"				\
+  "\t uX=[integer]\t: bitmap for cluster-based predecoder options (default: 0)\n" \
+  "\t\t 1 (bit 0) try low-weight error w/o cluster decomp (recommend with 'uR=0'); \n" \
+  "\t\t 2 (bit 1) use partial cluster matches (experimental)\n"		\
   "\t maxU=[long long integer]\t: max number of syndrome vectors in hash\n" \
   "\t\t for pre-decoding (default: '0', no limit)\n"			\
   "\t epsilon=[double]\t: small probability cutoff (default: 1e-8)\n"	\
@@ -368,6 +420,8 @@ typedef struct UFL_T {
   "\t mulP=[double]\t: scale probability values from DEM file\n"	\
   "\t\t for a quantum code specify 'fdem' OR 'finH' and ( 'finL' OR 'finG' );\n" \
   "\t\t for classical just 'finH' or 'finHT' (and optionally the dual matrix 'finL')\n" \
+  "\t useQ=[double]\t: alt fixed probability value for use with mode 2.16\n" \
+  "\t refQ=[double]\t: reference error probability for use with mode 2.16\n" \
   "\t ferr=[string]\t: input file with error vectors (01 format)\n"	\
   "\t fer0=[string]\t: add'l error to correct det events 's+A*e0' (01 format)\n" \
   "\t\t where matrix 'A' is given via 'finA', 's' via 'fdet', and 'e0'\n" \
@@ -413,7 +467,7 @@ typedef struct UFL_T {
   "\t\t\t see the source code for more options\n"			\
   "\t See program documentation for input file syntax.\n"               \
   "\t Multiple 'debug' parameters are XOR combined except for 0.\n"	\
-  "\t Use debug=0 as the 1st argument to suppress all debug messages.\n"
+  "\n"
 
 #if 0  
 #define XXX \
@@ -455,14 +509,13 @@ typedef struct UFL_T {
   "\t With 'uW' non-negative, use hash storage to store likely syndrome\n" \
   "\t\t vectors to speed up the decoding.  Parameter 'maxU>0' sets the limit on the\n" \
   "\t\t number of syndrome vectors in the hash; no limit if 'maxU=0'.  \n"	\
-  "\t\t Parameter 'uR>0' sets the limit on the graph distance between non-zero positions\n" \
+  "\t\t Parameter 'uR>0' sets the limit on the v-v graph distance between non-zero positions\n" \
   "\t\t in an error vector stored in the hash; no limit if 'uR=0'\n"	\
-  "\t\t Parameter 'uX', when non-zero, allows the use of partially matched syndrome clusters,\n" \
-  "\t\t in which case only residual error is sent to the main decoder\n" \
-  "\t\t (default: 0, use only fully matched syndrome vectors)\n"	\
-  "\t\t (partial cluster decoding mode is experimental, may not work!)\n" \
+  "\t\t Bitmap 'uX', when non-zero, enables experimental options for cluster-based\n" \
+  "\t\t predecoder: try to match syndrome as a whole (bit 0), and using partially\n" \
+  "\t\t matched syndrome clusters, in which case only residual error is sent to the\n" \
+  "\t\t  main decoder (default: 0) (use with caution, fail rates may increase!)\n" \
   "\t\t With debug&2 non-zero and uW>0, print out the confinement function\n" 
-  
   
   //  "\t\t 'finU' / 'outU' names of likely error vectors file (not implemented)\n" 
   //  "\t\t\t(the file will be overwritten if names are the same). \n"
@@ -523,8 +576,12 @@ typedef struct UFL_T {
 #define HELP2 /** help for `mode=2` */  \
   " mode=2 : Generate most likely fault vectors, estimate Prob(Fail).\n" \
   "\tSubmode bitmap values:\n"						\
-  "\t\t\t .1 (bit 0) calculate original fail probability estimate\n"	\
-  "\t\t\t .2 (bit 1) calculate exact greedy probability estimate\n"	\
+  "\t\t\t .1  (bit 0) calculate original fail probability estimate\n"	\
+  "\t\t\t .2  (bit 1) fail prob estimate using average LLRs and cw count\n" \
+  "\t\t\t .4  (bit 2) calculate exact greedy probability estimate\n"	\
+  "\t\t\t .8  (bit 3) approx greedy prob estimate with prefactor\n"     \
+  "\t\t\t .16 (bit 4) use reference `refQ/finQ/useQ` to calculate fail\n" \
+  "\t\t\t\t probability estimates (as opposed to direct summations)\n"	\
   "\t Use up to 'steps' random information set (RIS) steps\n"		\
   "\t unless no new codewords (fault vectors) have been found for 'swait' steps.\n" \
   "\t Use 'steps=0' to just use the codewords from the file \n"		\
@@ -534,11 +591,13 @@ typedef struct UFL_T {
   "\t If 'outC' is set, write full list of CWs to this file.\n"		\
   "\t If 'finC' is set, read initial set of CWs from this file.\n"	\
   "\t Accuracy and performance are determined by parameters \n"		\
-  "\t 'steps' (number of BP rounds), 'lerr' (OSD level, defaul=-1, no OSD).\n" \
+  "\t 'steps' (number of RIS rounds), 'lerr' (OSD level, defaul=-1, no OSD).\n" \
   "\t Specify a single DEM file 'fdem', or 'finH', 'finL', and 'finP'\n" \
   "\t separately (either 'finL' or 'finG' is needed for a quantum code).\n" \
   "\t Use 'useP' to override error probability values in DEM file.   \n" \
   "\t Use 'mulP' to scale error probability values from DEM file.   \n" \
+  "\t Similarly, use 'finQ' or 'useQ' arguments to specify alternative\n" \
+  "\t probability vectors with mode 2.16\n"                              \
   "\n"
 
 #define HELP3 /** help for `mode=3` */  \

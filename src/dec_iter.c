@@ -36,11 +36,11 @@ void cnt_out(int print_banner, const params_t * const p){
   if(print_banner){
     printf("# P_FAIL N_TOT FAIL S_TOT ");
     if(p->uW>=0)
-      printf(": C_TRIVIAL S_TRIVIAL  ");
+      printf(": C_TRIVIAL F_TRIVIAL  ");
     if(p->uW>0)
-      printf(" C_LOW S_LOW  C_CLUS S_CLUS ");
+      printf("%s C_CLUS F_CLUS %s", p->uX & 1? " C_LOW F_LOW ":"", p->uX & 2? " C_PART S_PART F_PART ":"");
     if(p->mode==0)
-      printf(": FAIL_RIS N_RIS S_RIS\n");
+      printf(": N_RIS S_RIS FAIL_RIS\n");
     else
       printf(": FAIL_BP N_BP   C_BP C_BP_AVG C_BP_TOT   S_BP S_OSD\n");    
   }
@@ -48,12 +48,16 @@ void cnt_out(int print_banner, const params_t * const p){
 	 (double ) (cnt[TOTAL]-cnt[SUCC_TOT])/cnt[TOTAL],
 	 cnt[TOTAL], cnt[TOTAL]-cnt[SUCC_TOT], cnt[SUCC_TOT]);
   if(p->uW>=0)
-    printf(": %lld %lld \t", cnt[CONV_TRIVIAL], cnt[SUCC_TRIVIAL]);
-  if(p->uW>0) // use cluster-based pre-decoding
-    printf(" %lld %lld \t %lld %lld ",
-	   cnt[CONV_LOWW], cnt[SUCC_LOWW], cnt[CONV_CLUS], cnt[SUCC_CLUS]);
+    printf(": %lld %lld \t", cnt[CONV_TRIVIAL], cnt[CONV_TRIVIAL] - cnt[SUCC_TRIVIAL]);
+  if(p->uW>0){ // use cluster-based pre-decoding
+    if (p->uX & 1)
+      printf(" %lld %lld \t",  cnt[CONV_LOWW], cnt[CONV_LOWW] - cnt[SUCC_LOWW]);
+    printf(" %lld %lld ",  cnt[CONV_CLUS], cnt[CONV_CLUS] - cnt[SUCC_CLUS]);
+    if (p->uX & 2)
+      printf(" %lld %lld %lld \t",  cnt[PART_CLUS], cnt[PART_SUCC], cnt[PART_CONV] - cnt[PART_SUCC]);
+  }
   if(p->mode==0)
-    printf(": %lld %lld %lld \n",cnt[CONV_RIS]-cnt[SUCC_RIS], cnt[CONV_RIS],cnt[SUCC_RIS]);
+    printf(": %lld %lld %lld \n",cnt[CONV_RIS],cnt[SUCC_RIS], cnt[CONV_RIS]-cnt[SUCC_RIS]);
   else{ 
     printf(": %lld %lld \t %lld %lld %lld \t %lld  %lld\n",
 	   cnt[NUMB_BP]-cnt[SUCC_BP]-cnt[SUCC_OSD], cnt[NUMB_BP], cnt[CONV_BP], cnt[CONV_BP_AVG], cnt[CONV_BP_TOT],
@@ -570,8 +574,6 @@ int do_serialV_BP(qllr_t * outLLR, const mzd_t * const srow,
 
   return succ_BP;
 }
-
-
 
 /** @brief recursive part of OSD */
 int do_osd_recurs(const int minrow, const rci_t jstart, const int lev, qllr_t vE[], mzd_t *mE,
