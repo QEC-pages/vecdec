@@ -178,7 +178,7 @@ typedef struct UFL_T {
     int uW; /** max weight of an error vector in `U` hash (default: `2`) */
     int uX; /** bitmap: 1 (bit 0) try low-weight clusters; 
 	     *	        2 (bit 1) use partial pre-decoder cluster matches (default: `0`) */
-    int uR; /** max distance between v-v neighbors for errors in syndrome hash (default: `4`) */
+    int uR; /** max distance between v-v neighbors for errors in syndrome hash (default: `1`) */
     two_vec_t *hashU_error; /** `U` hash location by error vector */
     two_vec_t *hashU_syndr; /** `U` hash location by syndrome */
     int *permHe; /** permutation vector for syndrome bits when hashU is used */
@@ -408,7 +408,7 @@ int do_clus_error(const int cl, ufl_t * const u, const int clear);
   "\t uW=[integer]\t: max weight of an error cluster in hash (default: 2)\n" \
   "\t\t ('0': no hash but skip zero-weight syndrome vectors; '-1': do not skip)\n" \
   "\t uR=[integer]\t: max range of v-v neighbors for errors in syndrome hash\n" \
-  "\t\t (use '0' for no limit; default: 4)\n"				\
+  "\t\t (use '0' for no limit; recommended default: 1)\n"				\
   "\t uX=[integer]\t: bitmap for cluster-based predecoder options (default: 0)\n" \
   "\t\t 1 (bit 0) try low-weight error w/o cluster decomp (recommend with 'uR=0'); \n" \
   "\t\t 2 (bit 1) use partial cluster matches (experimental)\n"		\
@@ -509,7 +509,7 @@ int do_clus_error(const int cl, ufl_t * const u, const int clear);
   "\t With 'uW' non-negative, use hash storage to store likely syndrome\n" \
   "\t\t vectors to speed up the decoding.  Parameter 'maxU>0' sets the limit on the\n" \
   "\t\t number of syndrome vectors in the hash; no limit if 'maxU=0'.  \n"	\
-  "\t\t Parameter 'uR>0' sets the limit on the graph distance between non-zero positions\n" \
+  "\t\t Parameter 'uR>0' sets the limit on the v-v graph distance between non-zero positions\n" \
   "\t\t in an error vector stored in the hash; no limit if 'uR=0'\n"	\
   "\t\t Bitmap 'uX', when non-zero, enables experimental options for cluster-based\n" \
   "\t\t predecoder: try to match syndrome as a whole (bit 0), and using partially\n" \
