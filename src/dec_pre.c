@@ -19,7 +19,7 @@
 
 /** @brief construct an empty ufl structure */
 ufl_t *ufl_init(const params_t * const p){
-  ufl_t *ans = calloc(1,sizeof(ufl_t) + sizeof(cluster_t)*p->nchk);
+  ufl_t *ans = calloc(1,sizeof(ufl_t) + sizeof(cluster_t)* (p->nvar + p->nchk));
   if(!ans) ERROR("memory allocation");
   /** assign constant members */
   int *dummy_ =(void *) &(ans->nvar); *dummy_ = p->nvar;
@@ -692,6 +692,11 @@ void hash_add_maybe(vec_t *vec, params_t * const p){
   HASH_FIND(hh, p->hashU_error, entry->err, keylen, pvec);
   if(!pvec){ /** vector not found, inserting */
     HASH_ADD(hh, p->hashU_error, err, keylen, entry); /** store in the `hash` */
+#ifndef NDEBUG    
+    if(p->debug&64){
+      printf("# added to hash\n");
+    }
+#endif 
   }
   else
     ERROR("unexpected");
