@@ -36,7 +36,7 @@ src = Makefile ${VECDEC_HDRS} ${VECDEC_SRC}
 
 default: give_help
 
-all: vecdec mtx_sub mtx_qc mtx_rep mtx_fw mtx_01_to_nz
+all: vecdec mtx_sub mtx_qc mtx_bb mtx_rep mtx_fw mtx_01_to_nz
 
 # The vecdec program
 vecdec: ${VECDEC_OBJS} ${VECDEC_XTRA} ${VECDEC_HDRS} Makefile 
@@ -47,6 +47,10 @@ vecdec: ${VECDEC_OBJS} ${VECDEC_XTRA} ${VECDEC_HDRS} Makefile
 
 mtx_sub: mtx_sub.c utils.h util_m4ri.h util_m4ri.o utils.o mmio.o Makefile 
 	${CC} ${OPT} ${WARN} -o mtx_sub $< util_m4ri.o utils.o mmio.o -l m4ri -lm
+
+mtx_bb: mtx_bb.c utils.h util_m4ri.h util_m4ri.o utils.o mmio.o Makefile 
+	${CC} ${OPT} ${WARN} -o mtx_bb $< util_m4ri.o utils.o mmio.o -l m4ri -lm
+
 
 mtx_qc: mtx_qc.c utils.h util_m4ri.h util_m4ri.o utils.o mmio.o Makefile 
 	${CC} ${OPT} ${WARN} -o mtx_qc $< util_m4ri.o utils.o mmio.o -l m4ri -lm

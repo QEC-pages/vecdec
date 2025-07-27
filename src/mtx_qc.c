@@ -18,8 +18,9 @@
 #define MAX_ROWS 20
 #define MAX_COLS 20
 #define MAX_W 40
-#define WGHT(i,j) p->wght[p->rows*(i)+(j)]
-#define COEF(i,j,k) p->poly[MAX_W*(p->cols*(i)+(j))+k]
+#define BLOCK_INDEX(i,j) (p->cols*(i)+(j)) //! row=i, col=j 
+#define WGHT(i,j) p->wght[BLOCK_INDEX(i,j)]
+#define COEF(i,j,k) p->poly[(MAX_W)*BLOCK_INDEX(i,j)+k]
 
 typedef struct PAR_T {
   int rows; /** how many circulant rows, default 1 */
