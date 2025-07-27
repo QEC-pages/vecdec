@@ -544,7 +544,7 @@ int do_hash_fail_prob( params_t * const p){
     }
     count_tot++;
   }
-  if((minW>=15)&&(p->maxW!=maxW)){
+  if(((minW>=15)&&(p->maxW!=maxW)) && p->submode){
     printf("sanity check maxW=%d may not be valid here! Original maxW=%d\n",maxW,p->maxW);
     fprintf(stderr,"sanity check maxW=%d may not be valid here! Original maxW=%d\n",maxW,p->maxW);
   }

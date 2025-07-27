@@ -465,7 +465,10 @@ int main(int argc, char **argv){
   const size_t siz=1000;
   char comment[siz+1];
   int rank = rank_csr(p->mat);
-  snprintf(comment,siz,"QC block matrix [%d,%d] ell=%d rank=%d",p->rows,p->cols, p->ell, rank);
+  snprintf(comment,siz,"ell=%d (%d x %d) %s [%d x %d] block matrix dims= %d x %d rank=%d",
+	   p->ell, p->nx,p->ny,
+	   p->ny>1 ? "BB" : "QC",
+	   p->rows,p->cols, p->tot_rows,p->tot_cols,rank);
   comment[siz]='\0';/** sanity check */
   csr_mm_write(p->out,"" /** no extension */, p->mat, comment);
   if(p->mat) csr_free(p->mat);
