@@ -641,10 +641,13 @@ observable or soft-out row), and rows not-yet decoded.
 ## new items 2025/08/14
 
 - [ ] enable bigger radius clusters in UFL decoder
+  - [ ] add parameter `fixed` to `UFL` structure (init at `0`)
   - [ ] add parameter `uD` for max cluster size (up to `uW` with `uR=1`)
   - [ ] each cluster: add parameter `radius` - how many steps from initial `c` nodes (currently, `radius=1`)
   - [ ] given current cluster configuration and failed lookup, prepare for growth:
     - [ ] push all occupied `c` nodes to hash with `val=1`
+    - [ ] set `radius=1` for all clusters
+    - [ ] set `fixed=1`
   - [ ] for each undecoded cluster with `radius < uD`: 
     - go over its `v` nodes and add all neighboring `c` nodes to hash
       with `val=0` if not occupied (merging clusters if necessary,
@@ -653,3 +656,13 @@ observable or soft-out row), and rows not-yet decoded.
     - increment `radius`
   - [ ] when done, try lookup-decoding again, if fail, go back
   - [ ] continue until undecoded clusters reach `uD`
+  
+- [ ] can an undecoded cluster be decoded using a version of UFL?
+  - [ ] verify syndrome decodability condition (if any)
+  - [ ] given current set `V` of `v`-nodes (which include all
+        neighbors of `c` nodes in the cluster):
+    - construct local punctured matrix `H[V]` 
+	- construct the `v`-node lookup table `P` (cols of `H[V]` to
+      corresponding `v`),
+    - solve for variable nodes in `V`
+    - update the cluster information
