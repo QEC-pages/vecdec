@@ -637,3 +637,19 @@ observable or soft-out row), and rows not-yet decoded.
 - [ ] what would be a sufficient statistics?  Experiment.
 - [x] `bug`: with `uX=2` invalid codewords may be written (also, syndrome
       mismatch with DEBUG enabled) (fixed)
+	  
+## new items 2025/08/14
+
+- [ ] enable bigger radius clusters in UFL decoder
+  - [ ] add parameter `uD` for max cluster size (up to `uW` with `uR=1`)
+  - [ ] each cluster: add parameter `radius` - how many steps from initial `c` nodes (currently, `radius=1`)
+  - [ ] given current cluster configuration and failed lookup, prepare for growth:
+    - [ ] push all occupied `c` nodes to hash with `val=1`
+  - [ ] for each undecoded cluster with `radius < uD`: 
+    - go over its `v` nodes and add all neighboring `c` nodes to hash
+      with `val=0` if not occupied (merging clusters if necessary,
+      including those already decoded);
+    - add all neighboring `v` nodes to the cluster (with `val=0`).
+    - increment `radius`
+  - [ ] when done, try lookup-decoding again, if fail, go back
+  - [ ] continue until undecoded clusters reach `uD`
