@@ -471,7 +471,7 @@ int dec_ufl_lookup(ufl_t * const u, const params_t * const p){
   if(p->debug&64){
     printf("### original cluster num_proper=%d:\n",u->num_prop);
     ufl_print(u,2);
-    ufl_cnt_print(p);
+    //    ufl_cnt_print(p);
   }
   int num_prop = 0;
   u->syndr->wei = u->error->wei = 0;
@@ -514,7 +514,7 @@ int dec_ufl_lookup(ufl_t * const u, const params_t * const p){
   if(p->debug&64){
     printf("### remaining cluster num_proper=%d:\n",u->num_prop);
     ufl_print(u,2);
-    ufl_cnt_print(p);
+    //    ufl_cnt_print(p);
     printf("u->error: ");
     vec_print(u->error);
     printf("u->syndr: ");
@@ -693,9 +693,7 @@ void hash_add_maybe(vec_t *vec, params_t * const p){
   if(!pvec){ /** vector not found, inserting */
     HASH_ADD(hh, p->hashU_error, err, keylen, entry); /** store in the `hash` */
 #ifndef NDEBUG    
-    if(p->debug&64){
-      printf("# added to hash\n");
-    }
+    if(p->debug&64){ printf("# added to hash "); vec_print(sorted); } 
 #endif 
   }
   else
@@ -822,8 +820,8 @@ void do_clusters(params_t * const p){
     hash_do_confinement(p);
   //#endif
   
-
-  //  printf("move entries syndrome ordering:\n");
+  if(p->debug&2048)
+    printf("# processing error vectors in hash:\n");
   two_vec_t *tmp=NULL, *good=NULL;
   HASH_ITER(hh, p->hashU_error, entry, pvec) {
     if(good){
