@@ -682,8 +682,8 @@ void hash_do_confinement(const params_t * const p){
   printf("### ws=%d min we=%d cnt_w=%lld total cnt=%lld\n",ws,we,cnt_w,cnt);
 }
 
-
-void hash_add_maybe(vec_t *vec, params_t * const p){
+/** return 1 if added to hash */
+int hash_add_maybe(vec_t *vec, params_t * const p){
   two_vec_t *pvec, *entry;
   vec_t * sorted = vec_copy(vec);
   qsort(sorted->vec, sorted->wei, sizeof(rci_t), cmp_rci_t);
@@ -699,6 +699,9 @@ void hash_add_maybe(vec_t *vec, params_t * const p){
   else
     ERROR("unexpected");
   free(sorted);
+  if(!pvec)
+    return 1;
+  return 0;
 }
 
 void do_clusters(params_t * const p){
@@ -709,9 +712,45 @@ void do_clusters(params_t * const p){
   two_vec_t *entry, *pvec;
   const int max = p->mHt->rows;
 
-  long long int cnt_err=0, cnt_synd=0;
-  if(p->uR == 0){
-    for(int w=1; w<=wmax; w++){
+  long long int cnt_err=0, cnt_synd=0, cnt_err_ins=0;;
+  if((p->uR == 0)||(wmax==1)){
+    if (wmax>=1){
+      for(int i=0; i<max; i++){
+	err->wei=0; 
+	err->vec[err->wei++]=i;
+	hash_add_maybe(err,p);
+	cnt_err++;
+	if((p->maxU > 0) && (cnt_err >= p->maxU))
+	  goto stop_label;
+      }
+      if(p->debug&2)
+	printf("# stored %lld w=1 errors in hash\n", cnt_err);
+    }
+    if (wmax>=2){
+      cnt_err_ins=0;
+      for(int i=0; i<max; i++){
+	err->wei=2; 
+	err->vec[0]=i;
+	if((p->maxU > 0) && (cnt_err >= p->maxU))
+	  goto stop_label;
+	for(int j=i+1; j<max; j++){
+	  err->vec[1]=j;
+	  cnt_err_ins += hash_add_maybe(err,p);
+	  cnt_err++;
+	  if((p->maxU > 0) && (cnt_err >= p->maxU))
+	    goto stop_label;
+	}
+	if((p->debug&2)&& (cnt_err_ins > 1000000)){
+	  printf("# i=%d / %d: added %lld w=2 pairs, total %lld\n",
+		 i,max,cnt_err_ins, cnt_err);
+	  cnt_err_ins = 0;
+	}
+      }
+      if(p->debug&1)
+	printf("# added all w=2 pairs, total %lld errors in hash\n",
+	       cnt_err);
+    }
+    for(int w=3; w<=wmax; w++){
       //        printf("w=%d max=%d \n",w,max);
       for(int j=0; j<w; j++) // initial invalid vector
 	err->vec[j]=j;
@@ -724,7 +763,7 @@ void do_clusters(params_t * const p){
 	if((p->maxU > 0) && (cnt_err >= p->maxU))
 	  goto stop_label;
       }           
-    }
+    }    
   }
   else{/** the actual cluster code */
     if(wmax > 4)
