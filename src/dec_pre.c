@@ -743,11 +743,15 @@ void do_clusters(params_t * const p){
       /** construct uR-local adjacency matrix for vv graph */      
       csr_t *G1 = do_vv_graph(p->mH,p->mHt, p, 0);
       csr_t *GG=G1, *G2;
+      if(p->debug&2)
+	printf("# constructed vv adjacency R=1, n=%d nz=%d\n", GG->rows, GG->p[GG->rows]);
       for(int jj=2; jj <= p->uR; jj++){
 	G2 = do_vv_graph(G1,GG, p, 1);
 	if(G1!=GG)
 	  csr_free(GG);	
 	GG = G2;
+      if(p->debug&2)
+	printf("# constructed vv adjacency R=%d, n=%d nz=%d\n", jj, GG->rows, GG->p[GG->rows]);
       }
       if(p->uR > 1)
 	csr_free(G1);
