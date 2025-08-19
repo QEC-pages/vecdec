@@ -720,14 +720,18 @@ static inline void hash_add_sorted(const vec_t * const vec, params_t * const p){
 
 /** @brief construct a distance map of a connected graph
 
-    given the `symmetric` adjaceny matrix `mA` of a graph, 
-    map each vertex with the distance from v0.
-    The array `stack` (warning: must be allocated to `mA->rows`) is used for temporary storage.
-    warning: `ans` must be preallocated 
+    Breadth-First Search (BFS) for an unweighted graph
+    
+    Given the symmetric adjacency matrix `mA` of a graph, map each vertex with
+    the distance from v0 (ans[v1]=dist(v1,v0)+1 if connected, otherwise `0`).
+    The array `stack` is used for temporary storage.
+
+    warning: `ans` and `stack` must be preallocated with `mA->rows` entries
     
     warning: symmetry of `mA` is assumed but not verified
 */
-vec_t * do_map(vec_t *ans, int_pair stack[], const csr_t * const mA, const int v0){
+vec_t * do_map(vec_t *ans, int_pair stack[], const csr_t * const mA,
+               const int v0){
   if ((!ans) || (!stack))
     ERROR("arrays 'arr' and 'stack' must be allocated!");
   assert(ans->max == mA->rows);
@@ -748,7 +752,7 @@ vec_t * do_map(vec_t *ans, int_pair stack[], const csr_t * const mA, const int v
       }
     }
   }
-  ans->wei = mA->rows;
+  ans->wei = mA->rows; /** unvisited vertices contain `0` - disconnected */
   return ans;
 }
 
@@ -874,7 +878,7 @@ void do_clusters(params_t * const p){
             vec_print(map);
           }
           for(int v1=v0+1; v1 < G1->rows; v1++)
-            if(map->vec[v1] <= Rp1){ /** only if the distance is small enough */
+            if(map->vec[v1] && (map->vec[v1] <= Rp1)){ /** connected and distance small enough */
               err->vec[1] = v1;
               hash_add_sorted(err,p);
               cnt_err_ins++;
