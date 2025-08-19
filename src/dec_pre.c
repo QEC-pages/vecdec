@@ -604,13 +604,11 @@ csr_t * do_vv_graph(const csr_t * const mH, const csr_t * const mHT, const param
 }
 
 /** @brief for `err`or vector of weight `wgt`, compute syndrome vector and init `two_vec_t`
+ * warning: 
  */
 two_vec_t * two_vec_init(const vec_t * const err, params_t * const p){
   vec_t *v0 = p->v0, *v1 = p->v1;
-  if(!v0){ /** first time use => init temp storage. */
-    v0 = p->v0 = vec_init(p->nchk);
-    v1 = p->v1 = vec_init(p->nchk);
-  }
+  assert((v0!=NULL)&&(v1!=NULL)&& "p->v0 and p->v1 must be allocated!");
   qllr_t energ=0;
   if(p->vLLR){
     for(int i=0; i < err->wei; i++)
@@ -704,6 +702,56 @@ int hash_add_maybe(vec_t *vec, params_t * const p){
   return 0;
 }
 
+/** @brief add unique pre-sorted vector to hash
+ *
+ * warning: error may result unless `vec` is sorted
+ * `qsort(vec->vec, vec->wei, sizeof(rci_t), cmp_rci_t);`
+ *
+ *
+ */
+static inline void hash_add_sorted(const vec_t * const vec, params_t * const p){
+  two_vec_t *entry = two_vec_init(vec,p);
+  const size_t keylen = entry->w_e * sizeof(rci_t);
+  HASH_ADD(hh, p->hashU_error, err, keylen, entry); /** store in the `hash` */
+#ifndef NDEBUG    
+  if(p->debug&64){ printf("# added to hash "); vec_print(vec); } 
+#endif 
+}
+
+/** @brief construct a distance map of a connected graph
+
+    given the `symmetric` adjaceny matrix `mA` of a graph, 
+    map each vertex with the distance from v0.
+    The array `stack` (warning: must be allocated to `mA->rows`) is used for temporary storage.
+    warning: `ans` must be preallocated 
+    
+    warning: symmetry of `mA` is assumed but not verified
+*/
+vec_t * do_map(vec_t *ans, int_pair stack[], const csr_t * const mA, const int v0){
+  if ((!ans) || (!stack))
+    ERROR("arrays 'arr' and 'stack' must be allocated!");
+  assert(ans->max == mA->rows);
+  int * const lbl = ans->vec;
+  memset(lbl, '\0', ans->wei * sizeof(int));
+  int icur=0, itop=0; /** items on stack counter */
+  /** associate each vertex with the distance from `v0` plus 1 */
+  stack[itop++] = (int_pair) { .a=v0, .b=1};
+  lbl[v0]=1;
+  for(icur=0; icur<itop; icur++){
+    const int vcur=stack[icur].a;
+    const int dcur=stack[icur].b;
+    for(int j=mA->p[vcur]; j < mA->p[vcur+1] ; j++){
+      const int vj=mA->i[j];
+      if(!lbl[vj]){
+        stack[itop++] = (int_pair) { .a=vj, .b=dcur+1 };
+        lbl[vj]=dcur+1;
+      }
+    }
+  }
+  ans->wei = mA->rows;
+  return ans;
+}
+
 void do_clusters(params_t * const p){
   const int wmax=p->uW;
   if(!wmax)
@@ -765,7 +813,7 @@ void do_clusters(params_t * const p){
       }           
     }    
   }
-  else{/** the actual cluster code */
+  else{/** the actual cluster code with `uR` non-zero */
     if(wmax > 4)
       ERROR("uR-local error clusters of weight %d are currently not supported, max=4",wmax);
     /** code for w=1 */
@@ -773,13 +821,84 @@ void do_clusters(params_t * const p){
     for(int j=0; j<max; j++){ // initial invalid vector
       cnt_err++;
       err->vec[0]=j;
-      hash_add_maybe(err,p);
+      hash_add_sorted(err,p);
       if((p->maxU > 0) && (cnt_err >= p->maxU))
 	goto stop_label;
     }
-    
-    if(wmax>1){
-      /** construct uR-local adjacency matrix for vv graph */      
+    if(p->debug&2)
+      printf("# stored %lld w=1 errors in hash\n", cnt_err);    
+    if((wmax==2)|| 0){
+      cnt_err_ins=0;
+      err->wei = 2;
+      csr_t *G1 = do_vv_graph(p->mH,p->mHt, p, 0); /* v-v adjacency matrix */
+      if(p->uR == 1){
+        for(int v0=0; v0< max; v0++){
+          err->vec[0] = v0;
+          if((p->maxU > 0) && (cnt_err + cnt_err_ins + G1->p[v0+1] >= p->maxU + G1->p[v0]))
+            goto stop_label;
+          for(int i1 = G1->p[v0]; i1 < G1->p[v0+1]; i1++){
+            int v1 = G1->i[i1];
+            if(v1>v0){
+              err->vec[1] = v1;
+              hash_add_sorted(err,p);
+              cnt_err_ins++;
+            }        
+          }
+          if(cnt_err_ins > 1000000){
+            cnt_err += cnt_err_ins;
+            if (p->debug&2)
+              printf("# v0=%d / %d: added %lld w=2 pairs, total %lld\n",
+                     v0,max,cnt_err_ins, cnt_err);
+            cnt_err_ins = 0;
+          }
+        }
+        cnt_err += cnt_err_ins;
+        cnt_err_ins = 0;
+        if(p->debug&1)
+          printf("# added all n.n. pairs, total %lld errors in hash\n", cnt_err);
+      }    
+      else{ /** here we assume large-degree graph, so that it is OK to run over all pairs 
+                TODO: version of the code for small degree */
+        cnt_err_ins=0;
+        int_pair *stack = malloc(sizeof(int_pair) * G1->rows);
+        vec_t *map = vec_init(G1->rows);
+        const int Rp1 = p->uR + 1;
+        err->wei = 2;
+        for(int v0=0; v0 < max; v0++){
+          if((p->maxU > 0) && (cnt_err + cnt_err_ins + max >= p->maxU))
+            goto stop_label;
+          err->vec[0] = v0;
+          map = do_map(map,stack,G1,v0);
+          if(p->debug&64){
+            printf("# v0=%d distance map:\n# ",v0);
+            vec_print(map);
+          }
+          for(int v1=v0+1; v1 < G1->rows; v1++)
+            if(map->vec[v1] <= Rp1){ /** only if the distance is small enough */
+              err->vec[1] = v1;
+              hash_add_sorted(err,p);
+              cnt_err_ins++;
+            }
+          if(cnt_err_ins > 1000000){
+            cnt_err += cnt_err_ins;
+            if (p->debug&2)
+              printf("# v0=%d / %d: added %lld w=2 pairs, total %lld\n",
+                     v0,max,cnt_err_ins, cnt_err);
+            cnt_err_ins = 0;
+          }
+        }
+        cnt_err += cnt_err_ins;
+        cnt_err_ins = 0;
+        if(p->debug&1)
+          printf("# added all pairs separated by up to uR=%d, total %lld errors in hash\n",
+                 p->uR,cnt_err);
+        
+        free(map);
+        free(stack);
+        csr_free(G1);
+      }
+    }
+    else{   /** construct uR-local adjacency matrix for vv graph */      
       csr_t *G1 = do_vv_graph(p->mH,p->mHt, p, 0);
       csr_t *GG=G1, *G2;
       if(p->debug&2)

@@ -2395,14 +2395,16 @@ int main(int argc, char **argv){
 	  }
 	  if(p->debug&2){
 	    printf("# running RIS decoder on remaining %lld syndrome vectors\n",num);
-            mzd_print(mST);
 	    if(p->debug&512){
-	      printf("# list of pre-failures:");
+              mzd_print(mST);
+	    }
+            if(p->debug&8){
+              printf("# list of pre-failures iround=%lld:",iround);
 	      for(long long int ierr =0 ; ierr < ierr_tot; ierr++)
 		if(status[ierr] <= 0)
 		  printf(" %lld",ierr);
 	      printf("\n");
-	    }
+            }
           }
 	  mzd_t * mS = mzd_transpose(NULL,mST);
 	  mzd_t * mE2=do_decode(mS, p); /** each row a decoded error vector */
