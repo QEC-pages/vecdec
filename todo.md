@@ -672,9 +672,11 @@ observable or soft-out row), and rows not-yet decoded.
 	   map (distance), loop over `j` such that distance[j] <= `uR`
  - [ ] skip hash list of error vectors, directly construct a
        syndrome-err pairs hash list.
- - [ ] construct a BP decoder for a single cluster:
-   - [ ] create H[V] sparse matrix
-   - [ ] transpose
-   - [ ] create LLR (sub)vector
-   - [ ] hope cluster to be sufficiently tree-like, thus no LLR
+- [ ] construct a BP decoder for a single cluster (local BP, or LBP
+      decoder):
+  - [ ] create H1=H[V] sparse matrix
+  - [ ] transpose -> H1T
+  - [ ] create LLR (sub)vector
+  - [ ] select syndrome bits
+  - [ ] hope cluster to be sufficiently tree-like, thus no LLR
 

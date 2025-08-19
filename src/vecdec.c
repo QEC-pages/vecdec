@@ -2547,9 +2547,10 @@ int main(int argc, char **argv){
     } /** end of the `iround` loop */
     
     if (!((p->fdet)&&(p->fobs==NULL)&&(p->perr))){ /** except in the case of partial decoding */
-      if(p->steps > 0){  /** otherwise results are invalid as we assume syndromes to match */
-	cnt_out(p->debug&1,p);
-      }   
+      if(p->debug&1)
+	ufl_cnt_print(p);
+      if(p->steps > 0)  /** otherwise results are invalid as we assume syndromes to match */
+	cnt_out(p->debug&1,p);         
     }
     else if(p->debug&1)
       printf("# all finished\n");

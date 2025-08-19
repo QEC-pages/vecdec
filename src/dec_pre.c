@@ -1076,6 +1076,8 @@ void ufl_cnt_update(const int which, const ufl_t * const u, _maybe_unused const 
 void ufl_cnt_print(const params_t * const p){
   if(p->mode > 1)
     ERROR("this only works for mode=0 and mode=1");
+  if((cnt[SUM_CLN1])||(cnt[SUM_XLN1]))
+    printf("# average and sigma for Number of clusters, C-node count, and V-node count:\n"); 
   if(cnt[SUM_CLN1]){
     double an = (double) cnt[SUM_CLN1]/cnt[NUM_CLF];
     double dn = (double) (cnt[SUM_CLN2]-an*cnt[SUM_CLN1])/cnt[NUM_CLF];
