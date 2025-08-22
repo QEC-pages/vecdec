@@ -2347,19 +2347,21 @@ int main(int argc, char **argv){
 	long long int cnt_pre = 0;
 	for(long long int ierr = 0; ierr < ierr_tot; ierr++){ /** cycle over errors */
 	  mzd_copy_row(srow,0,p->mHeT,ierr); /** syndrome row in question */
-	  if(p->debug&512)
+	  if(p->debug&512){
+	    printf("\n# round=%lld ierr=%lld ",iround,ierr);
 	    mzd_row_print_sparse(srow,0);
+	  }
 	  int res_pre = dec_ufl_one(srow,p);
 	  if(res_pre){ /** pre-decoder success */
 	    mzd_row_add_vec(mE0,ierr,p->ufl->error,1);
 	    status[ierr] = res_pre;
 	    cnt_pre++;
 	    if(p->debug&512){
+	      ufl_print(p->ufl,2);
 	      vec_print(p->ufl->syndr);
 	      vec_print(p->ufl->error);
-	      mzd_row_print_sparse(mE0,ierr);
-	      printf("######### done ierr=%lld \n",ierr);
-	    }
+	      printf("######### success ierr=%lld res_pre=%d \n",ierr,res_pre);
+	    }	  
 	  }
 	  else{  /** pre-decoder failed */
 	    if(p->uX & 2){
@@ -2370,10 +2372,20 @@ int main(int argc, char **argv){
 		mzd_row_add_vec(p->mHeT,ierr,p->ufl->syndr,0);
 	      }
 	    }
+	    if(p->debug&512){
+	      ufl_print(p->ufl,2);
+	      vec_print(p->ufl->syndr);
+	      vec_print(p->ufl->error);
+	      printf("## pre-decoder fail ierr=%lld res_pre=%d\n",ierr,res_pre);
+	      if(p->uX & 2){
+		printf("######### uX&2=%d partial match\n",p->uX&2);
+		mzd_row_print_sparse(mE0,ierr);
+		mzd_row_print_sparse(p->mHeT,ierr);
+		printf("######### done ierr=%lld res_pre=%d\n",ierr,res_pre);
+	      }
+	    }
 	  }
 	}
-        //        mzd_print(p->mHeT);
-        //        mzd_print(mE0);
 	if(cnt_pre < ierr_tot){ /** some pre-decoder failures */
 	  long long int num = ierr_tot - cnt_pre;
 	  mzd_t *mST = mzd_init(num,p->nchk);
@@ -2383,7 +2395,16 @@ int main(int argc, char **argv){
 	  }
 	  if(p->debug&2){
 	    printf("# running RIS decoder on remaining %lld syndrome vectors\n",num);
-            mzd_print(mST);
+	    if(p->debug&512){
+              mzd_print(mST);
+	    }
+            if(p->debug&8){
+              printf("# list of pre-failures iround=%lld:",iround);
+	      for(long long int ierr =0 ; ierr < ierr_tot; ierr++)
+		if(status[ierr] <= 0)
+		  printf(" %lld",ierr);
+	      printf("\n");
+            }
           }
 	  mzd_t * mS = mzd_transpose(NULL,mST);
 	  mzd_t * mE2=do_decode(mS, p); /** each row a decoded error vector */
@@ -2528,9 +2549,10 @@ int main(int argc, char **argv){
     } /** end of the `iround` loop */
     
     if (!((p->fdet)&&(p->fobs==NULL)&&(p->perr))){ /** except in the case of partial decoding */
-      if(p->steps > 0){  /** otherwise results are invalid as we assume syndromes to match */
-	cnt_out(p->debug&1,p);
-      }   
+      if(p->debug&1)
+	ufl_cnt_print(p);
+      if(p->steps > 0)  /** otherwise results are invalid as we assume syndromes to match */
+	cnt_out(p->debug&1,p);         
     }
     else if(p->debug&1)
       printf("# all finished\n");

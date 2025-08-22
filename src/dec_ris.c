@@ -281,7 +281,7 @@ mzd_t *do_decode(mzd_t *mS, params_t const * const p){
 
     mzd_free(mEt);
     iwait = ichanged > 0 ? 0 : iwait+1 ;
-    if(p->debug&8) /** convergence information */
+    if(p->debug&32) /** convergence information */
       if(ichanged)
         printf(" ii=%d of %d changed=%d\n",ii,p->steps,ichanged);
     if((p->swait > 0)&&(iwait > p->swait))

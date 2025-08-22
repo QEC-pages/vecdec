@@ -471,7 +471,7 @@ int dec_ufl_lookup(ufl_t * const u, const params_t * const p){
   if(p->debug&64){
     printf("### original cluster num_proper=%d:\n",u->num_prop);
     ufl_print(u,2);
-    ufl_cnt_print(p);
+    //    ufl_cnt_print(p);
   }
   int num_prop = 0;
   u->syndr->wei = u->error->wei = 0;
@@ -514,7 +514,7 @@ int dec_ufl_lookup(ufl_t * const u, const params_t * const p){
   if(p->debug&64){
     printf("### remaining cluster num_proper=%d:\n",u->num_prop);
     ufl_print(u,2);
-    ufl_cnt_print(p);
+    //    ufl_cnt_print(p);
     printf("u->error: ");
     vec_print(u->error);
     printf("u->syndr: ");
@@ -604,13 +604,11 @@ csr_t * do_vv_graph(const csr_t * const mH, const csr_t * const mHT, const param
 }
 
 /** @brief for `err`or vector of weight `wgt`, compute syndrome vector and init `two_vec_t`
+ * warning: 
  */
 two_vec_t * two_vec_init(const vec_t * const err, params_t * const p){
   vec_t *v0 = p->v0, *v1 = p->v1;
-  if(!v0){ /** first time use => init temp storage. */
-    v0 = p->v0 = vec_init(p->nchk);
-    v1 = p->v1 = vec_init(p->nchk);
-  }
+  assert((v0!=NULL)&&(v1!=NULL)&& "p->v0 and p->v1 must be allocated!");
   qllr_t energ=0;
   if(p->vLLR){
     for(int i=0; i < err->wei; i++)
@@ -682,8 +680,8 @@ void hash_do_confinement(const params_t * const p){
   printf("### ws=%d min we=%d cnt_w=%lld total cnt=%lld\n",ws,we,cnt_w,cnt);
 }
 
-
-void hash_add_maybe(vec_t *vec, params_t * const p){
+/** return 1 if added to hash */
+int hash_add_maybe(vec_t *vec, params_t * const p){
   two_vec_t *pvec, *entry;
   vec_t * sorted = vec_copy(vec);
   qsort(sorted->vec, sorted->wei, sizeof(rci_t), cmp_rci_t);
@@ -693,14 +691,69 @@ void hash_add_maybe(vec_t *vec, params_t * const p){
   if(!pvec){ /** vector not found, inserting */
     HASH_ADD(hh, p->hashU_error, err, keylen, entry); /** store in the `hash` */
 #ifndef NDEBUG    
-    if(p->debug&64){
-      printf("# added to hash\n");
-    }
+    if(p->debug&64){ printf("# added to hash "); vec_print(sorted); } 
 #endif 
   }
   else
     ERROR("unexpected");
   free(sorted);
+  if(!pvec)
+    return 1;
+  return 0;
+}
+
+/** @brief add unique pre-sorted vector to hash
+ *
+ * warning: error may result unless `vec` is sorted
+ * `qsort(vec->vec, vec->wei, sizeof(rci_t), cmp_rci_t);`
+ *
+ *
+ */
+static inline void hash_add_sorted(const vec_t * const vec, params_t * const p){
+  two_vec_t *entry = two_vec_init(vec,p);
+  const size_t keylen = entry->w_e * sizeof(rci_t);
+  HASH_ADD(hh, p->hashU_error, err, keylen, entry); /** store in the `hash` */
+#ifndef NDEBUG    
+  if(p->debug&64){ printf("# added to hash "); vec_print(vec); } 
+#endif 
+}
+
+/** @brief construct a distance map of a connected graph
+
+    Breadth-First Search (BFS) for an unweighted graph
+    
+    Given the symmetric adjacency matrix `mA` of a graph, map each vertex with
+    the distance from v0 (ans[v1]=dist(v1,v0)+1 if connected, otherwise `0`).
+    The array `stack` is used for temporary storage.
+
+    warning: `ans` and `stack` must be preallocated with `mA->rows` entries
+    
+    warning: symmetry of `mA` is assumed but not verified
+*/
+vec_t * do_map(vec_t *ans, int_pair stack[], const csr_t * const mA,
+               const int v0){
+  if ((!ans) || (!stack))
+    ERROR("arrays 'arr' and 'stack' must be allocated!");
+  assert(ans->max == mA->rows);
+  int * const lbl = ans->vec;
+  memset(lbl, '\0', ans->wei * sizeof(int));
+  int icur=0, itop=0; /** items on stack counter */
+  /** associate each vertex with the distance from `v0` plus 1 */
+  stack[itop++] = (int_pair) { .a=v0, .b=1};
+  lbl[v0]=1;
+  for(icur=0; icur<itop; icur++){
+    const int vcur=stack[icur].a;
+    const int dcur=stack[icur].b;
+    for(int j=mA->p[vcur]; j < mA->p[vcur+1] ; j++){
+      const int vj=mA->i[j];
+      if(!lbl[vj]){
+        stack[itop++] = (int_pair) { .a=vj, .b=dcur+1 };
+        lbl[vj]=dcur+1;
+      }
+    }
+  }
+  ans->wei = mA->rows; /** unvisited vertices contain `0` - disconnected */
+  return ans;
 }
 
 void do_clusters(params_t * const p){
@@ -711,9 +764,45 @@ void do_clusters(params_t * const p){
   two_vec_t *entry, *pvec;
   const int max = p->mHt->rows;
 
-  long long int cnt_err=0, cnt_synd=0;
-  if(p->uR == 0){
-    for(int w=1; w<=wmax; w++){
+  long long int cnt_err=0, cnt_synd=0, cnt_err_ins=0;;
+  if((p->uR == 0)||(wmax==1)){
+    if (wmax>=1){
+      for(int i=0; i<max; i++){
+	err->wei=0; 
+	err->vec[err->wei++]=i;
+	hash_add_maybe(err,p);
+	cnt_err++;
+	if((p->maxU > 0) && (cnt_err >= p->maxU))
+	  goto stop_label;
+      }
+      if(p->debug&2)
+	printf("# stored %lld w=1 errors in hash\n", cnt_err);
+    }
+    if (wmax>=2){
+      cnt_err_ins=0;
+      for(int i=0; i<max; i++){
+	err->wei=2; 
+	err->vec[0]=i;
+	if((p->maxU > 0) && (cnt_err >= p->maxU))
+	  goto stop_label;
+	for(int j=i+1; j<max; j++){
+	  err->vec[1]=j;
+	  cnt_err_ins += hash_add_maybe(err,p);
+	  cnt_err++;
+	  if((p->maxU > 0) && (cnt_err >= p->maxU))
+	    goto stop_label;
+	}
+	if((p->debug&2)&& (cnt_err_ins > 1000000)){
+	  printf("# i=%d / %d: added %lld w=2 pairs, total %lld\n",
+		 i,max,cnt_err_ins, cnt_err);
+	  cnt_err_ins = 0;
+	}
+      }
+      if(p->debug&1)
+	printf("# added all w=2 pairs, total %lld errors in hash\n",
+	       cnt_err);
+    }
+    for(int w=3; w<=wmax; w++){
       //        printf("w=%d max=%d \n",w,max);
       for(int j=0; j<w; j++) // initial invalid vector
 	err->vec[j]=j;
@@ -726,9 +815,9 @@ void do_clusters(params_t * const p){
 	if((p->maxU > 0) && (cnt_err >= p->maxU))
 	  goto stop_label;
       }           
-    }
+    }    
   }
-  else{/** the actual cluster code */
+  else{/** the actual cluster code with `uR` non-zero */
     if(wmax > 4)
       ERROR("uR-local error clusters of weight %d are currently not supported, max=4",wmax);
     /** code for w=1 */
@@ -736,20 +825,95 @@ void do_clusters(params_t * const p){
     for(int j=0; j<max; j++){ // initial invalid vector
       cnt_err++;
       err->vec[0]=j;
-      hash_add_maybe(err,p);
+      hash_add_sorted(err,p);
       if((p->maxU > 0) && (cnt_err >= p->maxU))
 	goto stop_label;
     }
-    
-    if(wmax>1){
-      /** construct uR-local adjacency matrix for vv graph */      
+    if(p->debug&2)
+      printf("# stored %lld w=1 errors in hash\n", cnt_err);    
+    if((wmax==2)|| 0){
+      cnt_err_ins=0;
+      err->wei = 2;
+      csr_t *G1 = do_vv_graph(p->mH,p->mHt, p, 0); /* v-v adjacency matrix */
+      if(p->uR == 1){
+        for(int v0=0; v0< max; v0++){
+          err->vec[0] = v0;
+          if((p->maxU > 0) && (cnt_err + cnt_err_ins + G1->p[v0+1] >= p->maxU + G1->p[v0]))
+            goto stop_label;
+          for(int i1 = G1->p[v0]; i1 < G1->p[v0+1]; i1++){
+            int v1 = G1->i[i1];
+            if(v1>v0){
+              err->vec[1] = v1;
+              hash_add_sorted(err,p);
+              cnt_err_ins++;
+            }        
+          }
+          if(cnt_err_ins > 1000000){
+            cnt_err += cnt_err_ins;
+            if (p->debug&2)
+              printf("# v0=%d / %d: added %lld w=2 pairs, total %lld\n",
+                     v0,max,cnt_err_ins, cnt_err);
+            cnt_err_ins = 0;
+          }
+        }
+        cnt_err += cnt_err_ins;
+        cnt_err_ins = 0;
+        if(p->debug&1)
+          printf("# added all n.n. pairs, total %lld errors in hash\n", cnt_err);
+      }    
+      else{ /** here we assume large-degree graph, so that it is OK to run over all pairs 
+                TODO: version of the code for small degree */
+        cnt_err_ins=0;
+        int_pair *stack = malloc(sizeof(int_pair) * G1->rows);
+        vec_t *map = vec_init(G1->rows);
+        const int Rp1 = p->uR + 1;
+        err->wei = 2;
+        for(int v0=0; v0 < max; v0++){
+          if((p->maxU > 0) && (cnt_err + cnt_err_ins + max >= p->maxU))
+            goto stop_label;
+          err->vec[0] = v0;
+          map = do_map(map,stack,G1,v0);
+          if(p->debug&64){
+            printf("# v0=%d distance map:\n# ",v0);
+            vec_print(map);
+          }
+          for(int v1=v0+1; v1 < G1->rows; v1++)
+            if(map->vec[v1] && (map->vec[v1] <= Rp1)){ /** connected and distance small enough */
+              err->vec[1] = v1;
+              hash_add_sorted(err,p);
+              cnt_err_ins++;
+            }
+          if(cnt_err_ins > 1000000){
+            cnt_err += cnt_err_ins;
+            if (p->debug&2)
+              printf("# v0=%d / %d: added %lld w=2 pairs, total %lld\n",
+                     v0,max,cnt_err_ins, cnt_err);
+            cnt_err_ins = 0;
+          }
+        }
+        cnt_err += cnt_err_ins;
+        cnt_err_ins = 0;
+        if(p->debug&1)
+          printf("# added all pairs separated by up to uR=%d, total %lld errors in hash\n",
+                 p->uR,cnt_err);
+        
+        free(map);
+        free(stack);
+        csr_free(G1);
+      }
+    }
+    else{   /** construct uR-local adjacency matrix for vv graph */      
       csr_t *G1 = do_vv_graph(p->mH,p->mHt, p, 0);
       csr_t *GG=G1, *G2;
+      if(p->debug&2)
+	printf("# constructed vv adjacency R=1, n=%d nz=%d\n", GG->rows, GG->p[GG->rows]);
       for(int jj=2; jj <= p->uR; jj++){
 	G2 = do_vv_graph(G1,GG, p, 1);
 	if(G1!=GG)
 	  csr_free(GG);	
 	GG = G2;
+      if(p->debug&2)
+	printf("# constructed vv adjacency R=%d, n=%d nz=%d\n", jj, GG->rows, GG->p[GG->rows]);
       }
       if(p->uR > 1)
 	csr_free(G1);
@@ -822,8 +986,8 @@ void do_clusters(params_t * const p){
     hash_do_confinement(p);
   //#endif
   
-
-  //  printf("move entries syndrome ordering:\n");
+  if(p->debug&2048)
+    printf("# processing error vectors in hash:\n");
   two_vec_t *tmp=NULL, *good=NULL;
   HASH_ITER(hh, p->hashU_error, entry, pvec) {
     if(good){
@@ -1035,6 +1199,8 @@ void ufl_cnt_update(const int which, const ufl_t * const u, _maybe_unused const 
 void ufl_cnt_print(const params_t * const p){
   if(p->mode > 1)
     ERROR("this only works for mode=0 and mode=1");
+  if((cnt[SUM_CLN1])||(cnt[SUM_XLN1]))
+    printf("# average and sigma for Number of clusters, C-node count, and V-node count:\n"); 
   if(cnt[SUM_CLN1]){
     double an = (double) cnt[SUM_CLN1]/cnt[NUM_CLF];
     double dn = (double) (cnt[SUM_CLN2]-an*cnt[SUM_CLN1])/cnt[NUM_CLF];
