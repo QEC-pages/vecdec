@@ -1034,6 +1034,8 @@ void init_Ht(params_t *p){
 	if (p->uX & 2)
 	  printf("%sbit 1 set, pass partially matched errors to main decoder\n",p->uX & 1 ?"#\t":" ");
       }
+	if (p->uX & 4)
+      printf("%sbit 2 set, do one extra expansion (add observed checks) when uW>1\n", (p->uX & 3) ? "#\t":" ");
     }
     p->v0 = vec_init(p->nchk);
     p->v1 = vec_init(p->nchk);

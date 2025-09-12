@@ -417,6 +417,12 @@ void dec_ufl_clear(ufl_t * const u){
   u->error->wei = u->syndr->wei = 0;
 }
 
+/* check whether index `idx` appears in sparse vector `s` */
+static inline int vec_has(const vec_t *s, int idx){
+  for(int i=0;i<s->wei;i++) if (s->vec[i]==idx) return 1;
+  return 0;
+}
+
 /** @brief start ufl decoding
  *
  *  Given the syndrome vector `s`, construct its cluster decomposition.
@@ -437,6 +443,25 @@ int dec_ufl_start(const vec_t * const s, ufl_t * const u, const params_t * const
     u->clus[ic].num_poi_c = 1;
     u->clus[ic].first_v = u->clus[ic].last_v = NULL;
     u->clus[ic].num_poi_v = 0;
+	
+	#if 1
+	/* the expand twice codes that works
+	     /** NEW: register this initial check in the hash and set wei_c,
+      *       so later we can safely merge clusters by shared checks. */
+    
+      int idx = c + u->nvar;
+      vnode_t *x = &(u->spare[u->num_s++]);
+      x->idx  = idx;
+      x->val  = 1;      /* observed check bit = 1 */
+       x->clus = ic;     /* belongs to this newly created cluster */
+      HASH_ADD_INT(u->nodes, idx, x);
+       u->clus[ic].wei_c = 1;
+     
+	#fi 
+	
+	
+	
+	
     /** attach all neighboring vertices, merging clusters if needed */
     assert(c < p->mH->rows);
     for(int iv = p->mH->p[c]; iv < p->mH->p[c+1]; iv++){
@@ -445,6 +470,84 @@ int dec_ufl_start(const vec_t * const s, ufl_t * const u, const params_t * const
       add_v(v,ic,u);
     }
   }
+  
+  #if 1
+     /* -----------------------------------------------------------
+   * Second expansion (optional):
+   *   variables -> ALL neighboring checks (observed or not).
+   *   Ensure each such check exists in hash as a *latent* check
+   *   (val=0, NOT added to the cluster's check list),
+   *   then immediately merge via that check to any clusters that
+   *   also touch it (using c->v neighbors already in hash).
+   * ----------------------------------------------------------- */
+  if ((p->uW > 1) && (p->uX & 4)){
+    for (int ic2 = 0; ic2 < u->num_clus; ic2++){
+      if (u->clus[ic2].label != ic2) continue; /* only proper clusters */
+      /* keep 'rootA' updated in case of merges while iterating */
+      int rootA = ic2;
+      while (u->clus[rootA].label != rootA) rootA = u->clus[rootA].label;
+      for (point_t *pv = u->clus[rootA].first_v; pv != NULL; pv = pv->next){
+        int v0 = pv->index;
+        /* v -> its adjacent checks (include unobserved checks) */
+        for (int kc = p->mHt->p[v0]; kc < p->mHt->p[v0+1]; kc++){
+          int c0  = p->mHt->i[kc];
+          int idx = c0 + u->nvar;
+          vnode_t *cn = NULL;
+          HASH_FIND_INT(u->nodes, &idx, cn);
+          if (!cn){
+            /* create a latent check node: val=0, bind to current rootA;
+               DO NOT add to the cluster's check list */
+            cn = &(u->spare[u->num_s++]);
+            cn->idx  = idx;
+            cn->val  = 0;      /* not observed */
+            cn->clus = rootA;  /* belongs to this cluster for now */
+            HASH_ADD_INT(u->nodes, idx, cn);
+          }
+          /* Now link through this check to any other clusters touching it:
+             iterate c0 -> v neighbors and merge those clusters to rootA. */
+          for (int iv1 = p->mH->p[c0]; iv1 < p->mH->p[c0+1]; iv1++){
+            int v1 = p->mH->i[iv1];
+            vnode_t *vn = NULL;
+            HASH_FIND_INT(u->nodes, &v1, vn); /* variables were added by add_v() */
+            if (!vn) continue; /* shouldn't happen, but be safe */
+            int rootB = vn->clus;
+            while (u->clus[rootB].label != rootB) rootB = u->clus[rootB].label;
+            if (rootB != rootA){
+              int r1 = (rootA < rootB) ? rootA : rootB;
+              int r2 = (rootA ^ rootB) ^ r1;
+              merge_clus(r1, r2, u);
+              rootA = r1; /* update current root after merge */
+            }
+          }
+        }
+      }
+    }
+  }
+  #else
+	  
+   /* -----------------------------------------------------------
+   * Second expansion (optional):
+   *   when uW>1 and (uX & 4) is set:
+   *   variables -> neighboring checks (only observed checks),
+   *   and merge clusters that collide on those checks.
+   * ----------------------------------------------------------- */
+  if ((p->uW > 1) && (p->uX & 4)){
+    for (int ic2 = 0; ic2 < u->num_clus; ic2++){
+      if (u->clus[ic2].label != ic2) continue; /* only proper clusters */
+      for (point_t *pv = u->clus[ic2].first_v; pv != NULL; pv = pv->next){
+        int v0 = pv->index;
+        /* v -> its adjacent checks */
+        for (int kc = p->mHt->p[v0]; kc < p->mHt->p[v0+1]; kc++){
+          int c0 = p->mHt->i[kc];
+          if (!vec_has(s, c0)) continue; /* only checks that are 1 in the original syndrome */
+          add_c(c0, ic2, u); /* add or merge via shared check */
+        }
+      }
+    }
+  }
+  
+  #fi 
+
 #ifndef NDEBUG
   ufl_verify(u);
   if(p->debug & 32){
@@ -454,6 +557,10 @@ int dec_ufl_start(const vec_t * const s, ufl_t * const u, const params_t * const
     printf("\n");
   }
 #endif
+
+
+
+
 
   return 0;
 }
