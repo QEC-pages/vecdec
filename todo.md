@@ -679,4 +679,3 @@ observable or soft-out row), and rows not-yet decoded.
   - [ ] create LLR (sub)vector
   - [ ] select syndrome bits
   - [ ] hope cluster to be sufficiently tree-like, thus no LLR
-

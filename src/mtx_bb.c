@@ -173,8 +173,8 @@ int do_scan_a(int * const ptr, int i, const char argvi[], int glbpos, int p1, in
       pos=pos1;
       /* fall through */
     case 2: case 3:
-      /*      printf("recording dbgx=%d dbgy=%d w=%d idx=%d\n",
-	      dbgx,dbgy,w,reverse==0 ? IDX(dbgx,dbgy) : IDX(-dbgx,-dbgy)); */
+            /* printf("recording dbgx=%d dbgy=%d w=%d idx=%d\n", */
+	    /*   dbgx,dbgy,w,reverse==0 ? IDX(dbgx,dbgy) : IDX(-dbgx,-dbgy));  */
       /** this is correct: reserve 0th position for the weight */
       ptr[++w] = reverse==0 ? IDX(dbgx,dbgy) : IDX(-dbgx,-dbgy);
       if(c[pos]==','){ /** we are looking at `#,` or `#_#,` format */

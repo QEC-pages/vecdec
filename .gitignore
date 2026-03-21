@@ -38,6 +38,7 @@ TAGS
 src/vecdec
 vecdec
 mtx_sub
+mtx_dep
 mtx_fw
 mtx_qc
 mtx_bb
