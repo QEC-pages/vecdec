@@ -494,8 +494,8 @@ int do_hash_fail_prob( params_t * const p){
   int count = 0, count_min = 0, count_tot = 0;
   int minW=p->nvar + 1;
   int maxW=p->maxW;
-  if ((maxW==0)||(maxW>20)){
-    maxW=20; /** sanity check: this method would be too expensive */
+  if ((maxW==0)||(maxW>p->maxW_rec)){
+    maxW=p->maxW_rec; /** sanity check: this method would be too expensive */
   }
   for(pvec = p->codewords; pvec != NULL; pvec=(one_vec_t *)(pvec->hh.next)){
     if (pvec->weight <= maxW){
