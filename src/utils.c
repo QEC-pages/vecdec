@@ -77,7 +77,7 @@ FILE * nzlist_r_open(const char fnam[], long long int *lineno){
 #else /* treat signature line as comment */
   *lineno=1;
 #endif   
-  char c=fgetc(f); /** are there comments to skip? */  //  putchar(c);
+  int c=fgetc(f); /** are there comments to skip? */  //  putchar(c);
   while(c=='%'){ /** `comment line` starting with '%' */
     do{
       c=fgetc(f);      //      putchar(c);
@@ -106,7 +106,7 @@ one_vec_t * nzlist_r_one(FILE *f, one_vec_t * vec, const char fnam[], long long 
     return NULL; /** not an actuall error */
   int w;
 
-  char c=fgetc(f); /** are there comments to skip? */
+  int c=fgetc(f); /** are there comments to skip? */
   while(c=='%'){ /** `comment line` starting with '%' */
     do{
       c=fgetc(f);     

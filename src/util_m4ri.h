@@ -214,6 +214,7 @@ static inline int nextelement(const word * const set1, const int m, const int po
   }
   else{
     w = SETWD(pos);
+    if (w >= m) return -1;
     setwd = set1[w] & (m4ri_ffff<< SETBT(pos));
   }
   for (;;){
